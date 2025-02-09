@@ -1,0 +1,29 @@
+[package]
+name = "rust-roguelike"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = "0.15.0"
+rand = "0.8.5"
+#log = { version = "*", features = ["max_level_debug", "release_max_level_warn"] }
+
+[features]
+default = ["dynamic_linking"]
+dynamic_linking = ["bevy/dynamic_linking"]
+file_watcher = ["bevy/file_watcher"]
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+
+[profile.wasm-release]
+inherits = "release"
+opt-level = "s"
+strip = "debuginfo"
