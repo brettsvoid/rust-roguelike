@@ -37,6 +37,7 @@ fn main() {
             ..default()
         }))
         .init_state::<RunState>()
+        .add_event::<AppExit>()
         .add_plugins((
             ResourcesPlugin,
             PlayerPlugin,
@@ -54,9 +55,9 @@ fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
 }
 
-fn handle_exit(keyboard: Res<ButtonInput<KeyCode>>) {
+fn handle_exit(keyboard: Res<ButtonInput<KeyCode>>, mut exit: EventWriter<AppExit>) {
     if keyboard.just_released(KeyCode::KeyQ) {
-        std::process::exit(0);
+        exit.send(AppExit::Success);
     }
 }
 
@@ -70,6 +71,8 @@ fn update_run_state(
 }
 
 fn run_loop(mut app: App) -> AppExit {
+    //let mut exit_event_reader = app.world().resource_mut::<Events<AppExit>>().get_cursor();
+
     loop {
         let run_state = app.world().resource::<State<RunState>>();
         if run_state.get() == &RunState::Running {
@@ -77,20 +80,26 @@ fn run_loop(mut app: App) -> AppExit {
         }
 
         // Check if we got an exit event, etc...
-        if app.should_exit().is_some() {
-            break;
+        if let Some(exit) = app.should_exit() {
+            return exit;
         }
+
         // Check if we should exit
         {
-            let exit_events = app.world().resource::<Events<AppExit>>();
-            if !exit_events.is_empty() {
-                break;
-            }
+            //let exit_events = app.world().resource::<Events<AppExit>>();
+            //for exit in exit_event_reader.read(exit_events) {
+            //    return exit.clone();
+            //}
+
+            //if !exit_events.is_empty() {
+            //    // Return the first exit event found.
+            //    if let Some(exit) = exit_events.iter().next() {
+            //        return exit.clone();
+            //    }
+            //}
         }
 
         // Small sleep to avoid busy-looping (adjust as needed)
         std::thread::sleep(Duration::from_millis(16));
     }
-
-    AppExit::Success
 }
