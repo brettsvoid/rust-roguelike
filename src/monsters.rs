@@ -12,6 +12,11 @@ use crate::{
 #[derive(Component, Debug)]
 struct Monster;
 
+#[derive(Component, Debug)]
+struct Name {
+    name: String,
+}
+
 pub struct MonstersPlugin;
 impl Plugin for MonstersPlugin {
     fn build(&self, app: &mut App) {
@@ -34,16 +39,27 @@ fn setup_monsters(mut commands: Commands, font: Res<UiFont>, map: Res<Map>) {
 
     let mut rng = rand::thread_rng();
     let roll = rng.gen_range(0..=1);
-    let monster_type = match roll {
-        0 => "o",
-        _ => "g",
+    let monster_type: &str;
+    let name: String;
+    match roll {
+        0 => {
+            monster_type = "o";
+            name = "Orc".to_string();
+        }
+        _ => {
+            monster_type = "g";
+            name = "Goblin".to_string();
+        }
     };
 
     // Skip the first room because that's where the player starts
-    for room in map.rooms.iter().skip(1) {
+    for (i, room) in map.rooms.iter().skip(1).enumerate() {
         let (x, y) = room.center();
         commands.spawn((
             Monster,
+            Name {
+                name: format!("{} #{}", &name, i),
+            },
             Position { x, y, z: 1 },
             Text2d::new(monster_type),
             text_font.clone(),
@@ -73,17 +89,17 @@ fn update_monsters(
 }
 
 fn monster_ai(
-    mut monster_query: Query<(&Position, &mut Viewshed), With<Monster>>,
+    mut monster_query: Query<(&Position, &mut Viewshed, &Name), With<Monster>>,
     player_position: Single<&Position, With<Player>>,
 ) {
     let player_pos = &player_position;
 
-    for (pos, viewshed) in &monster_query {
+    for (pos, viewshed, name) in &monster_query {
         if viewshed
             .visible_tiles
             .contains(&(player_pos.x, player_pos.y))
         {
-            println!("Monster shouts insults");
+            println!("{} shouts insults", name.name);
         }
     }
 }
