@@ -74,10 +74,10 @@ fn run_loop(mut app: App) -> AppExit {
     //let mut exit_event_reader = app.world().resource_mut::<Events<AppExit>>().get_cursor();
 
     loop {
-        let run_state = app.world().resource::<State<RunState>>();
-        if run_state.get() == &RunState::Running {
-            app.update();
-        }
+        //let run_state = app.world().resource::<State<RunState>>();
+        //if run_state.get() == &RunState::Running {
+        app.update();
+        //}
 
         // Check if we got an exit event, etc...
         if let Some(exit) = app.should_exit() {

@@ -3,8 +3,10 @@ use rand::Rng;
 
 use crate::{
     map::{Map, Position, FONT_SIZE},
+    player::Player,
     resources::UiFont,
     viewshed::Viewshed,
+    RunState,
 };
 
 #[derive(Component, Debug)]
@@ -13,8 +15,13 @@ struct Monster;
 pub struct MonstersPlugin;
 impl Plugin for MonstersPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_monsters)
-            .add_systems(Update, (update_monsters, monster_ai));
+        app.add_systems(Startup, setup_monsters).add_systems(
+            Update,
+            (
+                update_monsters,
+                monster_ai.run_if(in_state(RunState::Running)),
+            ),
+        );
     }
 }
 
@@ -65,8 +72,18 @@ fn update_monsters(
     }
 }
 
-fn monster_ai(mut monster_query: Query<(&Position, &mut Viewshed), With<Monster>>) {
+fn monster_ai(
+    mut monster_query: Query<(&Position, &mut Viewshed), With<Monster>>,
+    player_position: Single<&Position, With<Player>>,
+) {
+    let player_pos = &player_position;
+
     for (pos, viewshed) in &monster_query {
-        println!("Monster considers their own existence");
+        if viewshed
+            .visible_tiles
+            .contains(&(player_pos.x, player_pos.y))
+        {
+            println!("Monster shouts insults");
+        }
     }
 }

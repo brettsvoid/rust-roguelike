@@ -8,6 +8,7 @@ use crate::{
     map::{xy_idx, Map, Position, TileType, FONT_SIZE},
     resources::UiFont,
     viewshed::Viewshed,
+    RunState,
 };
 
 #[derive(Component, Debug)]
@@ -61,8 +62,10 @@ fn handle_player_input(
     mut evr_kbd: EventReader<KeyboardInput>,
     map: Res<Map>,
     mut query: Single<&mut Position, With<Player>>,
+    mut next_state: ResMut<NextState<RunState>>,
 ) {
     let pos = &mut query;
+    let mut player_moved = false;
 
     for ev in evr_kbd.read() {
         // We don't care about key releases, only key presses
@@ -73,17 +76,25 @@ fn handle_player_input(
         match &ev.key_code {
             KeyCode::ArrowLeft | KeyCode::KeyH | KeyCode::Numpad4 => {
                 try_move_player(&map, pos, -1, 0);
+                player_moved = true;
             }
             KeyCode::ArrowRight | KeyCode::KeyL | KeyCode::Numpad6 => {
                 try_move_player(&map, pos, 1, 0);
+                player_moved = true;
             }
             KeyCode::ArrowUp | KeyCode::KeyK | KeyCode::Numpad8 => {
                 try_move_player(&map, pos, 0, -1);
+                player_moved = true;
             }
             KeyCode::ArrowDown | KeyCode::KeyJ | KeyCode::Numpad2 => {
                 try_move_player(&map, pos, 0, 1);
+                player_moved = true;
             }
             _ => {}
         }
+    }
+
+    if player_moved {
+        next_state.set(RunState::Running);
     }
 }
