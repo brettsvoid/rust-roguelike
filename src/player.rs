@@ -5,6 +5,7 @@ use bevy::{
 };
 
 use crate::{
+    components::Name,
     map::{xy_idx, Map, Position, TileType, FONT_SIZE},
     resources::UiFont,
     viewshed::Viewshed,
@@ -33,6 +34,9 @@ fn spawn_player(mut commands: Commands, font: Res<UiFont>, map: Res<Map>) {
     let (player_x, player_y) = map.rooms[0].center();
     commands.spawn((
         Player,
+        Name {
+            name: "Player".to_string(),
+        },
         Position {
             x: player_x,
             y: player_y,

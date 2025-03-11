@@ -7,6 +7,7 @@ use player::PlayerPlugin;
 use resources::ResourcesPlugin;
 use viewshed::ViewshedPlugin;
 
+mod components;
 mod map;
 mod monsters;
 mod player;

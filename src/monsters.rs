@@ -2,6 +2,7 @@ use bevy::{color::palettes, prelude::*};
 use rand::Rng;
 
 use crate::{
+    components::Name,
     map::{Map, Position, FONT_SIZE},
     player::Player,
     resources::UiFont,
@@ -11,11 +12,6 @@ use crate::{
 
 #[derive(Component, Debug)]
 struct Monster;
-
-#[derive(Component, Debug)]
-struct Name {
-    name: String,
-}
 
 pub struct MonstersPlugin;
 impl Plugin for MonstersPlugin {
