@@ -10,7 +10,7 @@ use crate::shapes::Rect;
 use crate::viewshed::Viewshed;
 
 pub const FONT_SIZE: f32 = 16.;
-pub const MAP_HEIGHT: usize = 50;
+pub const MAP_HEIGHT: usize = 43;
 pub const MAP_WIDTH: usize = 80;
 pub const GRID_PX: Vec2 = Vec2 {
     x: FONT_SIZE * 1.,

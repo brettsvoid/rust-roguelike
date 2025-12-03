@@ -21,7 +21,7 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, spawn_player)
-            .add_systems(Update, handle_player_input);
+            .add_systems(Update, handle_player_input.run_if(in_state(RunState::AwaitingInput)));
     }
 }
 
@@ -99,9 +99,14 @@ fn handle_player_input(
     let mut player_moved = false;
 
     for ev in evr_kbd.read() {
-        // We don't care about key releases or key repeats, only initial key presses
-        if ev.state == ButtonState::Released || ev.repeat {
+        // We don't care about key releases, only key presses (including repeats)
+        if ev.state == ButtonState::Released {
             continue;
+        }
+
+        // Only process one input per frame to allow turn cycle to complete
+        if player_moved {
+            break;
         }
 
         match &ev.key_code {

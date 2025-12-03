@@ -10,6 +10,8 @@ use viewshed::ViewshedPlugin;
 mod combat;
 mod components;
 mod distance;
+mod gamelog;
+mod gui;
 mod map;
 mod map_indexing;
 mod monsters;
@@ -19,9 +21,10 @@ mod resources;
 mod shapes;
 mod viewshed;
 
+const SCREEN_HEIGHT: usize = 50;
 const RESOLUTION: Vec2 = Vec2 {
     x: MAP_WIDTH as f32 * GRID_PX.x,
-    y: MAP_HEIGHT as f32 * GRID_PX.y,
+    y: SCREEN_HEIGHT as f32 * GRID_PX.y,
 };
 
 #[derive(States, Clone, Copy, Default, Eq, PartialEq, Debug, Hash)]
@@ -44,6 +47,7 @@ fn main() {
             ..default()
         }))
         .init_state::<RunState>()
+        .init_resource::<gamelog::GameLog>()
         .add_event::<AppExit>()
         .add_plugins((
             ResourcesPlugin,
@@ -51,6 +55,7 @@ fn main() {
             ViewshedPlugin,
             MapPlugin,
             MonstersPlugin,
+            gui::GuiPlugin,
         ))
         .add_systems(Startup, setup)
         .add_systems(Update, (map_indexing::map_indexing_system, handle_exit))
