@@ -2,16 +2,19 @@ use bevy::{color::palettes, prelude::*};
 use rand::Rng;
 
 use crate::{
-    components::Name,
-    map::{Map, Position, FONT_SIZE},
+    combat::{CombatStats, WantsToMelee},
+    components::{BlocksTile, Name},
+    distance::DistanceAlg,
+    map::{Map, Position, TileType, FONT_SIZE, MAP_HEIGHT, MAP_WIDTH},
+    pathfinding,
     player::Player,
     resources::UiFont,
-    viewshed::Viewshed,
+    viewshed::{self, Viewshed},
     RunState,
 };
 
 #[derive(Component, Debug)]
-struct Monster;
+pub struct Monster;
 
 pub struct MonstersPlugin;
 impl Plugin for MonstersPlugin {
@@ -20,7 +23,7 @@ impl Plugin for MonstersPlugin {
             Update,
             (
                 update_monsters,
-                monster_ai.run_if(in_state(RunState::Running)),
+                update_blocked_tiles.run_if(in_state(RunState::MonsterTurn)),
             ),
         );
     }
@@ -57,6 +60,13 @@ fn setup_monsters(mut commands: Commands, font: Res<UiFont>, map: Res<Map>) {
                 name: format!("{} #{}", &name, i),
             },
             Position { x, y, z: 1 },
+            BlocksTile,
+            CombatStats {
+                max_hp: 16,
+                hp: 16,
+                defense: 1,
+                power: 4,
+            },
             Text2d::new(monster_type),
             text_font.clone(),
             Viewshed {
@@ -84,18 +94,71 @@ fn update_monsters(
     }
 }
 
-fn monster_ai(
-    mut monster_query: Query<(&Position, &mut Viewshed, &Name), With<Monster>>,
-    player_position: Single<&Position, With<Player>>,
-) {
-    let player_pos = &player_position;
+fn update_blocked_tiles(mut map: ResMut<Map>, monster_query: Query<&Position, With<Monster>>) {
+    // Clear blocked tiles and re-populate from walls
+    let size = MAP_WIDTH * MAP_HEIGHT;
+    for idx in 0..size {
+        map.blocked_tiles[idx] = map.tiles[idx] == TileType::Wall;
+    }
 
-    for (pos, viewshed, name) in &monster_query {
+    // Block tiles with monsters
+    for pos in &monster_query {
+        let idx = map.xy_idx(pos.x, pos.y);
+        map.blocked_tiles[idx] = true;
+    }
+}
+
+pub fn monster_ai(
+    mut commands: Commands,
+    mut map: ResMut<Map>,
+    mut monster_query: Query<
+        (Entity, &mut Position, &mut Viewshed, &Name, &CombatStats),
+        (With<Monster>, Without<Player>),
+    >,
+    player_query: Single<(Entity, &Position), With<Player>>,
+) {
+    let (player_entity, player_pos) = player_query.into_inner();
+    let player_idx = map.xy_idx(player_pos.x, player_pos.y);
+
+    for (entity, mut pos, mut viewshed, _name, stats) in &mut monster_query {
+        if stats.hp <= 0 {
+            continue;
+        }
+
+        let distance = DistanceAlg::Chebyshev.distance2d(
+            Vec2::new(pos.x as f32, pos.y as f32),
+            Vec2::new(player_pos.x as f32, player_pos.y as f32),
+        );
+        if distance < 1.5 {
+            commands.entity(entity).insert(WantsToMelee {
+                target: player_entity,
+            });
+            continue;
+        }
+
+        // Check if player is visible
         if viewshed
             .visible_tiles
             .contains(&(player_pos.x, player_pos.y))
         {
-            println!("{} shouts insults", name.name);
+            let monster_idx = map.xy_idx(pos.x, pos.y);
+
+            // Find path to player (ignoring other entities so monsters keep chasing)
+            if let Some(path) = pathfinding::a_star_ignoring_entities(&map, monster_idx, player_idx) {
+                // Move one step toward player (path[0] is current position)
+                if path.len() > 1 {
+                    let next_idx = path[1];
+                    // Only move if destination is not blocked
+                    if !map.blocked_tiles[next_idx] {
+                        // Unblock old position, block new position
+                        map.blocked_tiles[monster_idx] = false;
+                        map.blocked_tiles[next_idx] = true;
+                        pos.x = (next_idx % map.width as usize) as i32;
+                        pos.y = (next_idx / map.width as usize) as i32;
+                        viewshed.dirty = true;
+                    }
+                }
+            }
         }
     }
 }

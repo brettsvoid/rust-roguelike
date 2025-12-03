@@ -5,6 +5,7 @@ use bevy::{
 };
 
 use crate::{
+    combat::{CombatStats, WantsToMelee},
     components::Name,
     map::{xy_idx, Map, Position, TileType, FONT_SIZE},
     resources::UiFont,
@@ -42,6 +43,12 @@ fn spawn_player(mut commands: Commands, font: Res<UiFont>, map: Res<Map>) {
             y: player_y,
             z: 1,
         },
+        CombatStats {
+            max_hp: 30,
+            hp: 30,
+            defense: 2,
+            power: 5,
+        },
         Viewshed {
             range: 8,
             ..default()
@@ -53,45 +60,123 @@ fn spawn_player(mut commands: Commands, font: Res<UiFont>, map: Res<Map>) {
     ));
 }
 
-fn try_move_player(map: &Map, pos: &mut Position, delta_x: i32, delta_y: i32) {
+fn try_move_player(
+    commands: &mut Commands,
+    map: &Map,
+    player_entity: Entity,
+    pos: &mut Position,
+    delta_x: i32,
+    delta_y: i32,
+    combat_stats: &Query<&CombatStats>,
+) {
     let destination_idx = xy_idx(pos.x + delta_x, pos.y + delta_y);
 
-    if map.tiles[destination_idx] != TileType::Wall {
+    // Check for attackable targets
+    for potential_target in map.tile_content[destination_idx].iter() {
+        if combat_stats.get(*potential_target).is_ok() {
+            commands.entity(player_entity).insert(WantsToMelee {
+                target: *potential_target,
+            });
+            return; // So we don't move after attacking
+        }
+    }
+
+    if !map.blocked_tiles[destination_idx] {
         pos.x = (pos.x + delta_x).clamp(0, map.width - 1);
         pos.y = (pos.y + delta_y).clamp(0, map.height - 1);
     }
 }
 
 fn handle_player_input(
+    mut commands: Commands,
     mut evr_kbd: EventReader<KeyboardInput>,
     map: Res<Map>,
-    mut query: Single<&mut Position, With<Player>>,
+    mut query: Single<(Entity, &mut Position), With<Player>>,
     mut next_state: ResMut<NextState<RunState>>,
+    combat_stats: Query<&CombatStats>,
 ) {
-    let pos = &mut query;
+    let (player_entity, ref mut pos) = *query;
     let mut player_moved = false;
 
     for ev in evr_kbd.read() {
-        // We don't care about key releases, only key presses
-        if ev.state == ButtonState::Released {
+        // We don't care about key releases or key repeats, only initial key presses
+        if ev.state == ButtonState::Released || ev.repeat {
             continue;
         }
 
         match &ev.key_code {
             KeyCode::ArrowLeft | KeyCode::KeyH | KeyCode::Numpad4 => {
-                try_move_player(&map, pos, -1, 0);
+                try_move_player(
+                    &mut commands,
+                    &map,
+                    player_entity,
+                    pos,
+                    -1,
+                    0,
+                    &combat_stats,
+                );
                 player_moved = true;
             }
             KeyCode::ArrowRight | KeyCode::KeyL | KeyCode::Numpad6 => {
-                try_move_player(&map, pos, 1, 0);
+                try_move_player(&mut commands, &map, player_entity, pos, 1, 0, &combat_stats);
                 player_moved = true;
             }
             KeyCode::ArrowUp | KeyCode::KeyK | KeyCode::Numpad8 => {
-                try_move_player(&map, pos, 0, -1);
+                try_move_player(
+                    &mut commands,
+                    &map,
+                    player_entity,
+                    pos,
+                    0,
+                    -1,
+                    &combat_stats,
+                );
                 player_moved = true;
             }
             KeyCode::ArrowDown | KeyCode::KeyJ | KeyCode::Numpad2 => {
-                try_move_player(&map, pos, 0, 1);
+                try_move_player(&mut commands, &map, player_entity, pos, 0, 1, &combat_stats);
+                player_moved = true;
+            }
+
+            // Diagonals
+            KeyCode::KeyY | KeyCode::Numpad7 => {
+                try_move_player(
+                    &mut commands,
+                    &map,
+                    player_entity,
+                    pos,
+                    -1,
+                    -1,
+                    &combat_stats,
+                );
+                player_moved = true;
+            }
+            KeyCode::KeyU | KeyCode::Numpad9 => {
+                try_move_player(
+                    &mut commands,
+                    &map,
+                    player_entity,
+                    pos,
+                    1,
+                    -1,
+                    &combat_stats,
+                );
+                player_moved = true;
+            }
+            KeyCode::KeyM | KeyCode::Numpad3 => {
+                try_move_player(&mut commands, &map, player_entity, pos, 1, 1, &combat_stats);
+                player_moved = true;
+            }
+            KeyCode::KeyN | KeyCode::Numpad1 => {
+                try_move_player(
+                    &mut commands,
+                    &map,
+                    player_entity,
+                    pos,
+                    -1,
+                    1,
+                    &combat_stats,
+                );
                 player_moved = true;
             }
             _ => {}
@@ -99,6 +184,6 @@ fn handle_player_input(
     }
 
     if player_moved {
-        next_state.set(RunState::Running);
+        next_state.set(RunState::PlayerTurn);
     }
 }

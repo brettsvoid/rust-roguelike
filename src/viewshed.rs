@@ -6,6 +6,7 @@ use crate::map::{Map, Position, TileType};
 pub struct Viewshed {
     pub range: i32,
     pub visible_tiles: Vec<(i32, i32)>,
+    pub dirty: bool,
 }
 
 pub struct ViewshedPlugin;

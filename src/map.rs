@@ -3,6 +3,7 @@ use std::cmp::{max, min};
 use bevy::prelude::*;
 use rand::prelude::*;
 
+use crate::distance::DistanceAlg;
 use crate::player::Player;
 use crate::resources::UiFont;
 use crate::shapes::Rect;
@@ -51,6 +52,8 @@ pub struct Map {
     pub height: i32,
     pub revealed_tiles: Vec<bool>,
     pub visible_tiles: Vec<bool>,
+    pub blocked_tiles: Vec<bool>,
+    pub tile_content: Vec<Vec<Entity>>,
 }
 
 impl Map {
@@ -85,6 +88,120 @@ impl Map {
         }
     }
 
+    pub fn is_exit_valid(&self, x: i32, y: i32) -> bool {
+        if x < 1 || x > self.width - 1 || y < 1 || y > self.height - 1 {
+            return false;
+        }
+        let idx = self.xy_idx(x, y);
+
+        !self.blocked_tiles[idx]
+    }
+
+    /// Check if a tile is walkable (ignores entities, only checks walls)
+    fn is_walkable(&self, x: i32, y: i32) -> bool {
+        if x < 1 || x > self.width - 1 || y < 1 || y > self.height - 1 {
+            return false;
+        }
+        let idx = self.xy_idx(x, y);
+
+        self.tiles[idx] != TileType::Wall
+    }
+
+    /// Get available exits ignoring entity blocking (for pathfinding)
+    pub fn get_available_exits_ignoring_entities(&self, idx: usize) -> Vec<(usize, f32)> {
+        let mut exits = Vec::new();
+        let x = idx as i32 % self.width;
+        let y = idx as i32 / self.width;
+        let w = self.width as usize;
+
+        // Cardinal directions
+        if self.is_walkable(x - 1, y) {
+            exits.push((idx - 1, 1.0))
+        };
+        if self.is_walkable(x + 1, y) {
+            exits.push((idx + 1, 1.0))
+        };
+        if self.is_walkable(x, y - 1) {
+            exits.push((idx - w, 1.0))
+        };
+        if self.is_walkable(x, y + 1) {
+            exits.push((idx + w, 1.0))
+        };
+
+        // Diagonal directions
+        if self.is_walkable(x - 1, y - 1) {
+            exits.push(((idx - w) - 1, 1.45))
+        };
+        if self.is_walkable(x + 1, y - 1) {
+            exits.push(((idx - w) + 1, 1.45))
+        };
+        if self.is_walkable(x - 1, y + 1) {
+            exits.push(((idx + w) - 1, 1.45))
+        };
+        if self.is_walkable(x + 1, y + 1) {
+            exits.push(((idx + w) + 1, 1.45))
+        };
+
+        exits
+    }
+
+    pub fn get_available_exits(&self, idx: usize) -> Vec<(usize, f32)> {
+        let mut exits = Vec::new();
+        let x = idx as i32 % self.width;
+        let y = idx as i32 / self.width;
+        let w = self.width as usize;
+
+        // Cardinal directions
+        if self.is_exit_valid(x - 1, y) {
+            exits.push((idx - 1, 1.0))
+        };
+        if self.is_exit_valid(x + 1, y) {
+            exits.push((idx + 1, 1.0))
+        };
+        if self.is_exit_valid(x, y - 1) {
+            exits.push((idx - w, 1.0))
+        };
+        if self.is_exit_valid(x, y + 1) {
+            exits.push((idx + w, 1.0))
+        };
+
+        // Diagonal directions
+        if self.is_exit_valid(x - 1, y - 1) {
+            exits.push(((idx - w) - 1, 1.45))
+        };
+        if self.is_exit_valid(x + 1, y - 1) {
+            exits.push(((idx - w) + 1, 1.45))
+        };
+        if self.is_exit_valid(x - 1, y + 1) {
+            exits.push(((idx + w) - 1, 1.45))
+        };
+        if self.is_exit_valid(x + 1, y + 1) {
+            exits.push(((idx + w) + 1, 1.45))
+        };
+
+        exits
+    }
+
+    pub fn get_pathing_distance(&self, idx1: usize, idx2: usize) -> f32 {
+        let w = self.width as usize;
+        let p1 = Vec2::new((idx1 % w) as f32, (idx1 / w) as f32);
+        let p2 = Vec2::new((idx2 % w) as f32, (idx2 / w) as f32);
+
+        DistanceAlg::Chebyshev.distance2d(p1, p2)
+    }
+
+    pub fn populate_blocked(&mut self) {
+        for (i, tile) in self.tiles.iter().enumerate() {
+            self.blocked_tiles[i] = *tile == TileType::Wall;
+        }
+    }
+
+    pub fn clear_content_index(&mut self) {
+        for content in self.tile_content.iter_mut() {
+            content.clear();
+        }
+    }
+
     pub fn new_map_rooms_and_corridors() -> Map {
         let size = MAP_WIDTH * MAP_HEIGHT;
         let mut map = Map {
@@ -94,6 +211,8 @@ impl Map {
             height: MAP_HEIGHT as i32,
             revealed_tiles: vec![false; size],
             visible_tiles: vec![false; size],
+            blocked_tiles: vec![false; size],
+            tile_content: vec![Vec::new(); size],
         };
 
         const MAX_ROOMS: i32 = 30;

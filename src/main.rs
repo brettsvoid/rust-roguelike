@@ -7,9 +7,13 @@ use player::PlayerPlugin;
 use resources::ResourcesPlugin;
 use viewshed::ViewshedPlugin;
 
+mod combat;
 mod components;
+mod distance;
 mod map;
+mod map_indexing;
 mod monsters;
+mod pathfinding;
 mod player;
 mod resources;
 mod shapes;
@@ -22,9 +26,11 @@ const RESOLUTION: Vec2 = Vec2 {
 
 #[derive(States, Clone, Copy, Default, Eq, PartialEq, Debug, Hash)]
 pub enum RunState {
-    Paused,
     #[default]
-    Running,
+    AwaitingInput,
+    PreRun,
+    PlayerTurn,
+    MonsterTurn,
 }
 
 fn main() {
@@ -47,8 +53,37 @@ fn main() {
             MonstersPlugin,
         ))
         .add_systems(Startup, setup)
-        .add_systems(Update, (update_run_state, handle_exit))
-        //.set_runner(run_loop)
+        .add_systems(Update, (map_indexing::map_indexing_system, handle_exit))
+        // PreRun: run systems then transition to AwaitingInput
+        .add_systems(
+            Update,
+            transition_to_awaiting_input.run_if(in_state(RunState::PreRun)),
+        )
+        // PlayerTurn: run combat systems then transition to MonsterTurn
+        .add_systems(
+            Update,
+            (
+                combat::melee_combat_system,
+                combat::damage_system,
+                combat::delete_the_dead,
+                transition_to_monster_turn,
+            )
+                .chain()
+                .run_if(in_state(RunState::PlayerTurn)),
+        )
+        // MonsterTurn: run monster AI then transition to AwaitingInput
+        .add_systems(
+            Update,
+            (
+                monsters::monster_ai,
+                combat::melee_combat_system,
+                combat::damage_system,
+                combat::delete_the_dead,
+                transition_to_awaiting_input,
+            )
+                .chain()
+                .run_if(in_state(RunState::MonsterTurn)),
+        )
         .run();
 }
 
@@ -62,13 +97,12 @@ fn handle_exit(keyboard: Res<ButtonInput<KeyCode>>, mut exit: EventWriter<AppExi
     }
 }
 
-fn update_run_state(
-    current_state: Res<State<RunState>>,
-    mut next_state: ResMut<NextState<RunState>>,
-) {
-    if current_state.get() == &RunState::Running {
-        next_state.set(RunState::Paused);
-    }
+fn transition_to_awaiting_input(mut next_state: ResMut<NextState<RunState>>) {
+    next_state.set(RunState::AwaitingInput);
+}
+
+fn transition_to_monster_turn(mut next_state: ResMut<NextState<RunState>>) {
+    next_state.set(RunState::MonsterTurn);
 }
 
 fn run_loop(mut app: App) -> AppExit {
