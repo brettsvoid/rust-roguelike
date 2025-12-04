@@ -12,13 +12,16 @@ mod components;
 mod distance;
 mod gamelog;
 mod gui;
+mod inventory;
 mod map;
 mod map_indexing;
 mod monsters;
 mod pathfinding;
 mod player;
 mod resources;
+mod rng;
 mod shapes;
+mod spawner;
 mod viewshed;
 
 const SCREEN_HEIGHT: usize = 50;
@@ -34,6 +37,8 @@ pub enum RunState {
     PreRun,
     PlayerTurn,
     MonsterTurn,
+    ShowInventory,
+    ShowDropItem,
 }
 
 fn main() {
@@ -48,6 +53,7 @@ fn main() {
         }))
         .init_state::<RunState>()
         .init_resource::<gamelog::GameLog>()
+        .init_resource::<rng::GameRng>()
         .add_event::<AppExit>()
         .add_plugins((
             ResourcesPlugin,
@@ -64,10 +70,13 @@ fn main() {
             Update,
             transition_to_awaiting_input.run_if(in_state(RunState::PreRun)),
         )
-        // PlayerTurn: run combat systems then transition to MonsterTurn
+        // PlayerTurn: run combat and item systems then transition to MonsterTurn
         .add_systems(
             Update,
             (
+                inventory::item_collection_system,
+                inventory::potion_use_system,
+                inventory::item_drop_system,
                 combat::melee_combat_system,
                 combat::damage_system,
                 combat::delete_the_dead,

@@ -1,15 +1,15 @@
 use bevy::{
-    color::palettes,
     input::{keyboard::KeyboardInput, ButtonState},
     prelude::*,
 };
 
 use crate::{
     combat::{CombatStats, WantsToMelee},
-    components::Name,
-    map::{xy_idx, Map, Position, TileType, FONT_SIZE},
+    components::{Item, WantsToPickupItem},
+    gamelog::GameLog,
+    map::{xy_idx, Map, Position, FONT_SIZE},
     resources::UiFont,
-    viewshed::Viewshed,
+    spawner,
     RunState,
 };
 
@@ -33,31 +33,7 @@ fn spawn_player(mut commands: Commands, font: Res<UiFont>, map: Res<Map>) {
     };
 
     let (player_x, player_y) = map.rooms[0].center();
-    commands.spawn((
-        Player,
-        Name {
-            name: "Player".to_string(),
-        },
-        Position {
-            x: player_x,
-            y: player_y,
-            z: 1,
-        },
-        CombatStats {
-            max_hp: 30,
-            hp: 30,
-            defense: 2,
-            power: 5,
-        },
-        Viewshed {
-            range: 8,
-            ..default()
-        },
-        Text2d::new("☺"),
-        text_font.clone(),
-        TextColor(palettes::basic::YELLOW.into()),
-        BackgroundColor(palettes::basic::BLACK.into()),
-    ));
+    spawner::spawn_player(&mut commands, &text_font, player_x, player_y);
 }
 
 fn try_move_player(
@@ -87,16 +63,38 @@ fn try_move_player(
     }
 }
 
+fn get_item(
+    commands: &mut Commands,
+    gamelog: &mut GameLog,
+    player_entity: Entity,
+    player_pos: &Position,
+    items: &Query<(Entity, &Position), (With<Item>, Without<Player>)>,
+) -> bool {
+    for (item_entity, item_pos) in items {
+        if item_pos.x == player_pos.x && item_pos.y == player_pos.y {
+            commands.entity(player_entity).insert(WantsToPickupItem {
+                collected_by: player_entity,
+                item: item_entity,
+            });
+            return true;
+        }
+    }
+    gamelog.entries.push("There is nothing here to pick up.".to_string());
+    false
+}
+
 fn handle_player_input(
     mut commands: Commands,
     mut evr_kbd: EventReader<KeyboardInput>,
     map: Res<Map>,
+    mut gamelog: ResMut<GameLog>,
     mut query: Single<(Entity, &mut Position), With<Player>>,
     mut next_state: ResMut<NextState<RunState>>,
     combat_stats: Query<&CombatStats>,
+    items: Query<(Entity, &Position), (With<Item>, Without<Player>)>,
 ) {
     let (player_entity, ref mut pos) = *query;
-    let mut player_moved = false;
+    let mut player_acted = false;
 
     for ev in evr_kbd.read() {
         // We don't care about key releases, only key presses (including repeats)
@@ -105,7 +103,7 @@ fn handle_player_input(
         }
 
         // Only process one input per frame to allow turn cycle to complete
-        if player_moved {
+        if player_acted {
             break;
         }
 
@@ -120,11 +118,11 @@ fn handle_player_input(
                     0,
                     &combat_stats,
                 );
-                player_moved = true;
+                player_acted = true;
             }
             KeyCode::ArrowRight | KeyCode::KeyL | KeyCode::Numpad6 => {
                 try_move_player(&mut commands, &map, player_entity, pos, 1, 0, &combat_stats);
-                player_moved = true;
+                player_acted = true;
             }
             KeyCode::ArrowUp | KeyCode::KeyK | KeyCode::Numpad8 => {
                 try_move_player(
@@ -136,11 +134,11 @@ fn handle_player_input(
                     -1,
                     &combat_stats,
                 );
-                player_moved = true;
+                player_acted = true;
             }
             KeyCode::ArrowDown | KeyCode::KeyJ | KeyCode::Numpad2 => {
                 try_move_player(&mut commands, &map, player_entity, pos, 0, 1, &combat_stats);
-                player_moved = true;
+                player_acted = true;
             }
 
             // Diagonals
@@ -154,7 +152,7 @@ fn handle_player_input(
                     -1,
                     &combat_stats,
                 );
-                player_moved = true;
+                player_acted = true;
             }
             KeyCode::KeyU | KeyCode::Numpad9 => {
                 try_move_player(
@@ -166,11 +164,11 @@ fn handle_player_input(
                     -1,
                     &combat_stats,
                 );
-                player_moved = true;
+                player_acted = true;
             }
             KeyCode::KeyM | KeyCode::Numpad3 => {
                 try_move_player(&mut commands, &map, player_entity, pos, 1, 1, &combat_stats);
-                player_moved = true;
+                player_acted = true;
             }
             KeyCode::KeyN | KeyCode::Numpad1 => {
                 try_move_player(
@@ -182,13 +180,30 @@ fn handle_player_input(
                     1,
                     &combat_stats,
                 );
-                player_moved = true;
+                player_acted = true;
+            }
+
+            // Pickup
+            KeyCode::KeyG => {
+                if get_item(&mut commands, &mut gamelog, player_entity, pos, &items) {
+                    player_acted = true;
+                }
+            }
+
+            // Inventory
+            KeyCode::KeyI => {
+                next_state.set(RunState::ShowInventory);
+            }
+
+            // Drop item
+            KeyCode::KeyD => {
+                next_state.set(RunState::ShowDropItem);
             }
             _ => {}
         }
     }
 
-    if player_moved {
+    if player_acted {
         next_state.set(RunState::PlayerTurn);
     }
 }

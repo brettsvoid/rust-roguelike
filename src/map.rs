@@ -3,6 +3,7 @@ use std::cmp::{max, min};
 use bevy::prelude::*;
 use rand::prelude::*;
 
+use crate::components::RenderOrder;
 use crate::distance::DistanceAlg;
 use crate::player::Player;
 use crate::resources::UiFont;
@@ -18,11 +19,10 @@ pub const GRID_PX: Vec2 = Vec2 {
 };
 
 /// Grid based position
-#[derive(Component)]
+#[derive(Component, Clone, Copy)]
 pub struct Position {
     pub x: i32,
     pub y: i32,
-    pub z: i32,
 }
 
 #[derive(Component)]
@@ -276,6 +276,7 @@ impl Plugin for MapPlugin {
                     update_revealed_state,
                     update_revealed_tiles,
                     update_visible_tiles,
+                    update_renderable_visibility,
                 ),
             );
     }
@@ -332,7 +333,7 @@ fn draw_map(mut commands: Commands, map: Res<Map>, font: Res<UiFont>) {
             TileType::Floor => {
                 commands.spawn((
                     Tile,
-                    Position { x, y, z: 0 },
+                    Position { x, y },
                     Text2d::new("."),
                     text_font.clone(),
                     TextColor(Color::srgb(0.5, 0.5, 0.5)),
@@ -342,7 +343,7 @@ fn draw_map(mut commands: Commands, map: Res<Map>, font: Res<UiFont>) {
             TileType::Wall => {
                 commands.spawn((
                     Tile,
-                    Position { x, y, z: 0 },
+                    Position { x, y },
                     Text2d::new("#"),
                     text_font.clone(),
                     TextColor(Color::srgb(0.0, 1.0, 0.0)),
@@ -397,17 +398,18 @@ fn update_revealed_state(mut tiles_query: Query<(&mut TextColor, &Revealed), Wit
 fn translate_positions(
     mut commands: Commands,
     window: Single<&Window>,
-    query: Query<(Entity, &Position), With<Position>>,
+    query: Query<(Entity, &Position, Option<&RenderOrder>)>,
 ) {
     let half_height = window.height() / 2.;
     let half_width = window.width() / 2.;
-    for (entity, position) in &query {
+    for (entity, position, render_order) in &query {
+        let z = render_order.map(|r| r.0 as f32 * 0.1).unwrap_or(0.0);
         // Map position coords to pixel coords. Y runs in the opposite direction to the pixel
         // coords.
         commands.entity(entity).insert(Transform::from_xyz(
             (position.x as f32) * GRID_PX.x + (GRID_PX.x / 2.) - half_width,
             (position.y as f32) * -GRID_PX.y - (GRID_PX.y / 2.) + half_height,
-            position.z as f32 / 10.,
+            z,
         ));
     }
 }
@@ -418,5 +420,19 @@ fn update_visible_tiles(mut map: ResMut<Map>, player: Single<&Viewshed, With<Pla
     for (pos_x, pos_y) in viewshed.visible_tiles.iter() {
         let idx = map.xy_idx(*pos_x, *pos_y);
         map.visible_tiles[idx] = true;
+    }
+}
+
+fn update_renderable_visibility(
+    map: Res<Map>,
+    mut query: Query<(&Position, &mut Visibility), (With<RenderOrder>, Without<Player>)>,
+) {
+    for (pos, mut visibility) in &mut query {
+        let idx = map.xy_idx(pos.x, pos.y);
+        if map.visible_tiles[idx] {
+            *visibility = Visibility::Visible;
+        } else {
+            *visibility = Visibility::Hidden;
+        }
     }
 }

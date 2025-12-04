@@ -1,18 +1,33 @@
+use bevy::input::keyboard::KeyboardInput;
+use bevy::input::ButtonState;
 use bevy::prelude::*;
 
 use crate::combat::CombatStats;
-use crate::components::Name;
+use crate::components::{InBackpack, Item, Name, Potion, WantsToDrinkPotion, WantsToDropItem};
 use crate::gamelog::GameLog;
 use crate::map::{Map, Position, GRID_PX, MAP_HEIGHT, MAP_WIDTH};
 use crate::player::Player;
 use crate::resources::UiFont;
+use crate::RunState;
 
 pub struct GuiPlugin;
 
 impl Plugin for GuiPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_gui)
-            .add_systems(Update, (update_health_bar, update_game_log, update_tooltip));
+            .add_systems(Update, (update_health_bar, update_game_log, update_tooltip))
+            .add_systems(OnEnter(RunState::ShowInventory), spawn_inventory_menu)
+            .add_systems(OnExit(RunState::ShowInventory), despawn_inventory_menu)
+            .add_systems(
+                Update,
+                handle_inventory_input.run_if(in_state(RunState::ShowInventory)),
+            )
+            .add_systems(OnEnter(RunState::ShowDropItem), spawn_drop_menu)
+            .add_systems(OnExit(RunState::ShowDropItem), despawn_drop_menu)
+            .add_systems(
+                Update,
+                handle_drop_input.run_if(in_state(RunState::ShowDropItem)),
+            );
     }
 }
 
@@ -30,6 +45,12 @@ struct Tooltip;
 
 #[derive(Component)]
 struct CursorHighlight;
+
+#[derive(Component)]
+struct InventoryMenu;
+
+#[derive(Component)]
+struct DropMenu;
 
 fn setup_gui(mut commands: Commands, font: Res<UiFont>) {
     // Bottom panel
@@ -261,4 +282,256 @@ fn update_tooltip(
         BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
         Tooltip,
     ));
+}
+
+fn spawn_inventory_menu(
+    mut commands: Commands,
+    font: Res<UiFont>,
+    player_query: Query<Entity, With<Player>>,
+    backpack_query: Query<(&InBackpack, &Name), With<Item>>,
+) {
+    let Ok(player_entity) = player_query.get_single() else {
+        return;
+    };
+
+    // Collect inventory items
+    let inventory: Vec<&str> = backpack_query
+        .iter()
+        .filter(|(backpack, _)| backpack.owner == player_entity)
+        .map(|(_, name)| name.name.as_str())
+        .collect();
+
+    // Build inventory text
+    let inventory_text = if inventory.is_empty() {
+        "Your inventory is empty.\n\n(Press Escape to close)".to_string()
+    } else {
+        let items: Vec<String> = inventory
+            .iter()
+            .enumerate()
+            .map(|(i, name)| format!("({}) {}", (b'a' + i as u8) as char, name))
+            .collect();
+        format!(
+            "Inventory\n\n{}\n\n(Press Escape to close)",
+            items.join("\n")
+        )
+    };
+
+    // Spawn centered inventory menu
+    commands.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        InventoryMenu,
+    )).with_children(|parent| {
+        parent.spawn((
+            Node {
+                padding: UiRect::all(Val::Px(20.0)),
+                border: UiRect::all(Val::Px(2.0)),
+                ..default()
+            },
+            BorderColor(Color::WHITE),
+            BackgroundColor(Color::srgb(0.1, 0.1, 0.1)),
+        )).with_children(|menu| {
+            menu.spawn((
+                Text::new(inventory_text),
+                TextFont {
+                    font: font.0.clone(),
+                    font_size: 16.0,
+                    ..default()
+                },
+                TextColor(Color::WHITE),
+            ));
+        });
+    });
+}
+
+fn despawn_inventory_menu(
+    mut commands: Commands,
+    menu_query: Query<Entity, With<InventoryMenu>>,
+) {
+    for entity in &menu_query {
+        commands.entity(entity).despawn_recursive();
+    }
+}
+
+fn handle_inventory_input(
+    mut commands: Commands,
+    mut evr_kbd: EventReader<KeyboardInput>,
+    mut next_state: ResMut<NextState<RunState>>,
+    player_query: Query<Entity, With<Player>>,
+    backpack_query: Query<(Entity, &InBackpack), With<Potion>>,
+) {
+    let Ok(player_entity) = player_query.get_single() else {
+        return;
+    };
+
+    // Collect player's potions
+    let potions: Vec<Entity> = backpack_query
+        .iter()
+        .filter(|(_, backpack)| backpack.owner == player_entity)
+        .map(|(entity, _)| entity)
+        .collect();
+
+    for ev in evr_kbd.read() {
+        if ev.state == ButtonState::Released {
+            continue;
+        }
+
+        match ev.key_code {
+            KeyCode::Escape => {
+                next_state.set(RunState::AwaitingInput);
+            }
+            KeyCode::KeyA => try_use_potion(&mut commands, &potions, 0, player_entity, &mut next_state),
+            KeyCode::KeyB => try_use_potion(&mut commands, &potions, 1, player_entity, &mut next_state),
+            KeyCode::KeyC => try_use_potion(&mut commands, &potions, 2, player_entity, &mut next_state),
+            KeyCode::KeyD => try_use_potion(&mut commands, &potions, 3, player_entity, &mut next_state),
+            KeyCode::KeyE => try_use_potion(&mut commands, &potions, 4, player_entity, &mut next_state),
+            KeyCode::KeyF => try_use_potion(&mut commands, &potions, 5, player_entity, &mut next_state),
+            _ => {}
+        }
+    }
+}
+
+fn try_use_potion(
+    commands: &mut Commands,
+    potions: &[Entity],
+    index: usize,
+    player_entity: Entity,
+    next_state: &mut ResMut<NextState<RunState>>,
+) {
+    if let Some(&potion) = potions.get(index) {
+        commands.entity(player_entity).insert(WantsToDrinkPotion { potion });
+        next_state.set(RunState::PlayerTurn);
+    }
+}
+
+fn spawn_drop_menu(
+    mut commands: Commands,
+    font: Res<UiFont>,
+    player_query: Query<Entity, With<Player>>,
+    backpack_query: Query<(&InBackpack, &Name), With<Item>>,
+) {
+    let Ok(player_entity) = player_query.get_single() else {
+        return;
+    };
+
+    // Collect inventory items
+    let inventory: Vec<&str> = backpack_query
+        .iter()
+        .filter(|(backpack, _)| backpack.owner == player_entity)
+        .map(|(_, name)| name.name.as_str())
+        .collect();
+
+    // Build drop menu text
+    let menu_text = if inventory.is_empty() {
+        "Nothing to drop.\n\n(Press Escape to close)".to_string()
+    } else {
+        let items: Vec<String> = inventory
+            .iter()
+            .enumerate()
+            .map(|(i, name)| format!("({}) {}", (b'a' + i as u8) as char, name))
+            .collect();
+        format!(
+            "Drop which item?\n\n{}\n\n(Press Escape to close)",
+            items.join("\n")
+        )
+    };
+
+    // Spawn centered drop menu
+    commands.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        DropMenu,
+    )).with_children(|parent| {
+        parent.spawn((
+            Node {
+                padding: UiRect::all(Val::Px(20.0)),
+                border: UiRect::all(Val::Px(2.0)),
+                ..default()
+            },
+            BorderColor(Color::WHITE),
+            BackgroundColor(Color::srgb(0.1, 0.1, 0.1)),
+        )).with_children(|menu| {
+            menu.spawn((
+                Text::new(menu_text),
+                TextFont {
+                    font: font.0.clone(),
+                    font_size: 16.0,
+                    ..default()
+                },
+                TextColor(Color::WHITE),
+            ));
+        });
+    });
+}
+
+fn despawn_drop_menu(
+    mut commands: Commands,
+    menu_query: Query<Entity, With<DropMenu>>,
+) {
+    for entity in &menu_query {
+        commands.entity(entity).despawn_recursive();
+    }
+}
+
+fn handle_drop_input(
+    mut commands: Commands,
+    mut evr_kbd: EventReader<KeyboardInput>,
+    mut next_state: ResMut<NextState<RunState>>,
+    player_query: Query<Entity, With<Player>>,
+    backpack_query: Query<(Entity, &InBackpack), With<Item>>,
+) {
+    let Ok(player_entity) = player_query.get_single() else {
+        return;
+    };
+
+    // Collect player's items
+    let items: Vec<Entity> = backpack_query
+        .iter()
+        .filter(|(_, backpack)| backpack.owner == player_entity)
+        .map(|(entity, _)| entity)
+        .collect();
+
+    for ev in evr_kbd.read() {
+        if ev.state == ButtonState::Released {
+            continue;
+        }
+
+        match ev.key_code {
+            KeyCode::Escape => {
+                next_state.set(RunState::AwaitingInput);
+            }
+            KeyCode::KeyA => try_drop_item(&mut commands, &items, 0, player_entity, &mut next_state),
+            KeyCode::KeyB => try_drop_item(&mut commands, &items, 1, player_entity, &mut next_state),
+            KeyCode::KeyC => try_drop_item(&mut commands, &items, 2, player_entity, &mut next_state),
+            KeyCode::KeyD => try_drop_item(&mut commands, &items, 3, player_entity, &mut next_state),
+            KeyCode::KeyE => try_drop_item(&mut commands, &items, 4, player_entity, &mut next_state),
+            KeyCode::KeyF => try_drop_item(&mut commands, &items, 5, player_entity, &mut next_state),
+            _ => {}
+        }
+    }
+}
+
+fn try_drop_item(
+    commands: &mut Commands,
+    items: &[Entity],
+    index: usize,
+    player_entity: Entity,
+    next_state: &mut ResMut<NextState<RunState>>,
+) {
+    if let Some(&item) = items.get(index) {
+        commands.entity(player_entity).insert(WantsToDropItem { item });
+        next_state.set(RunState::PlayerTurn);
+    }
 }

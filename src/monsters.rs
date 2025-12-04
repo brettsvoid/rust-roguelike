@@ -1,15 +1,16 @@
 use bevy::{color::palettes, prelude::*};
-use rand::Rng;
 
 use crate::{
     combat::{CombatStats, WantsToMelee},
-    components::{BlocksTile, Name},
+    components::Name,
     distance::DistanceAlg,
     map::{Map, Position, TileType, FONT_SIZE, MAP_HEIGHT, MAP_WIDTH},
     pathfinding,
     player::Player,
     resources::UiFont,
-    viewshed::{self, Viewshed},
+    rng::GameRng,
+    spawner,
+    viewshed::Viewshed,
     RunState,
 };
 
@@ -21,76 +22,23 @@ impl Plugin for MonstersPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_monsters).add_systems(
             Update,
-            (
-                update_monsters,
-                update_blocked_tiles.run_if(in_state(RunState::MonsterTurn)),
-            ),
+            update_blocked_tiles.run_if(in_state(RunState::MonsterTurn)),
         );
     }
 }
 
-fn setup_monsters(mut commands: Commands, font: Res<UiFont>, map: Res<Map>) {
+fn setup_monsters(mut commands: Commands, font: Res<UiFont>, map: Res<Map>, mut rng: ResMut<GameRng>) {
     let text_font = TextFont {
         font: font.0.clone(),
         font_size: FONT_SIZE,
         ..default()
     };
 
-    let mut rng = rand::thread_rng();
-    let roll = rng.gen_range(0..=1);
-    let monster_type: &str;
-    let name: String;
-    match roll {
-        0 => {
-            monster_type = "o";
-            name = "Orc".to_string();
-        }
-        _ => {
-            monster_type = "g";
-            name = "Goblin".to_string();
-        }
-    };
+    let mut monster_id: usize = 0;
 
     // Skip the first room because that's where the player starts
-    for (i, room) in map.rooms.iter().skip(1).enumerate() {
-        let (x, y) = room.center();
-        commands.spawn((
-            Monster,
-            Name {
-                name: format!("{} #{}", &name, i),
-            },
-            Position { x, y, z: 1 },
-            BlocksTile,
-            CombatStats {
-                max_hp: 16,
-                hp: 16,
-                defense: 1,
-                power: 4,
-            },
-            Text2d::new(monster_type),
-            text_font.clone(),
-            Viewshed {
-                range: 8,
-                ..default()
-            },
-            TextColor(palettes::basic::RED.into()),
-            BackgroundColor(palettes::basic::BLACK.into()),
-            Visibility::Hidden,
-        ));
-    }
-}
-
-fn update_monsters(
-    map: Res<Map>,
-    mut monster_query: Query<(&Position, &mut Visibility), With<Monster>>,
-) {
-    for (pos, mut visibility) in &mut monster_query {
-        let idx = map.xy_idx(pos.x, pos.y);
-        if map.visible_tiles[idx] && matches!(*visibility, Visibility::Hidden) {
-            visibility.toggle_visible_hidden();
-        } else if matches!(*visibility, Visibility::Visible) {
-            visibility.toggle_visible_hidden();
-        }
+    for room in map.rooms.iter().skip(1) {
+        spawner::spawn_room(&mut commands, &mut rng, &text_font, room, &mut monster_id);
     }
 }
 
