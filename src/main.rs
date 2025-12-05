@@ -39,6 +39,13 @@ pub enum RunState {
     MonsterTurn,
     ShowInventory,
     ShowDropItem,
+    ShowTargeting,
+}
+
+#[derive(Resource, Default)]
+pub struct TargetingInfo {
+    pub range: i32,
+    pub item: Option<Entity>,
 }
 
 fn main() {
@@ -54,6 +61,7 @@ fn main() {
         .init_state::<RunState>()
         .init_resource::<gamelog::GameLog>()
         .init_resource::<rng::GameRng>()
+        .init_resource::<TargetingInfo>()
         .add_event::<AppExit>()
         .add_plugins((
             ResourcesPlugin,
@@ -75,7 +83,7 @@ fn main() {
             Update,
             (
                 inventory::item_collection_system,
-                inventory::potion_use_system,
+                inventory::item_use_system,
                 inventory::item_drop_system,
                 combat::melee_combat_system,
                 combat::damage_system,

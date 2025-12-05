@@ -16,6 +16,7 @@ pub struct RenderableBundle {
     pub color: TextColor,
     pub background: BackgroundColor,
     pub render_order: RenderOrder,
+    pub visibility: Visibility,
 }
 
 impl RenderableBundle {
@@ -26,6 +27,7 @@ impl RenderableBundle {
             color: TextColor(fg),
             background: BackgroundColor(bg),
             render_order,
+            visibility: Visibility::Inherited,
         }
     }
 }
@@ -42,8 +44,44 @@ pub struct BlocksTile;
 pub struct Item;
 
 #[derive(Component, Debug)]
-pub struct Potion {
+pub struct Consumable;
+
+#[derive(Component, Debug)]
+pub struct ProvidesHealing {
     pub heal_amount: i32,
+}
+
+#[derive(Component, Debug)]
+pub struct Ranged {
+    pub range: i32,
+}
+
+#[derive(Component, Debug)]
+pub struct InflictsDamage {
+    pub damage: i32,
+}
+
+#[derive(Component, Debug)]
+pub struct AreaOfEffect {
+    pub radius: i32,
+}
+
+#[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum Targeting {
+    #[default]
+    Tile,           // Can target any tile
+    SingleEntity,   // Must target an entity
+    // Future: MultiEntity { count: i32 }, Line { length: i32 }, etc.
+}
+
+#[derive(Component, Debug)]
+pub struct Confusion {
+    pub turns: i32,
+}
+
+#[derive(Component, Debug)]
+pub struct CausesConfusion {
+    pub turns: i32,
 }
 
 #[derive(Component, Debug)]
@@ -58,8 +96,9 @@ pub struct WantsToPickupItem {
 }
 
 #[derive(Component, Debug)]
-pub struct WantsToDrinkPotion {
-    pub potion: Entity,
+pub struct WantsToUseItem {
+    pub item: Entity,
+    pub target: Option<(i32, i32)>,
 }
 
 #[derive(Component, Debug)]

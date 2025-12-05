@@ -2,8 +2,9 @@ use bevy::{color::palettes, prelude::*};
 
 use crate::{
     combat::{CombatStats, WantsToMelee},
-    components::Name,
+    components::{Confusion, Name},
     distance::DistanceAlg,
+    gamelog::GameLog,
     map::{Map, Position, TileType, FONT_SIZE, MAP_HEIGHT, MAP_WIDTH},
     pathfinding,
     player::Player,
@@ -59,8 +60,9 @@ fn update_blocked_tiles(mut map: ResMut<Map>, monster_query: Query<&Position, Wi
 pub fn monster_ai(
     mut commands: Commands,
     mut map: ResMut<Map>,
+    mut gamelog: ResMut<GameLog>,
     mut monster_query: Query<
-        (Entity, &mut Position, &mut Viewshed, &Name, &CombatStats),
+        (Entity, &mut Position, &mut Viewshed, &Name, &CombatStats, Option<&mut Confusion>),
         (With<Monster>, Without<Player>),
     >,
     player_query: Single<(Entity, &Position), With<Player>>,
@@ -68,9 +70,21 @@ pub fn monster_ai(
     let (player_entity, player_pos) = player_query.into_inner();
     let player_idx = map.xy_idx(player_pos.x, player_pos.y);
 
-    for (entity, mut pos, mut viewshed, _name, stats) in &mut monster_query {
+    for (entity, mut pos, mut viewshed, name, stats, confusion) in &mut monster_query {
         if stats.hp <= 0 {
             continue;
+        }
+
+        // Handle confusion
+        if let Some(mut confused) = confusion {
+            confused.turns -= 1;
+            if confused.turns < 1 {
+                commands.entity(entity).remove::<Confusion>();
+                gamelog.entries.push(format!("{} is no longer confused.", name.name));
+            } else {
+                gamelog.entries.push(format!("{} is confused and stumbles around.", name.name));
+            }
+            continue; // Skip normal AI while confused
         }
 
         let distance = DistanceAlg::Chebyshev.distance2d(

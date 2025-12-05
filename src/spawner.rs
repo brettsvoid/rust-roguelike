@@ -3,7 +3,7 @@ use rand::Rng;
 
 use crate::{
     combat::CombatStats,
-    components::{BlocksTile, Item, Name, Potion, RenderOrder, RenderableBundle},
+    components::{AreaOfEffect, BlocksTile, CausesConfusion, Consumable, InflictsDamage, Item, Name, ProvidesHealing, Ranged, RenderOrder, RenderableBundle, Targeting},
     map::Position,
     monsters::Monster,
     player::Player,
@@ -12,7 +12,7 @@ use crate::{
     viewshed::Viewshed,
 };
 
-const MAX_MONSTERS: i32 = 4;
+const MAX_MONSTERS: i32 = 3;
 const MAX_ITEMS: i32 = 2;
 
 pub fn spawn_player(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
@@ -77,7 +77,17 @@ pub fn spawn_room(commands: &mut Commands, rng: &mut GameRng, font: &TextFont, r
 
     // Spawn items
     for (x, y) in item_spawn_points.iter() {
-        spawn_health_potion(commands, font, *x, *y);
+        spawn_random_item(commands, rng, font, *x, *y);
+    }
+}
+
+fn spawn_random_item(commands: &mut Commands, rng: &mut GameRng, font: &TextFont, x: i32, y: i32) {
+    let roll = rng.0.gen_range(0..=3);
+    match roll {
+        0 => spawn_health_potion(commands, font, x, y),
+        1 => spawn_magic_missile_scroll(commands, font, x, y),
+        2 => spawn_fireball_scroll(commands, font, x, y),
+        _ => spawn_confusion_scroll(commands, font, x, y),
     }
 }
 
@@ -122,11 +132,57 @@ fn spawn_monster(commands: &mut Commands, font: &TextFont, x: i32, y: i32, glyph
 fn spawn_health_potion(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
     commands.spawn((
         Item,
-        Potion { heal_amount: 8 },
+        Consumable,
+        ProvidesHealing { heal_amount: 8 },
         Name {
             name: "Health Potion".to_string(),
         },
         Position { x, y },
         RenderableBundle::new("¡", palettes::basic::FUCHSIA.into(), palettes::basic::BLACK.into(), RenderOrder::ITEM, font),
+    ));
+}
+
+fn spawn_magic_missile_scroll(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
+    commands.spawn((
+        Item,
+        Consumable,
+        Ranged { range: 6 },
+        InflictsDamage { damage: 8 },
+        Targeting::SingleEntity,
+        Name {
+            name: "Magic Missile Scroll".to_string(),
+        },
+        Position { x, y },
+        RenderableBundle::new(")", palettes::basic::AQUA.into(), palettes::basic::BLACK.into(), RenderOrder::ITEM, font),
+    ));
+}
+
+fn spawn_fireball_scroll(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
+    commands.spawn((
+        Item,
+        Consumable,
+        Ranged { range: 6 },
+        InflictsDamage { damage: 20 },
+        AreaOfEffect { radius: 3 },
+        Name {
+            name: "Fireball Scroll".to_string(),
+        },
+        Position { x, y },
+        RenderableBundle::new(")", palettes::css::ORANGE.into(), palettes::basic::BLACK.into(), RenderOrder::ITEM, font),
+    ));
+}
+
+fn spawn_confusion_scroll(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
+    commands.spawn((
+        Item,
+        Consumable,
+        Ranged { range: 6 },
+        CausesConfusion { turns: 4 },
+        Targeting::SingleEntity,
+        Name {
+            name: "Confusion Scroll".to_string(),
+        },
+        Position { x, y },
+        RenderableBundle::new(")", palettes::css::PINK.into(), palettes::basic::BLACK.into(), RenderOrder::ITEM, font),
     ));
 }
