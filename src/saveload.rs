@@ -43,6 +43,7 @@ pub struct SerializedMap {
     pub revealed_tiles: Vec<bool>,
     pub width: i32,
     pub height: i32,
+    pub depth: i32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -242,6 +243,7 @@ pub fn save_game(
         revealed_tiles: map.revealed_tiles.clone(),
         width: map.width,
         height: map.height,
+        depth: map.depth,
     };
 
     let save_data = SaveData {
@@ -309,6 +311,7 @@ pub fn load_game(
     map.revealed_tiles = save_data.map.revealed_tiles;
     map.width = save_data.map.width;
     map.height = save_data.map.height;
+    map.depth = save_data.map.depth;
     // Recalculate blocked tiles
     map.blocked_tiles = map
         .tiles
@@ -355,6 +358,16 @@ pub fn load_game(
                     Text2d::new("#"),
                     text_font.clone(),
                     TextColor(Color::srgb(0.0, 1.0, 0.0)),
+                    Revealed(revealed_state),
+                ));
+            }
+            TileType::DownStairs => {
+                commands.spawn((
+                    Tile,
+                    Position { x, y },
+                    Text2d::new(">"),
+                    text_font.clone(),
+                    TextColor(Color::srgb(0.0, 1.0, 1.0)),
                     Revealed(revealed_state),
                 ));
             }

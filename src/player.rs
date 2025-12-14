@@ -7,7 +7,7 @@ use crate::{
     combat::{CombatStats, WantsToMelee},
     components::{Item, WantsToPickupItem},
     gamelog::GameLog,
-    map::{xy_idx, Map, Position, FONT_SIZE},
+    map::{xy_idx, Map, Position, TileType, FONT_SIZE},
     resources::UiFont,
     spawner,
     RunState,
@@ -198,6 +198,16 @@ fn handle_player_input(
             // Drop item
             KeyCode::KeyD => {
                 next_state.set(RunState::ShowDropItem);
+            }
+
+            // Go down stairs
+            KeyCode::Period => {
+                let idx = xy_idx(pos.x, pos.y);
+                if map.tiles[idx] == TileType::DownStairs {
+                    next_state.set(RunState::NextLevel);
+                } else {
+                    gamelog.entries.push("There are no stairs here.".to_string());
+                }
             }
             _ => {}
         }

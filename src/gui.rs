@@ -11,7 +11,6 @@ use crate::monsters::Monster;
 use crate::player::Player;
 use crate::resources::UiFont;
 use crate::saveload;
-use crate::viewshed::Viewshed;
 use crate::{RunState, TargetingInfo};
 
 pub struct GuiPlugin;
@@ -19,7 +18,7 @@ pub struct GuiPlugin;
 impl Plugin for GuiPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_gui)
-            .add_systems(Update, (update_health_bar, update_game_log, update_tooltip))
+            .add_systems(Update, (update_health_bar, update_depth, update_game_log, update_tooltip))
             // Main menu
             .add_systems(OnEnter(RunState::MainMenu), spawn_main_menu)
             .add_systems(OnExit(RunState::MainMenu), despawn_main_menu)
@@ -56,6 +55,9 @@ struct HealthText;
 
 #[derive(Component)]
 struct HealthBar;
+
+#[derive(Component)]
+struct DepthText;
 
 #[derive(Component)]
 struct GameLogText;
@@ -139,6 +141,18 @@ fn setup_gui(mut commands: Commands, font: Res<UiFont>) {
                     ));
                 });
 
+            // Depth display
+            parent.spawn((
+                Text::new("Depth: 1"),
+                TextFont {
+                    font: font.0.clone(),
+                    font_size: 16.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(1.0, 1.0, 0.0)), // Yellow
+                DepthText,
+            ));
+
             // Game log container
             parent
                 .spawn((
@@ -182,6 +196,12 @@ fn update_health_bar(
             let percent = (stats.hp as f32 / stats.max_hp as f32) * 100.0;
             node.width = Val::Percent(percent.max(0.0));
         }
+    }
+}
+
+fn update_depth(map: Res<Map>, mut depth_text_query: Query<&mut Text, With<DepthText>>) {
+    if let Ok(mut text) = depth_text_query.get_single_mut() {
+        **text = format!("Depth: {}", map.depth);
     }
 }
 

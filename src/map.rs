@@ -32,6 +32,7 @@ pub struct Tile;
 pub enum TileType {
     Floor,
     Wall,
+    DownStairs,
 }
 
 #[derive(Debug)]
@@ -50,6 +51,7 @@ pub struct Map {
     pub tiles: Vec<TileType>,
     pub width: i32,
     pub height: i32,
+    pub depth: i32,
     pub revealed_tiles: Vec<bool>,
     pub visible_tiles: Vec<bool>,
     pub blocked_tiles: Vec<bool>,
@@ -209,6 +211,7 @@ impl Map {
             tiles: vec![TileType::Wall; size],
             width: MAP_WIDTH as i32,
             height: MAP_HEIGHT as i32,
+            depth: 1,
             revealed_tiles: vec![false; size],
             visible_tiles: vec![false; size],
             blocked_tiles: vec![false; size],
@@ -252,6 +255,13 @@ impl Map {
 
                 map.rooms.push(new_room);
             }
+        }
+
+        // Place down stairs in the center of the last room
+        if let Some(last_room) = map.rooms.last() {
+            let (stairs_x, stairs_y) = last_room.center();
+            let stairs_idx = map.xy_idx(stairs_x, stairs_y);
+            map.tiles[stairs_idx] = TileType::DownStairs;
         }
 
         map
@@ -347,6 +357,16 @@ fn draw_map(mut commands: Commands, map: Res<Map>, font: Res<UiFont>) {
                     Text2d::new("#"),
                     text_font.clone(),
                     TextColor(Color::srgb(0.0, 1.0, 0.0)),
+                    Revealed(RevealedState::Hidden),
+                ));
+            }
+            TileType::DownStairs => {
+                commands.spawn((
+                    Tile,
+                    Position { x, y },
+                    Text2d::new(">"),
+                    text_font.clone(),
+                    TextColor(Color::srgb(0.0, 1.0, 1.0)),
                     Revealed(RevealedState::Hidden),
                 ));
             }

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use bevy::prelude::*;
-use map::{MapPlugin, GRID_PX, MAP_HEIGHT, MAP_WIDTH};
+use map::{MapPlugin, GRID_PX, MAP_WIDTH};
 use monsters::MonstersPlugin;
 use player::PlayerPlugin;
 use resources::ResourcesPlugin;
@@ -42,6 +42,7 @@ pub enum RunState {
     ShowInventory,
     ShowDropItem,
     ShowTargeting,
+    NextLevel,
 }
 
 #[derive(Resource, Default)]
@@ -107,6 +108,11 @@ fn main() {
             )
                 .chain()
                 .run_if(in_state(RunState::MonsterTurn)),
+        )
+        // NextLevel: generate new level and transition to PreRun
+        .add_systems(
+            Update,
+            go_next_level.run_if(in_state(RunState::NextLevel)),
         )
         .run();
 }
@@ -176,6 +182,126 @@ fn transition_to_awaiting_input(mut next_state: ResMut<NextState<RunState>>) {
 
 fn transition_to_monster_turn(mut next_state: ResMut<NextState<RunState>>) {
     next_state.set(RunState::MonsterTurn);
+}
+
+fn go_next_level(
+    mut commands: Commands,
+    mut map: ResMut<map::Map>,
+    mut gamelog: ResMut<gamelog::GameLog>,
+    mut next_state: ResMut<NextState<RunState>>,
+    font: Res<resources::UiFont>,
+    mut rng: ResMut<rng::GameRng>,
+    mut player_query: Query<(Entity, &mut combat::CombatStats), With<player::Player>>,
+    backpack_query: Query<(Entity, &components::InBackpack)>,
+    entities_to_delete: Query<
+        Entity,
+        Or<(With<monsters::Monster>, With<map::Tile>, With<components::Item>)>,
+    >,
+) {
+    // Get player entity and items in their backpack
+    let Ok((player_entity, mut player_stats)) = player_query.get_single_mut() else {
+        return;
+    };
+    let player_items: Vec<Entity> = backpack_query
+        .iter()
+        .filter(|(_, backpack)| backpack.owner == player_entity)
+        .map(|(entity, _)| entity)
+        .collect();
+
+    // Delete all entities except player and their backpack items
+    for entity in &entities_to_delete {
+        if entity != player_entity && !player_items.contains(&entity) {
+            commands.entity(entity).despawn_recursive();
+        }
+    }
+
+    // Generate new map with increased depth
+    let new_map = map::Map::new_map_rooms_and_corridors();
+    let new_depth = map.depth + 1;
+    *map = new_map;
+    map.depth = new_depth;
+
+    // Spawn new map tiles
+    let text_font = TextFont {
+        font: font.0.clone(),
+        font_size: map::FONT_SIZE,
+        ..default()
+    };
+
+    let mut y = 0;
+    let mut x = 0;
+    for tile in map.tiles.iter() {
+        match tile {
+            map::TileType::Floor => {
+                commands.spawn((
+                    map::Tile,
+                    map::Position { x, y },
+                    Text2d::new("."),
+                    text_font.clone(),
+                    TextColor(Color::srgb(0.5, 0.5, 0.5)),
+                    map::Revealed(map::RevealedState::Hidden),
+                ));
+            }
+            map::TileType::Wall => {
+                commands.spawn((
+                    map::Tile,
+                    map::Position { x, y },
+                    Text2d::new("#"),
+                    text_font.clone(),
+                    TextColor(Color::srgb(0.0, 1.0, 0.0)),
+                    map::Revealed(map::RevealedState::Hidden),
+                ));
+            }
+            map::TileType::DownStairs => {
+                commands.spawn((
+                    map::Tile,
+                    map::Position { x, y },
+                    Text2d::new(">"),
+                    text_font.clone(),
+                    TextColor(Color::srgb(0.0, 1.0, 1.0)),
+                    map::Revealed(map::RevealedState::Hidden),
+                ));
+            }
+        }
+
+        x += 1;
+        if x > map::MAP_WIDTH as i32 - 1 {
+            x = 0;
+            y += 1;
+        }
+    }
+
+    // Spawn monsters and items in new rooms (skip first room - player starts there)
+    let mut monster_id: usize = 0;
+    for room in map.rooms.iter().skip(1) {
+        spawner::spawn_room(&mut commands, &mut rng, &text_font, room, &mut monster_id);
+    }
+
+    // Move player to first room center
+    let (player_x, player_y) = map.rooms[0].center();
+    commands
+        .entity(player_entity)
+        .insert(map::Position { x: player_x, y: player_y });
+
+    // Heal player (restore up to 50% of max HP)
+    let heal_amount = player_stats.max_hp / 2;
+    player_stats.hp = (player_stats.hp + heal_amount).min(player_stats.max_hp);
+
+    // Mark player's viewshed as dirty to recalculate visibility
+    commands
+        .entity(player_entity)
+        .insert(viewshed::Viewshed {
+            range: 8,
+            visible_tiles: Vec::new(),
+            dirty: true,
+        });
+
+    gamelog.entries.push(format!(
+        "You descend to level {}. You feel slightly rejuvenated.",
+        new_depth
+    ));
+
+    next_state.set(RunState::PreRun);
 }
 
 fn run_loop(mut app: App) -> AppExit {

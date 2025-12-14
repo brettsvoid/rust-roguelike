@@ -1,4 +1,4 @@
-use bevy::{color::palettes, prelude::*};
+use bevy::prelude::*;
 
 use crate::{
     combat::{CombatStats, WantsToMelee},
