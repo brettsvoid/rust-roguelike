@@ -6,10 +6,12 @@ use crate::combat::CombatStats;
 use crate::components::{AreaOfEffect, InBackpack, Item, Name, Ranged, Targeting, WantsToDropItem, WantsToUseItem};
 use crate::distance::DistanceAlg;
 use crate::gamelog::GameLog;
-use crate::map::{Map, Position, TileType, GRID_PX, MAP_HEIGHT, MAP_WIDTH};
+use crate::map::{Map, Position, Tile, TileType, GRID_PX, MAP_HEIGHT, MAP_WIDTH};
 use crate::monsters::Monster;
 use crate::player::Player;
 use crate::resources::UiFont;
+use crate::saveload;
+use crate::viewshed::Viewshed;
 use crate::{RunState, TargetingInfo};
 
 pub struct GuiPlugin;
@@ -18,6 +20,14 @@ impl Plugin for GuiPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_gui)
             .add_systems(Update, (update_health_bar, update_game_log, update_tooltip))
+            // Main menu
+            .add_systems(OnEnter(RunState::MainMenu), spawn_main_menu)
+            .add_systems(OnExit(RunState::MainMenu), despawn_main_menu)
+            .add_systems(
+                Update,
+                handle_main_menu_input.run_if(in_state(RunState::MainMenu)),
+            )
+            // Inventory
             .add_systems(OnEnter(RunState::ShowInventory), spawn_inventory_menu)
             .add_systems(OnExit(RunState::ShowInventory), despawn_inventory_menu)
             .add_systems(
@@ -73,6 +83,9 @@ struct TargetBorder;
 
 #[derive(Component)]
 struct RangeIndicator;
+
+#[derive(Component)]
+struct MainMenu;
 
 fn setup_gui(mut commands: Commands, font: Res<UiFont>) {
     // Bottom panel
@@ -1093,6 +1106,106 @@ fn handle_targeting(
                 target: Some((map_x, map_y)),
             });
             next_state.set(RunState::PlayerTurn);
+        }
+    }
+}
+
+// ============================================================================
+// Main Menu
+// ============================================================================
+
+fn spawn_main_menu(mut commands: Commands, font: Res<UiFont>) {
+    let has_save = saveload::has_save_file();
+
+    let menu_text = if has_save {
+        "Rust Roguelike\n\n(N) New Game\n(C) Continue\n(Q) Quit"
+    } else {
+        "Rust Roguelike\n\n(N) New Game\n(Q) Quit"
+    };
+
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
+            MainMenu,
+        ))
+        .with_children(|parent| {
+            parent
+                .spawn((
+                    Node {
+                        padding: UiRect::all(Val::Px(30.0)),
+                        border: UiRect::all(Val::Px(2.0)),
+                        ..default()
+                    },
+                    BorderColor(Color::WHITE),
+                    BackgroundColor(Color::srgb(0.1, 0.1, 0.1)),
+                ))
+                .with_children(|menu| {
+                    menu.spawn((
+                        Text::new(menu_text),
+                        TextFont {
+                            font: font.0.clone(),
+                            font_size: 20.0,
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                    ));
+                });
+        });
+}
+
+fn despawn_main_menu(mut commands: Commands, menu_query: Query<Entity, With<MainMenu>>) {
+    for entity in &menu_query {
+        commands.entity(entity).despawn_recursive();
+    }
+}
+
+fn handle_main_menu_input(
+    mut commands: Commands,
+    mut evr_kbd: EventReader<KeyboardInput>,
+    mut next_state: ResMut<NextState<RunState>>,
+    mut exit: EventWriter<AppExit>,
+    // Resources needed for loading
+    entities_to_despawn: Query<Entity, Or<(With<Player>, With<Monster>, With<Item>, With<Tile>)>>,
+    mut map: ResMut<Map>,
+    mut game_log: ResMut<GameLog>,
+    font: Res<UiFont>,
+) {
+    for ev in evr_kbd.read() {
+        if ev.state != ButtonState::Pressed {
+            continue;
+        }
+
+        match ev.key_code {
+            KeyCode::KeyN => {
+                // New Game - just close menu and continue with already-spawned game
+                next_state.set(RunState::PreRun);
+            }
+            KeyCode::KeyC => {
+                // Continue - load from save file
+                if saveload::has_save_file() {
+                    if saveload::load_game(
+                        &mut commands,
+                        &entities_to_despawn,
+                        &mut map,
+                        &mut game_log,
+                        &font,
+                    ) {
+                        next_state.set(RunState::PreRun);
+                    }
+                }
+            }
+            KeyCode::KeyQ => {
+                exit.send(AppExit::Success);
+            }
+            _ => {}
         }
     }
 }

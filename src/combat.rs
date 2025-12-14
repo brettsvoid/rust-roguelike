@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::components::Name;
 use crate::gamelog::GameLog;
 use crate::player::Player;
+use crate::saveload;
 
 #[derive(Component, Debug)]
 pub struct CombatStats {
@@ -92,6 +93,8 @@ pub fn delete_the_dead(
     if let Ok(player_stats) = player_query.get_single() {
         if player_stats.hp <= 0 {
             log.entries.push("You are dead".to_string());
+            // Delete save file on death (permadeath)
+            saveload::delete_save_file();
         }
     }
 }

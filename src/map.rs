@@ -28,7 +28,7 @@ pub struct Position {
 #[derive(Component)]
 pub struct Tile;
 
-#[derive(PartialEq, Copy, Clone, Debug)]
+#[derive(PartialEq, Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum TileType {
     Floor,
     Wall,
@@ -405,8 +405,8 @@ fn translate_positions(
     for (entity, position, render_order) in &query {
         let z = render_order.map(|r| r.0 as f32 * 0.1).unwrap_or(0.0);
         // Map position coords to pixel coords. Y runs in the opposite direction to the pixel
-        // coords.
-        commands.entity(entity).insert(Transform::from_xyz(
+        // coords. Use try_insert to handle entities that may be despawned during load.
+        commands.entity(entity).try_insert(Transform::from_xyz(
             (position.x as f32) * GRID_PX.x + (GRID_PX.x / 2.) - half_width,
             (position.y as f32) * -GRID_PX.y - (GRID_PX.y / 2.) + half_height,
             z,

@@ -20,6 +20,7 @@ mod pathfinding;
 mod player;
 mod resources;
 mod rng;
+mod saveload;
 mod shapes;
 mod spawner;
 mod viewshed;
@@ -33,8 +34,9 @@ const RESOLUTION: Vec2 = Vec2 {
 #[derive(States, Clone, Copy, Default, Eq, PartialEq, Debug, Hash)]
 pub enum RunState {
     #[default]
-    AwaitingInput,
+    MainMenu,
     PreRun,
+    AwaitingInput,
     PlayerTurn,
     MonsterTurn,
     ShowInventory,
@@ -113,8 +115,57 @@ fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
 }
 
-fn handle_exit(keyboard: Res<ButtonInput<KeyCode>>, mut exit: EventWriter<AppExit>) {
+fn handle_exit(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut exit: EventWriter<AppExit>,
+    state: Res<State<RunState>>,
+    map: Res<map::Map>,
+    game_log: Res<gamelog::GameLog>,
+    player_query: Query<
+        (Entity, &map::Position, &components::Name, &combat::CombatStats, &viewshed::Viewshed),
+        With<player::Player>,
+    >,
+    monster_query: Query<
+        (&map::Position, &components::Name, &combat::CombatStats, &viewshed::Viewshed, &Text2d, Option<&components::Confusion>),
+        With<monsters::Monster>,
+    >,
+    item_query: Query<
+        (
+            Entity,
+            &components::Name,
+            &Text2d,
+            &TextColor,
+            Option<&map::Position>,
+            Option<&components::InBackpack>,
+            Option<&components::Consumable>,
+            Option<&components::ProvidesHealing>,
+            Option<&components::Ranged>,
+            Option<&components::InflictsDamage>,
+            Option<&components::AreaOfEffect>,
+            Option<&components::Targeting>,
+            Option<&components::CausesConfusion>,
+        ),
+        With<components::Item>,
+    >,
+) {
     if keyboard.just_released(KeyCode::KeyQ) {
+        // Only save if we're in-game (not in MainMenu) and player is alive
+        if *state.get() != RunState::MainMenu {
+            let player_alive = player_query
+                .get_single()
+                .map(|(_, _, _, stats, _)| stats.hp > 0)
+                .unwrap_or(false);
+
+            if player_alive {
+                saveload::save_game(
+                    map,
+                    game_log,
+                    player_query,
+                    monster_query,
+                    item_query,
+                );
+            }
+        }
         exit.send(AppExit::Success);
     }
 }

@@ -1,5 +1,6 @@
 /// Shape helpers based off of the map grid
 
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Rect {
     pub x1: i32,
     pub x2: i32,
