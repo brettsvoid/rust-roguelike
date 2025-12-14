@@ -1,9 +1,20 @@
-## TODO
+# Rust Roguelike
 
-[https://bfnightly.bracketproductions.com/rustbook/chapter_6.html]
+A classic roguelike game built with Bevy, following the [Roguelike Tutorial](https://bfnightly.bracketproductions.com/rustbook/).
 
-- [x] add player name
+## Controls
 
-[https://bfnightly.bracketproductions.com/rustbook/chapter_7.html]
+| Key | Action |
+|-----|--------|
+| Arrow keys / HJKL / Numpad | Move |
+| G | Pick up item |
+| I | Open inventory |
+| D | Drop item menu |
+| Escape | Cancel / Close menu |
+| Q | Save and quit |
 
-- [ ] get pathing distance working
+## Running
+
+```bash
+cargo run
+```
