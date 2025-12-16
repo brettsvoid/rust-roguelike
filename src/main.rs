@@ -274,7 +274,7 @@ fn go_next_level(
     // Spawn monsters and items in new rooms (skip first room - player starts there)
     let mut monster_id: usize = 0;
     for room in map.rooms.iter().skip(1) {
-        spawner::spawn_room(&mut commands, &mut rng, &text_font, room, &mut monster_id);
+        spawner::spawn_room(&mut commands, &mut rng, &text_font, room, &mut monster_id, map.depth);
     }
 
     // Move player to first room center

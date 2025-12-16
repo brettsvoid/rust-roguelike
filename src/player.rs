@@ -8,8 +8,10 @@ use crate::{
     components::{Item, WantsToPickupItem},
     gamelog::GameLog,
     map::{xy_idx, Map, Position, TileType, FONT_SIZE},
+    monsters::Monster,
     resources::UiFont,
     spawner,
+    viewshed::Viewshed,
     RunState,
 };
 
@@ -43,7 +45,7 @@ fn try_move_player(
     pos: &mut Position,
     delta_x: i32,
     delta_y: i32,
-    combat_stats: &Query<&CombatStats>,
+    combat_stats: &Query<&CombatStats, Without<Player>>,
 ) {
     let destination_idx = xy_idx(pos.x + delta_x, pos.y + delta_y);
 
@@ -88,12 +90,13 @@ fn handle_player_input(
     mut evr_kbd: EventReader<KeyboardInput>,
     map: Res<Map>,
     mut gamelog: ResMut<GameLog>,
-    mut query: Single<(Entity, &mut Position), With<Player>>,
+    mut query: Single<(Entity, &mut Position, &Viewshed, &mut CombatStats), With<Player>>,
     mut next_state: ResMut<NextState<RunState>>,
-    combat_stats: Query<&CombatStats>,
+    other_combat_stats: Query<&CombatStats, Without<Player>>,
     items: Query<(Entity, &Position), (With<Item>, Without<Player>)>,
+    monsters: Query<&Position, (With<Monster>, Without<Player>)>,
 ) {
-    let (player_entity, ref mut pos) = *query;
+    let (player_entity, ref mut pos, viewshed, ref mut player_stats) = *query;
     let mut player_acted = false;
 
     for ev in evr_kbd.read() {
@@ -116,12 +119,12 @@ fn handle_player_input(
                     pos,
                     -1,
                     0,
-                    &combat_stats,
+                    &other_combat_stats,
                 );
                 player_acted = true;
             }
             KeyCode::ArrowRight | KeyCode::KeyL | KeyCode::Numpad6 => {
-                try_move_player(&mut commands, &map, player_entity, pos, 1, 0, &combat_stats);
+                try_move_player(&mut commands, &map, player_entity, pos, 1, 0, &other_combat_stats);
                 player_acted = true;
             }
             KeyCode::ArrowUp | KeyCode::KeyK | KeyCode::Numpad8 => {
@@ -132,12 +135,12 @@ fn handle_player_input(
                     pos,
                     0,
                     -1,
-                    &combat_stats,
+                    &other_combat_stats,
                 );
                 player_acted = true;
             }
             KeyCode::ArrowDown | KeyCode::KeyJ | KeyCode::Numpad2 => {
-                try_move_player(&mut commands, &map, player_entity, pos, 0, 1, &combat_stats);
+                try_move_player(&mut commands, &map, player_entity, pos, 0, 1, &other_combat_stats);
                 player_acted = true;
             }
 
@@ -150,7 +153,7 @@ fn handle_player_input(
                     pos,
                     -1,
                     -1,
-                    &combat_stats,
+                    &other_combat_stats,
                 );
                 player_acted = true;
             }
@@ -162,12 +165,12 @@ fn handle_player_input(
                     pos,
                     1,
                     -1,
-                    &combat_stats,
+                    &other_combat_stats,
                 );
                 player_acted = true;
             }
             KeyCode::KeyM | KeyCode::Numpad3 => {
-                try_move_player(&mut commands, &map, player_entity, pos, 1, 1, &combat_stats);
+                try_move_player(&mut commands, &map, player_entity, pos, 1, 1, &other_combat_stats);
                 player_acted = true;
             }
             KeyCode::KeyN | KeyCode::Numpad1 => {
@@ -178,8 +181,26 @@ fn handle_player_input(
                     pos,
                     -1,
                     1,
-                    &combat_stats,
+                    &other_combat_stats,
                 );
+                player_acted = true;
+            }
+
+            // Skip turn / wait
+            KeyCode::Space | KeyCode::Numpad5 => {
+                // Check if any monsters are visible
+                let mut can_heal = true;
+                for monster_pos in monsters.iter() {
+                    if viewshed.visible_tiles.contains(&(monster_pos.x, monster_pos.y)) {
+                        can_heal = false;
+                        break;
+                    }
+                }
+                // Heal 1 HP if no monsters visible
+                if can_heal && player_stats.hp < player_stats.max_hp {
+                    player_stats.hp = (player_stats.hp + 1).min(player_stats.max_hp);
+                    gamelog.entries.push("You rest and recover 1 HP.".to_string());
+                }
                 player_acted = true;
             }
 

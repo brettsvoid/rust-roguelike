@@ -39,7 +39,7 @@ fn setup_monsters(mut commands: Commands, font: Res<UiFont>, map: Res<Map>, mut 
 
     // Skip the first room because that's where the player starts
     for room in map.rooms.iter().skip(1) {
-        spawner::spawn_room(&mut commands, &mut rng, &text_font, room, &mut monster_id);
+        spawner::spawn_room(&mut commands, &mut rng, &text_font, room, &mut monster_id, map.depth);
     }
 }
 

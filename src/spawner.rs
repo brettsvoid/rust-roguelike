@@ -7,12 +7,12 @@ use crate::{
     map::Position,
     monsters::Monster,
     player::Player,
-    rng::GameRng,
+    rng::{GameRng, RandomTable},
     shapes::Rect,
     viewshed::Viewshed,
 };
 
-const MAX_MONSTERS: i32 = 3;
+const MAX_MONSTERS: i32 = 4;
 const MAX_ITEMS: i32 = 2;
 
 pub fn spawn_player(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
@@ -36,9 +36,39 @@ pub fn spawn_player(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
     ));
 }
 
-pub fn spawn_room(commands: &mut Commands, rng: &mut GameRng, font: &TextFont, room: &Rect, monster_id: &mut usize) {
-    let num_monsters = rng.0.gen_range(0..=MAX_MONSTERS);
-    let num_items = rng.0.gen_range(0..=MAX_ITEMS);
+pub fn spawn_room(
+    commands: &mut Commands,
+    rng: &mut GameRng,
+    font: &TextFont,
+    room: &Rect,
+    monster_id: &mut usize,
+    map_depth: i32,
+) {
+    // Calculate spawn counts based on depth
+    let max_monsters_roll = (MAX_MONSTERS + 3) + (map_depth - 1) - 3;
+    let num_monsters = if max_monsters_roll > 0 {
+        rng.0.gen_range(1..=max_monsters_roll).max(0)
+    } else {
+        0
+    };
+
+    let max_items_roll = (MAX_ITEMS + 3) + (map_depth - 1) - 3;
+    let num_items = if max_items_roll > 0 {
+        rng.0.gen_range(1..=max_items_roll).max(0)
+    } else {
+        0
+    };
+
+    // Build weighted spawn tables based on depth
+    let monster_table = RandomTable::new()
+        .add("Goblin", 10)
+        .add("Orc", 1 + map_depth);
+
+    let item_table = RandomTable::new()
+        .add("Health Potion", 7)
+        .add("Magic Missile Scroll", 2)
+        .add("Fireball Scroll", map_depth - 1)
+        .add("Confusion Scroll", map_depth - 1);
 
     let mut spawn_points: Vec<(i32, i32)> = Vec::new();
 
@@ -55,10 +85,15 @@ pub fn spawn_room(commands: &mut Commands, rng: &mut GameRng, font: &TextFont, r
         }
     }
 
-    // Spawn monsters
+    // Spawn monsters using weighted table
     for (x, y) in spawn_points.iter() {
-        spawn_random_monster(commands, rng, font, *x, *y, *monster_id);
-        *monster_id += 1;
+        if let Some(monster_name) = monster_table.roll(rng) {
+            match monster_name.as_str() {
+                "Orc" => spawn_orc(commands, font, *x, *y, *monster_id),
+                _ => spawn_goblin(commands, font, *x, *y, *monster_id),
+            }
+            *monster_id += 1;
+        }
     }
 
     // Generate item spawn points
@@ -75,27 +110,17 @@ pub fn spawn_room(commands: &mut Commands, rng: &mut GameRng, font: &TextFont, r
         }
     }
 
-    // Spawn items
+    // Spawn items using weighted table
     for (x, y) in item_spawn_points.iter() {
-        spawn_random_item(commands, rng, font, *x, *y);
-    }
-}
-
-fn spawn_random_item(commands: &mut Commands, rng: &mut GameRng, font: &TextFont, x: i32, y: i32) {
-    let roll = rng.0.gen_range(0..=3);
-    match roll {
-        0 => spawn_health_potion(commands, font, x, y),
-        1 => spawn_magic_missile_scroll(commands, font, x, y),
-        2 => spawn_fireball_scroll(commands, font, x, y),
-        _ => spawn_confusion_scroll(commands, font, x, y),
-    }
-}
-
-fn spawn_random_monster(commands: &mut Commands, rng: &mut GameRng, font: &TextFont, x: i32, y: i32, id: usize) {
-    let roll = rng.0.gen_range(0..=1);
-    match roll {
-        0 => spawn_orc(commands, font, x, y, id),
-        _ => spawn_goblin(commands, font, x, y, id),
+        if let Some(item_name) = item_table.roll(rng) {
+            match item_name.as_str() {
+                "Health Potion" => spawn_health_potion(commands, font, *x, *y),
+                "Magic Missile Scroll" => spawn_magic_missile_scroll(commands, font, *x, *y),
+                "Fireball Scroll" => spawn_fireball_scroll(commands, font, *x, *y),
+                "Confusion Scroll" => spawn_confusion_scroll(commands, font, *x, *y),
+                _ => {}
+            }
+        }
     }
 }
 
