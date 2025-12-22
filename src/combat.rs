@@ -1,9 +1,10 @@
 use bevy::prelude::*;
 
-use crate::components::Name;
+use crate::components::{DefenseBonus, Equipped, MeleePowerBonus, Name};
 use crate::gamelog::GameLog;
 use crate::player::Player;
 use crate::saveload;
+use crate::RunState;
 
 #[derive(Component, Debug)]
 pub struct CombatStats {
@@ -36,6 +37,8 @@ pub fn melee_combat_system(
     mut log: ResMut<GameLog>,
     query: Query<(Entity, &WantsToMelee, &Name, &CombatStats)>,
     targets: Query<(&Name, &CombatStats)>,
+    melee_bonus_query: Query<(&Equipped, &MeleePowerBonus)>,
+    defense_bonus_query: Query<(&Equipped, &DefenseBonus)>,
 ) {
     for (entity, wants_melee, name, stats) in &query {
         if stats.hp <= 0 {
@@ -47,7 +50,26 @@ pub fn melee_combat_system(
                 continue;
             }
 
-            let damage = i32::max(0, stats.power - target_stats.defense);
+            // Calculate attacker's power bonus from equipment
+            let mut offense_bonus = 0;
+            for (equipped, bonus) in &melee_bonus_query {
+                if equipped.owner == entity {
+                    offense_bonus += bonus.power;
+                }
+            }
+
+            // Calculate defender's defense bonus from equipment
+            let mut defense_bonus = 0;
+            for (equipped, bonus) in &defense_bonus_query {
+                if equipped.owner == wants_melee.target {
+                    defense_bonus += bonus.defense;
+                }
+            }
+
+            let damage = i32::max(
+                0,
+                (stats.power + offense_bonus) - (target_stats.defense + defense_bonus),
+            );
 
             if damage == 0 {
                 log.entries.push(format!(
@@ -80,6 +102,7 @@ pub fn damage_system(
 pub fn delete_the_dead(
     mut commands: Commands,
     mut log: ResMut<GameLog>,
+    mut next_state: ResMut<NextState<RunState>>,
     query: Query<(Entity, &CombatStats, &Name), Without<Player>>,
     player_query: Query<&CombatStats, With<Player>>,
 ) {
@@ -95,6 +118,8 @@ pub fn delete_the_dead(
             log.entries.push("You are dead".to_string());
             // Delete save file on death (permadeath)
             saveload::delete_save_file();
+            // Transition to game over screen
+            next_state.set(RunState::GameOver);
         }
     }
 }

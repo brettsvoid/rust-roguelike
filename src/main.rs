@@ -41,8 +41,10 @@ pub enum RunState {
     MonsterTurn,
     ShowInventory,
     ShowDropItem,
+    ShowRemoveItem,
     ShowTargeting,
     NextLevel,
+    GameOver,
 }
 
 #[derive(Resource, Default)]
@@ -88,6 +90,7 @@ fn main() {
                 inventory::item_collection_system,
                 inventory::item_use_system,
                 inventory::item_drop_system,
+                inventory::item_remove_system,
                 combat::melee_combat_system,
                 combat::damage_system,
                 combat::delete_the_dead,

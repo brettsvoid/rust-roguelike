@@ -221,6 +221,11 @@ fn handle_player_input(
                 next_state.set(RunState::ShowDropItem);
             }
 
+            // Remove equipment
+            KeyCode::KeyR => {
+                next_state.set(RunState::ShowRemoveItem);
+            }
+
             // Go down stairs
             KeyCode::Period => {
                 let idx = xy_idx(pos.x, pos.y);

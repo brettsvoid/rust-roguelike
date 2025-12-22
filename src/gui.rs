@@ -3,7 +3,7 @@ use bevy::input::ButtonState;
 use bevy::prelude::*;
 
 use crate::combat::CombatStats;
-use crate::components::{AreaOfEffect, InBackpack, Item, Name, Ranged, Targeting, WantsToDropItem, WantsToUseItem};
+use crate::components::{AreaOfEffect, Equipped, InBackpack, Item, Name, Ranged, Targeting, WantsToDropItem, WantsToRemoveItem, WantsToUseItem};
 use crate::distance::DistanceAlg;
 use crate::gamelog::GameLog;
 use crate::map::{Map, Position, Tile, TileType, GRID_PX, MAP_HEIGHT, MAP_WIDTH};
@@ -38,6 +38,20 @@ impl Plugin for GuiPlugin {
             .add_systems(
                 Update,
                 handle_drop_input.run_if(in_state(RunState::ShowDropItem)),
+            )
+            // Remove equipment menu
+            .add_systems(OnEnter(RunState::ShowRemoveItem), spawn_remove_menu)
+            .add_systems(OnExit(RunState::ShowRemoveItem), despawn_remove_menu)
+            .add_systems(
+                Update,
+                handle_remove_input.run_if(in_state(RunState::ShowRemoveItem)),
+            )
+            // Game over
+            .add_systems(OnEnter(RunState::GameOver), spawn_game_over)
+            .add_systems(OnExit(RunState::GameOver), despawn_game_over)
+            .add_systems(
+                Update,
+                handle_game_over_input.run_if(in_state(RunState::GameOver)),
             )
             .add_systems(OnEnter(RunState::ShowTargeting), (spawn_targeting_ui, spawn_target_borders, spawn_range_indicator))
             .add_systems(OnExit(RunState::ShowTargeting), despawn_targeting_ui)
@@ -88,6 +102,12 @@ struct RangeIndicator;
 
 #[derive(Component)]
 struct MainMenu;
+
+#[derive(Component)]
+struct RemoveMenu;
+
+#[derive(Component)]
+struct GameOverMenu;
 
 fn setup_gui(mut commands: Commands, font: Res<UiFont>) {
     // Bottom panel
@@ -1226,6 +1246,197 @@ fn handle_main_menu_input(
                 exit.send(AppExit::Success);
             }
             _ => {}
+        }
+    }
+}
+
+// ============================================================================
+// Remove Equipment Menu
+// ============================================================================
+
+fn spawn_remove_menu(
+    mut commands: Commands,
+    font: Res<UiFont>,
+    player_query: Query<Entity, With<Player>>,
+    equipped_query: Query<(&Equipped, &Name), With<Item>>,
+) {
+    let Ok(player_entity) = player_query.get_single() else {
+        return;
+    };
+
+    // Collect equipped items
+    let equipped_items: Vec<&str> = equipped_query
+        .iter()
+        .filter(|(equipped, _)| equipped.owner == player_entity)
+        .map(|(_, name)| name.name.as_str())
+        .collect();
+
+    // Build menu text
+    let menu_text = if equipped_items.is_empty() {
+        "No equipment to remove.\n\n(Press Escape to close)".to_string()
+    } else {
+        let items: Vec<String> = equipped_items
+            .iter()
+            .enumerate()
+            .map(|(i, name)| format!("({}) {}", (b'a' + i as u8) as char, name))
+            .collect();
+        format!(
+            "Remove which item?\n\n{}\n\n(Press Escape to close)",
+            items.join("\n")
+        )
+    };
+
+    // Spawn centered menu
+    commands.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        RemoveMenu,
+    )).with_children(|parent| {
+        parent.spawn((
+            Node {
+                padding: UiRect::all(Val::Px(20.0)),
+                border: UiRect::all(Val::Px(2.0)),
+                ..default()
+            },
+            BorderColor(Color::WHITE),
+            BackgroundColor(Color::srgb(0.1, 0.1, 0.1)),
+        )).with_children(|menu| {
+            menu.spawn((
+                Text::new(menu_text),
+                TextFont {
+                    font: font.0.clone(),
+                    font_size: 16.0,
+                    ..default()
+                },
+                TextColor(Color::WHITE),
+            ));
+        });
+    });
+}
+
+fn despawn_remove_menu(
+    mut commands: Commands,
+    menu_query: Query<Entity, With<RemoveMenu>>,
+) {
+    for entity in &menu_query {
+        commands.entity(entity).despawn_recursive();
+    }
+}
+
+fn handle_remove_input(
+    mut commands: Commands,
+    mut evr_kbd: EventReader<KeyboardInput>,
+    mut next_state: ResMut<NextState<RunState>>,
+    player_query: Query<Entity, With<Player>>,
+    equipped_query: Query<(Entity, &Equipped), With<Item>>,
+) {
+    let Ok(player_entity) = player_query.get_single() else {
+        return;
+    };
+
+    // Collect player's equipped items
+    let items: Vec<Entity> = equipped_query
+        .iter()
+        .filter(|(_, equipped)| equipped.owner == player_entity)
+        .map(|(entity, _)| entity)
+        .collect();
+
+    for ev in evr_kbd.read() {
+        if ev.state == ButtonState::Released {
+            continue;
+        }
+
+        match ev.key_code {
+            KeyCode::Escape => {
+                next_state.set(RunState::AwaitingInput);
+            }
+            KeyCode::KeyA => try_remove_item(&mut commands, &items, 0, player_entity, &mut next_state),
+            KeyCode::KeyB => try_remove_item(&mut commands, &items, 1, player_entity, &mut next_state),
+            KeyCode::KeyC => try_remove_item(&mut commands, &items, 2, player_entity, &mut next_state),
+            KeyCode::KeyD => try_remove_item(&mut commands, &items, 3, player_entity, &mut next_state),
+            KeyCode::KeyE => try_remove_item(&mut commands, &items, 4, player_entity, &mut next_state),
+            KeyCode::KeyF => try_remove_item(&mut commands, &items, 5, player_entity, &mut next_state),
+            _ => {}
+        }
+    }
+}
+
+fn try_remove_item(
+    commands: &mut Commands,
+    items: &[Entity],
+    index: usize,
+    player_entity: Entity,
+    next_state: &mut ResMut<NextState<RunState>>,
+) {
+    if let Some(&item) = items.get(index) {
+        commands.entity(player_entity).insert(WantsToRemoveItem { item });
+        next_state.set(RunState::PlayerTurn);
+    }
+}
+
+// ============================================================================
+// Game Over Screen
+// ============================================================================
+
+fn spawn_game_over(mut commands: Commands, font: Res<UiFont>) {
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
+            GameOverMenu,
+        ))
+        .with_children(|parent| {
+            parent
+                .spawn((
+                    Node {
+                        padding: UiRect::all(Val::Px(30.0)),
+                        border: UiRect::all(Val::Px(2.0)),
+                        ..default()
+                    },
+                    BorderColor(Color::srgb(0.8, 0.0, 0.0)),
+                    BackgroundColor(Color::srgb(0.1, 0.0, 0.0)),
+                ))
+                .with_children(|menu| {
+                    menu.spawn((
+                        Text::new("GAME OVER\n\nYou have died.\n\n(Press any key to return to menu)"),
+                        TextFont {
+                            font: font.0.clone(),
+                            font_size: 20.0,
+                            ..default()
+                        },
+                        TextColor(Color::srgb(1.0, 0.3, 0.3)),
+                    ));
+                });
+        });
+}
+
+fn despawn_game_over(mut commands: Commands, menu_query: Query<Entity, With<GameOverMenu>>) {
+    for entity in &menu_query {
+        commands.entity(entity).despawn_recursive();
+    }
+}
+
+fn handle_game_over_input(
+    mut evr_kbd: EventReader<KeyboardInput>,
+    mut next_state: ResMut<NextState<RunState>>,
+) {
+    for ev in evr_kbd.read() {
+        if ev.state == ButtonState::Pressed {
+            next_state.set(RunState::MainMenu);
+            return;
         }
     }
 }

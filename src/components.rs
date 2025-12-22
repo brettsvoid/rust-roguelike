@@ -105,3 +105,36 @@ pub struct WantsToUseItem {
 pub struct WantsToDropItem {
     pub item: Entity,
 }
+
+// Equipment system
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum EquipmentSlot {
+    Melee,
+    Shield,
+}
+
+#[derive(Component, Debug)]
+pub struct Equippable {
+    pub slot: EquipmentSlot,
+}
+
+#[derive(Component, Debug)]
+pub struct Equipped {
+    pub owner: Entity,
+    pub slot: EquipmentSlot,
+}
+
+#[derive(Component, Debug)]
+pub struct MeleePowerBonus {
+    pub power: i32,
+}
+
+#[derive(Component, Debug)]
+pub struct DefenseBonus {
+    pub defense: i32,
+}
+
+#[derive(Component, Debug)]
+pub struct WantsToRemoveItem {
+    pub item: Entity,
+}

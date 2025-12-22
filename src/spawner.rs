@@ -3,7 +3,11 @@ use rand::Rng;
 
 use crate::{
     combat::CombatStats,
-    components::{AreaOfEffect, BlocksTile, CausesConfusion, Consumable, InflictsDamage, Item, Name, ProvidesHealing, Ranged, RenderOrder, RenderableBundle, Targeting},
+    components::{
+        AreaOfEffect, BlocksTile, CausesConfusion, Consumable, DefenseBonus, EquipmentSlot,
+        Equippable, InflictsDamage, Item, MeleePowerBonus, Name, ProvidesHealing, Ranged,
+        RenderOrder, RenderableBundle, Targeting,
+    },
     map::Position,
     monsters::Monster,
     player::Player,
@@ -68,7 +72,11 @@ pub fn spawn_room(
         .add("Health Potion", 7)
         .add("Magic Missile Scroll", 2)
         .add("Fireball Scroll", map_depth - 1)
-        .add("Confusion Scroll", map_depth - 1);
+        .add("Confusion Scroll", map_depth - 1)
+        .add("Dagger", 3)
+        .add("Shield", 3)
+        .add("Longsword", map_depth - 1)
+        .add("Tower Shield", map_depth - 1);
 
     let mut spawn_points: Vec<(i32, i32)> = Vec::new();
 
@@ -118,6 +126,10 @@ pub fn spawn_room(
                 "Magic Missile Scroll" => spawn_magic_missile_scroll(commands, font, *x, *y),
                 "Fireball Scroll" => spawn_fireball_scroll(commands, font, *x, *y),
                 "Confusion Scroll" => spawn_confusion_scroll(commands, font, *x, *y),
+                "Dagger" => spawn_dagger(commands, font, *x, *y),
+                "Shield" => spawn_shield(commands, font, *x, *y),
+                "Longsword" => spawn_longsword(commands, font, *x, *y),
+                "Tower Shield" => spawn_tower_shield(commands, font, *x, *y),
                 _ => {}
             }
         }
@@ -209,5 +221,50 @@ fn spawn_confusion_scroll(commands: &mut Commands, font: &TextFont, x: i32, y: i
         },
         Position { x, y },
         RenderableBundle::new(")", palettes::css::PINK.into(), palettes::basic::BLACK.into(), RenderOrder::ITEM, font),
+    ));
+}
+
+// Equipment spawners
+fn spawn_dagger(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
+    commands.spawn((
+        Item,
+        Equippable { slot: EquipmentSlot::Melee },
+        MeleePowerBonus { power: 2 },
+        Name { name: "Dagger".to_string() },
+        Position { x, y },
+        RenderableBundle::new("/", palettes::basic::AQUA.into(), palettes::basic::BLACK.into(), RenderOrder::ITEM, font),
+    ));
+}
+
+fn spawn_shield(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
+    commands.spawn((
+        Item,
+        Equippable { slot: EquipmentSlot::Shield },
+        DefenseBonus { defense: 1 },
+        Name { name: "Shield".to_string() },
+        Position { x, y },
+        RenderableBundle::new("(", palettes::basic::AQUA.into(), palettes::basic::BLACK.into(), RenderOrder::ITEM, font),
+    ));
+}
+
+fn spawn_longsword(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
+    commands.spawn((
+        Item,
+        Equippable { slot: EquipmentSlot::Melee },
+        MeleePowerBonus { power: 4 },
+        Name { name: "Longsword".to_string() },
+        Position { x, y },
+        RenderableBundle::new("/", palettes::basic::YELLOW.into(), palettes::basic::BLACK.into(), RenderOrder::ITEM, font),
+    ));
+}
+
+fn spawn_tower_shield(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
+    commands.spawn((
+        Item,
+        Equippable { slot: EquipmentSlot::Shield },
+        DefenseBonus { defense: 3 },
+        Name { name: "Tower Shield".to_string() },
+        Position { x, y },
+        RenderableBundle::new("(", palettes::basic::YELLOW.into(), palettes::basic::BLACK.into(), RenderOrder::ITEM, font),
     ));
 }

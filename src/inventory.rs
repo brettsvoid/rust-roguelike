@@ -2,7 +2,11 @@ use bevy::prelude::*;
 
 use crate::{
     combat::{CombatStats, SufferDamage},
-    components::{AreaOfEffect, CausesConfusion, Confusion, Consumable, InBackpack, InflictsDamage, Name, ProvidesHealing, WantsToDropItem, WantsToUseItem, WantsToPickupItem},
+    components::{
+        AreaOfEffect, CausesConfusion, Confusion, Consumable, Equippable, Equipped, InBackpack,
+        InflictsDamage, Name, ProvidesHealing, WantsToDropItem, WantsToPickupItem,
+        WantsToRemoveItem, WantsToUseItem,
+    },
     distance::DistanceAlg,
     gamelog::GameLog,
     map::Position,
@@ -45,10 +49,38 @@ pub fn item_use_system(
     damage_query: Query<(&InflictsDamage, &Name)>,
     confusion_query: Query<(&CausesConfusion, &Name)>,
     aoe_query: Query<&AreaOfEffect>,
+    equippable_query: Query<(&Equippable, &Name)>,
+    equipped_query: Query<(Entity, &Equipped, &Name)>,
     mut stats_query: Query<&mut CombatStats>,
     target_query: Query<(Entity, &Position, &Name), With<CombatStats>>,
 ) {
     for (entity, wants_use) in &use_query {
+        // Handle equippable items
+        if let Ok((equippable, item_name)) = equippable_query.get(wants_use.item) {
+            let target_slot = equippable.slot;
+
+            // Find and unequip any item in the same slot owned by this entity
+            for (equipped_entity, equipped, equipped_name) in &equipped_query {
+                if equipped.owner == entity && equipped.slot == target_slot {
+                    // Unequip: remove Equipped, add InBackpack
+                    commands.entity(equipped_entity).remove::<Equipped>();
+                    commands.entity(equipped_entity).insert(InBackpack { owner: entity });
+                    gamelog.entries.push(format!("You unequip the {}.", equipped_name.name));
+                }
+            }
+
+            // Equip the new item
+            commands.entity(wants_use.item).remove::<InBackpack>();
+            commands.entity(wants_use.item).insert(Equipped {
+                owner: entity,
+                slot: target_slot,
+            });
+            gamelog.entries.push(format!("You equip the {}.", item_name.name));
+
+            // Remove the intent and continue to next item
+            commands.entity(entity).remove::<WantsToUseItem>();
+            continue;
+        }
         // Apply healing if the item provides it
         if let Ok((healing, item_name)) = healing_query.get(wants_use.item) {
             if let Ok(mut stats) = stats_query.get_mut(entity) {
@@ -154,5 +186,28 @@ pub fn item_drop_system(
 
         // Remove intent component
         commands.entity(entity).remove::<WantsToDropItem>();
+    }
+}
+
+pub fn item_remove_system(
+    mut commands: Commands,
+    mut gamelog: ResMut<GameLog>,
+    remove_query: Query<(Entity, &WantsToRemoveItem)>,
+    name_query: Query<&Name>,
+) {
+    for (entity, wants_remove) in &remove_query {
+        // Unequip: remove Equipped, add InBackpack
+        commands.entity(wants_remove.item).remove::<Equipped>();
+        commands
+            .entity(wants_remove.item)
+            .insert(InBackpack { owner: entity });
+
+        // Log the removal
+        if let Ok(name) = name_query.get(wants_remove.item) {
+            gamelog.entries.push(format!("You unequip the {}.", name.name));
+        }
+
+        // Remove intent component
+        commands.entity(entity).remove::<WantsToRemoveItem>();
     }
 }
