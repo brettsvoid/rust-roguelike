@@ -9,7 +9,7 @@ use crate::gamelog::GameLog;
 use crate::map::{Map, Position, Revealed, RevealedState, Tile, TileType, FONT_SIZE, GRID_PX, MAP_HEIGHT, MAP_WIDTH};
 use crate::monsters::Monster;
 use crate::player::Player;
-use crate::resources::UiFont;
+use crate::resources::{MenuBackground, UiFont};
 use crate::rng::GameRng;
 use crate::saveload;
 use crate::spawner;
@@ -1396,7 +1396,7 @@ fn spawn_new_game(
     }
 }
 
-fn spawn_main_menu(mut commands: Commands, font: Res<UiFont>) {
+fn spawn_main_menu(mut commands: Commands, font: Res<UiFont>, background: Res<MenuBackground>) {
     let has_save = saveload::has_save_file();
 
     let menu_text = if has_save {
@@ -1415,7 +1415,7 @@ fn spawn_main_menu(mut commands: Commands, font: Res<UiFont>) {
                 align_items: AlignItems::Center,
                 ..default()
             },
-            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
+            ImageNode::new(background.0.clone()),
             MainMenu,
         ))
         .with_children(|parent| {
@@ -1427,7 +1427,7 @@ fn spawn_main_menu(mut commands: Commands, font: Res<UiFont>) {
                         ..default()
                     },
                     BorderColor(Color::WHITE),
-                    BackgroundColor(Color::srgb(0.1, 0.1, 0.1)),
+                    BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.7)),
                 ))
                 .with_children(|menu| {
                     menu.spawn((
