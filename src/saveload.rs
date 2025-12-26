@@ -18,7 +18,6 @@ use crate::map::{Map, Position, Revealed, RevealedState, Tile, TileType, MAP_WID
 use crate::monsters::Monster;
 use crate::player::Player;
 use crate::resources::UiFont;
-use crate::shapes::Rect;
 use crate::viewshed::Viewshed;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -42,7 +41,6 @@ pub struct SaveData {
 #[derive(Serialize, Deserialize)]
 pub struct SerializedMap {
     pub tiles: Vec<TileType>,
-    pub rooms: Vec<Rect>,
     pub revealed_tiles: Vec<bool>,
     pub width: i32,
     pub height: i32,
@@ -321,7 +319,6 @@ pub fn save_game(
     // Serialize map
     let serialized_map = SerializedMap {
         tiles: map.tiles.clone(),
-        rooms: map.rooms.clone(),
         revealed_tiles: map.revealed_tiles.clone(),
         width: map.width,
         height: map.height,
@@ -391,7 +388,6 @@ pub fn load_game(
 
     // Restore map
     map.tiles = save_data.map.tiles;
-    map.rooms = save_data.map.rooms;
     map.revealed_tiles = save_data.map.revealed_tiles;
     map.width = save_data.map.width;
     map.height = save_data.map.height;

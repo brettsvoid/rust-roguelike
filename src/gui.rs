@@ -7,6 +7,7 @@ use crate::components::{AreaOfEffect, EntryTrigger, Equipped, HungerClock, Hunge
 use crate::distance::DistanceAlg;
 use crate::gamelog::GameLog;
 use crate::map::{Map, Position, Revealed, RevealedState, Tile, TileType, FONT_SIZE, GRID_PX, MAP_HEIGHT, MAP_WIDTH};
+use crate::map_builders;
 use crate::monsters::Monster;
 use crate::player::Player;
 use crate::resources::{MenuBackground, UiFont};
@@ -1328,8 +1329,10 @@ fn spawn_new_game(
     rng: &mut ResMut<GameRng>,
     font: &Res<UiFont>,
 ) {
-    // Generate new map
-    *map.as_mut() = Map::new_map_rooms_and_corridors();
+    // Generate new map using builder
+    let mut builder = map_builders::random_builder(1);
+    builder.build_map(rng);
+    *map.as_mut() = builder.get_map();
 
     let text_font = TextFont {
         font: font.0.clone(),
@@ -1385,15 +1388,12 @@ fn spawn_new_game(
         }
     }
 
-    // Spawn player at first room center
-    let (player_x, player_y) = map.rooms[0].center();
+    // Spawn player at starting position
+    let (player_x, player_y) = builder.get_starting_position();
     spawner::spawn_player(commands, &text_font, player_x, player_y);
 
-    // Spawn monsters and items in rooms (skip first room - player starts there)
-    let mut monster_id: usize = 0;
-    for room in map.rooms.iter().skip(1) {
-        spawner::spawn_room(commands, rng, &text_font, room, &mut monster_id, map.depth);
-    }
+    // Spawn monsters and items via builder
+    builder.spawn_entities(commands, rng, &text_font);
 }
 
 fn spawn_main_menu(mut commands: Commands, font: Res<UiFont>, background: Res<MenuBackground>) {

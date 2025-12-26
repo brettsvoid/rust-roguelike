@@ -16,6 +16,7 @@ mod gui;
 mod hunger;
 mod inventory;
 mod map;
+mod map_builders;
 mod map_indexing;
 mod monsters;
 mod particle;
@@ -269,7 +270,7 @@ fn go_next_level(
     backpack_query: Query<(Entity, &components::InBackpack)>,
     entities_to_delete: Query<
         Entity,
-        Or<(With<monsters::Monster>, With<map::Tile>, With<components::Item>)>,
+        Or<(With<monsters::Monster>, With<map::Tile>, With<components::Item>, With<components::EntryTrigger>)>,
     >,
 ) {
     // Get player entity and items in their backpack
@@ -289,11 +290,11 @@ fn go_next_level(
         }
     }
 
-    // Generate new map with increased depth
-    let new_map = map::Map::new_map_rooms_and_corridors();
+    // Generate new map with increased depth using builder
     let new_depth = map.depth + 1;
-    *map = new_map;
-    map.depth = new_depth;
+    let mut builder = map_builders::random_builder(new_depth);
+    builder.build_map(&mut rng);
+    *map = builder.get_map();
 
     // Spawn new map tiles
     let text_font = TextFont {
@@ -350,14 +351,11 @@ fn go_next_level(
         }
     }
 
-    // Spawn monsters and items in new rooms (skip first room - player starts there)
-    let mut monster_id: usize = 0;
-    for room in map.rooms.iter().skip(1) {
-        spawner::spawn_room(&mut commands, &mut rng, &text_font, room, &mut monster_id, map.depth);
-    }
+    // Spawn monsters and items via builder
+    builder.spawn_entities(&mut commands, &mut rng, &text_font);
 
-    // Move player to first room center
-    let (player_x, player_y) = map.rooms[0].center();
+    // Move player to starting position
+    let (player_x, player_y) = builder.get_starting_position();
     commands
         .entity(player_entity)
         .insert(map::Position { x: player_x, y: player_y });

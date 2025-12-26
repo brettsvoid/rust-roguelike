@@ -1,15 +1,11 @@
-use std::cmp::{max, min};
 use std::collections::HashSet;
 
 use bevy::prelude::*;
-use rand::prelude::*;
 
 use crate::components::{Hidden, RenderOrder};
 use crate::debug::DebugState;
 use crate::distance::DistanceAlg;
 use crate::player::Player;
-use crate::resources::UiFont;
-use crate::shapes::Rect;
 use crate::viewshed::Viewshed;
 use crate::RunState;
 
@@ -98,9 +94,8 @@ pub struct Revealed(pub RevealedState);
 #[derive(Component)]
 pub struct BloodstainMarker;
 
-#[derive(Resource)]
+#[derive(Resource, Clone)]
 pub struct Map {
-    pub rooms: Vec<Rect>,
     pub tiles: Vec<TileType>,
     pub width: i32,
     pub height: i32,
@@ -113,6 +108,21 @@ pub struct Map {
 }
 
 impl Map {
+    pub fn new(width: usize, height: usize, depth: i32) -> Self {
+        let size = width * height;
+        Self {
+            tiles: vec![TileType::Wall; size],
+            width: width as i32,
+            height: height as i32,
+            depth,
+            revealed_tiles: vec![false; size],
+            visible_tiles: vec![false; size],
+            blocked_tiles: vec![false; size],
+            tile_content: vec![Vec::new(); size],
+            bloodstains: HashSet::new(),
+        }
+    }
+
     pub fn xy_idx(&self, x: i32, y: i32) -> usize {
         (y as usize * self.width as usize) + x as usize
     }
@@ -129,33 +139,6 @@ impl Map {
         check(x, y - 1) || check(x, y + 1) || check(x - 1, y) || check(x + 1, y) ||
         // Diagonal directions (for corners)
         check(x - 1, y - 1) || check(x + 1, y - 1) || check(x - 1, y + 1) || check(x + 1, y + 1)
-    }
-
-    fn apply_room_to_map(&mut self, room: &Rect) {
-        for y in room.y1 + 1..=room.y2 {
-            for x in room.x1 + 1..=room.x2 {
-                let idx = self.xy_idx(x, y);
-                self.tiles[idx] = TileType::Floor;
-            }
-        }
-    }
-
-    fn apply_horizontal_tunnel(&mut self, x1: i32, x2: i32, y: i32) {
-        for x in min(x1, x2)..=max(x1, x2) {
-            let idx = xy_idx(x, y);
-            if idx > 0 && idx < MAP_WIDTH * MAP_HEIGHT {
-                self.tiles[idx] = TileType::Floor;
-            }
-        }
-    }
-
-    fn apply_vertical_tunnel(&mut self, y1: i32, y2: i32, x: i32) {
-        for y in min(y1, y2)..=max(y1, y2) {
-            let idx = xy_idx(x, y);
-            if idx > 0 && idx < MAP_WIDTH * MAP_HEIGHT {
-                self.tiles[idx] = TileType::Floor;
-            }
-        }
     }
 
     pub fn is_exit_valid(&self, x: i32, y: i32) -> bool {
@@ -318,75 +301,11 @@ impl Map {
 
         WallGlyph(mask)
     }
-
-    pub fn new_map_rooms_and_corridors() -> Map {
-        let size = MAP_WIDTH * MAP_HEIGHT;
-        let mut map = Map {
-            rooms: Vec::new(),
-            tiles: vec![TileType::Wall; size],
-            width: MAP_WIDTH as i32,
-            height: MAP_HEIGHT as i32,
-            depth: 1,
-            revealed_tiles: vec![false; size],
-            visible_tiles: vec![false; size],
-            blocked_tiles: vec![false; size],
-            tile_content: vec![Vec::new(); size],
-            bloodstains: HashSet::new(),
-        };
-
-        const MAX_ROOMS: i32 = 30;
-        const MIN_SIZE: i32 = 6;
-        const MAX_SIZE: i32 = 10;
-
-        let mut rng = rand::thread_rng();
-
-        for _ in 0..MAX_ROOMS {
-            let w = rng.gen_range(MIN_SIZE..=MAX_SIZE);
-            let h = rng.gen_range(MIN_SIZE..=MAX_SIZE);
-            let x_roll = map.width - w - 1;
-            let y_roll = map.height - h - 1;
-            let x = rng.gen_range(0..x_roll);
-            let y = rng.gen_range(0..y_roll);
-            let new_room = Rect::new(x, y, w, h);
-            let mut ok = true;
-            for other_room in map.rooms.iter() {
-                if new_room.intersect(other_room) {
-                    ok = false
-                }
-            }
-            if ok {
-                map.apply_room_to_map(&new_room);
-
-                if !map.rooms.is_empty() {
-                    let (new_x, new_y) = new_room.center();
-                    let (prev_x, prev_y) = map.rooms[map.rooms.len() - 1].center();
-                    if rng.gen_range(0..2) == 1 {
-                        map.apply_horizontal_tunnel(prev_x, new_x, prev_y);
-                        map.apply_vertical_tunnel(prev_y, new_y, prev_x);
-                    } else {
-                        map.apply_vertical_tunnel(prev_y, new_y, prev_x);
-                        map.apply_horizontal_tunnel(prev_x, new_x, prev_y);
-                    }
-                }
-
-                map.rooms.push(new_room);
-            }
-        }
-
-        // Place down stairs in the center of the last room
-        if let Some(last_room) = map.rooms.last() {
-            let (stairs_x, stairs_y) = last_room.center();
-            let stairs_idx = map.xy_idx(stairs_x, stairs_y);
-            map.tiles[stairs_idx] = TileType::DownStairs;
-        }
-
-        map
-    }
 }
 
 impl Default for Map {
     fn default() -> Self {
-        Map::new_map_rooms_and_corridors()
+        Map::new(MAP_WIDTH, MAP_HEIGHT, 1)
     }
 }
 
@@ -412,95 +331,6 @@ impl Plugin for MapPlugin {
 
 pub fn xy_idx(x: i32, y: i32) -> usize {
     (y as usize * MAP_WIDTH) + x as usize
-}
-
-/// Makes a map with solid boundaries and 400 randomly placed walls. No guarantees that it won't look awful.
-fn new_map_test() -> Vec<TileType> {
-    let width = MAP_WIDTH as i32;
-    let height = MAP_HEIGHT as i32;
-    let mut map = vec![TileType::Floor; MAP_WIDTH * MAP_HEIGHT];
-
-    // Make the boundary walls
-    for x in 0..width {
-        map[xy_idx(x, 0)] = TileType::Wall;
-        map[xy_idx(x, height - 1)] = TileType::Wall;
-    }
-    for y in 0..height {
-        map[xy_idx(0, y)] = TileType::Wall;
-        map[xy_idx(width - 1, y)] = TileType::Wall;
-    }
-
-    // Now we'll randomly splat a bunch of walls. It won't be pretty, but it's a decent illustration.
-    // First, obtain the thread-local RNG:
-    let mut rng = rand::thread_rng();
-
-    for _i in 0..400 {
-        let x = rng.gen_range(1..width);
-        let y = rng.gen_range(1..height);
-        let idx = xy_idx(x, y);
-        if idx != xy_idx(40, 25) {
-            map[idx] = TileType::Wall;
-        }
-    }
-
-    map
-}
-
-fn draw_map(mut commands: Commands, map: Res<Map>, font: Res<UiFont>) {
-    let text_font = TextFont {
-        font: font.0.clone(),
-        font_size: FONT_SIZE,
-        ..default()
-    };
-
-    let mut y = 0;
-    let mut x = 0;
-    for tile in map.tiles.iter() {
-        // Render a tile depending upon the tile type
-        match tile {
-            TileType::Floor => {
-                commands.spawn((
-                    Tile,
-                    Position { x, y },
-                    Text2d::new("."),
-                    text_font.clone(),
-                    TextColor(Color::srgb(0.5, 0.5, 0.5)),
-                    Revealed(RevealedState::Hidden),
-                ));
-            }
-            TileType::Wall => {
-                // Only spawn walls adjacent to floors (boundary walls)
-                if map.is_adjacent_to_floor(x, y) {
-                    let glyph = map.wall_glyph_at(x, y);
-                    commands.spawn((
-                        Tile,
-                        Position { x, y },
-                        glyph,
-                        Text2d::new(glyph.to_char().to_string()),
-                        text_font.clone(),
-                        TextColor(Color::srgb(0.0, 1.0, 0.0)),
-                        Revealed(RevealedState::Hidden),
-                    ));
-                }
-            }
-            TileType::DownStairs => {
-                commands.spawn((
-                    Tile,
-                    Position { x, y },
-                    Text2d::new(">"),
-                    text_font.clone(),
-                    TextColor(Color::srgb(0.0, 1.0, 1.0)),
-                    Revealed(RevealedState::Hidden),
-                ));
-            }
-        }
-
-        x += 1;
-        if x > MAP_WIDTH as i32 - 1 {
-            x = 0;
-            y += 1;
-        }
-    }
 }
 
 fn update_revealed_tiles(
@@ -655,19 +485,7 @@ mod tests {
 
     /// Creates a small test map with given dimensions and all walls
     fn create_test_map(width: i32, height: i32) -> Map {
-        let size = (width * height) as usize;
-        Map {
-            rooms: Vec::new(),
-            tiles: vec![TileType::Wall; size],
-            width,
-            height,
-            depth: 1,
-            revealed_tiles: vec![false; size],
-            visible_tiles: vec![false; size],
-            blocked_tiles: vec![false; size],
-            tile_content: vec![Vec::new(); size],
-            bloodstains: HashSet::new(),
-        }
+        Map::new(width as usize, height as usize, 1)
     }
 
     #[test]
