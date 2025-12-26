@@ -160,3 +160,13 @@ pub struct ProvidesFood;
 
 #[derive(Component, Debug)]
 pub struct MagicMapper;
+
+// Trap system
+#[derive(Component, Debug)]
+pub struct Hidden;
+
+#[derive(Component, Debug)]
+pub struct EntryTrigger;
+
+#[derive(Component, Debug)]
+pub struct SingleActivation;

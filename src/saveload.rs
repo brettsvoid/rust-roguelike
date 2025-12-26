@@ -9,9 +9,9 @@ use std::path::Path;
 
 use crate::combat::CombatStats;
 use crate::components::{
-    AreaOfEffect, BlocksTile, CausesConfusion, Confusion, Consumable, HungerClock, HungerState,
-    InBackpack, InflictsDamage, Item, MagicMapper, Name, ProvidesFood, ProvidesHealing, Ranged,
-    RenderOrder, RenderableBundle, Targeting,
+    AreaOfEffect, BlocksTile, CausesConfusion, Confusion, Consumable, EntryTrigger, Hidden,
+    HungerClock, HungerState, InBackpack, InflictsDamage, Item, MagicMapper, Name, ProvidesFood,
+    ProvidesHealing, Ranged, RenderOrder, RenderableBundle, SingleActivation, Targeting,
 };
 use crate::gamelog::GameLog;
 use crate::map::{Map, Position, Revealed, RevealedState, Tile, TileType, MAP_WIDTH};
@@ -34,6 +34,8 @@ pub struct SaveData {
     pub player: SerializedPlayer,
     pub monsters: Vec<SerializedMonster>,
     pub items: Vec<SerializedItem>,
+    #[serde(default)]
+    pub traps: Vec<SerializedTrap>,
     pub game_log: Vec<String>,
 }
 
@@ -119,6 +121,18 @@ pub struct SerializedColor {
     pub b: f32,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct SerializedTrap {
+    pub x: i32,
+    pub y: i32,
+    pub name: String,
+    pub glyph: String,
+    pub color: SerializedColor,
+    pub damage: i32,
+    pub hidden: bool,
+    pub single_activation: bool,
+}
+
 // ============================================================================
 // Save System
 // ============================================================================
@@ -161,6 +175,18 @@ pub fn save_game(
             Option<&MagicMapper>,
         ),
         With<Item>,
+    >,
+    trap_query: Query<
+        (
+            &Position,
+            &Name,
+            &Text2d,
+            &TextColor,
+            &InflictsDamage,
+            Option<&Hidden>,
+            Option<&SingleActivation>,
+        ),
+        With<EntryTrigger>,
     >,
 ) {
     let Ok((player_entity, player_pos, player_name, player_stats, player_viewshed, player_hunger)) =
@@ -270,6 +296,28 @@ pub fn save_game(
         )
         .collect();
 
+    // Serialize traps
+    let traps: Vec<SerializedTrap> = trap_query
+        .iter()
+        .map(|(pos, name, text, color, damage, hidden, single)| {
+            let srgba = color.0.to_srgba();
+            SerializedTrap {
+                x: pos.x,
+                y: pos.y,
+                name: name.name.clone(),
+                glyph: text.0.clone(),
+                color: SerializedColor {
+                    r: srgba.red,
+                    g: srgba.green,
+                    b: srgba.blue,
+                },
+                damage: damage.damage,
+                hidden: hidden.is_some(),
+                single_activation: single.is_some(),
+            }
+        })
+        .collect();
+
     // Serialize map
     let serialized_map = SerializedMap {
         tiles: map.tiles.clone(),
@@ -286,6 +334,7 @@ pub fn save_game(
         player,
         monsters,
         items,
+        traps,
         game_log: game_log.entries.clone(),
     };
 
@@ -320,7 +369,7 @@ pub fn delete_save_file() {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_game(
     commands: &mut Commands,
-    entities_to_despawn: &Query<Entity, Or<(With<Player>, With<Monster>, With<Item>, With<Tile>)>>,
+    entities_to_despawn: &Query<Entity, Or<(With<Player>, With<Monster>, With<Item>, With<Tile>, With<EntryTrigger>)>>,
     map: &mut Map,
     game_log: &mut GameLog,
     font: &UiFont,
@@ -550,6 +599,31 @@ pub fn load_game(
         }
     }
 
+    // Spawn traps
+    for trap in save_data.traps {
+        let color = Color::srgb(trap.color.r, trap.color.g, trap.color.b);
+        let mut entity_commands = commands.spawn((
+            EntryTrigger,
+            Name { name: trap.name },
+            Position { x: trap.x, y: trap.y },
+            InflictsDamage { damage: trap.damage },
+            RenderableBundle::new(
+                &trap.glyph,
+                color,
+                palettes::basic::BLACK.into(),
+                RenderOrder::ITEM,
+                &text_font,
+            ),
+        ));
+
+        if trap.hidden {
+            entity_commands.insert(Hidden);
+        }
+        if trap.single_activation {
+            entity_commands.insert(SingleActivation);
+        }
+    }
+
     // Delete save file (permadeath)
     delete_save_file();
 
@@ -600,6 +674,18 @@ pub fn save_game(
         ),
         With<Item>,
     >,
+    _trap_query: Query<
+        (
+            &Position,
+            &Name,
+            &Text2d,
+            &TextColor,
+            &InflictsDamage,
+            Option<&Hidden>,
+            Option<&SingleActivation>,
+        ),
+        With<EntryTrigger>,
+    >,
 ) {
     // No-op on WASM
 }
@@ -617,7 +703,7 @@ pub fn delete_save_file() {
 #[cfg(target_arch = "wasm32")]
 pub fn load_game(
     _commands: &mut Commands,
-    _entities_to_despawn: &Query<Entity, Or<(With<Player>, With<Monster>, With<Item>, With<Tile>)>>,
+    _entities_to_despawn: &Query<Entity, Or<(With<Player>, With<Monster>, With<Item>, With<Tile>, With<EntryTrigger>)>>,
     _map: &mut Map,
     _game_log: &mut GameLog,
     _font: &UiFont,

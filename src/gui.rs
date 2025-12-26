@@ -3,7 +3,7 @@ use bevy::input::ButtonState;
 use bevy::prelude::*;
 
 use crate::combat::CombatStats;
-use crate::components::{AreaOfEffect, Equipped, HungerClock, HungerState, InBackpack, Item, Name, Ranged, Targeting, WantsToDropItem, WantsToRemoveItem, WantsToUseItem};
+use crate::components::{AreaOfEffect, EntryTrigger, Equipped, HungerClock, HungerState, InBackpack, Item, Name, Ranged, Targeting, WantsToDropItem, WantsToRemoveItem, WantsToUseItem};
 use crate::distance::DistanceAlg;
 use crate::gamelog::GameLog;
 use crate::map::{Map, Position, Revealed, RevealedState, Tile, TileType, FONT_SIZE, GRID_PX, MAP_HEIGHT, MAP_WIDTH};
@@ -1455,7 +1455,7 @@ fn handle_main_menu_input(
     mut next_state: ResMut<NextState<RunState>>,
     mut exit: EventWriter<AppExit>,
     // Resources needed for loading/new game
-    entities_to_despawn: Query<Entity, Or<(With<Player>, With<Monster>, With<Item>, With<Tile>)>>,
+    entities_to_despawn: Query<Entity, Or<(With<Player>, With<Monster>, With<Item>, With<Tile>, With<EntryTrigger>)>>,
     mut map: ResMut<Map>,
     mut game_log: ResMut<GameLog>,
     mut rng: ResMut<crate::rng::GameRng>,

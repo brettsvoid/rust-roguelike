@@ -4,9 +4,10 @@ use rand::Rng;
 use crate::{
     combat::CombatStats,
     components::{
-        AreaOfEffect, BlocksTile, CausesConfusion, Consumable, DefenseBonus, EquipmentSlot,
-        Equippable, HungerClock, HungerState, InflictsDamage, Item, MagicMapper, MeleePowerBonus,
-        Name, ProvidesFood, ProvidesHealing, Ranged, RenderOrder, RenderableBundle, Targeting,
+        AreaOfEffect, BlocksTile, CausesConfusion, Consumable, DefenseBonus, EntryTrigger,
+        EquipmentSlot, Equippable, Hidden, HungerClock, HungerState, InflictsDamage, Item,
+        MagicMapper, MeleePowerBonus, Name, ProvidesFood, ProvidesHealing, Ranged, RenderOrder,
+        RenderableBundle, SingleActivation, Targeting,
     },
     map::Position,
     monsters::Monster,
@@ -88,7 +89,8 @@ pub fn spawn_room(
         .add("Dagger", 3)
         .add("Shield", 3)
         .add("Longsword", map_depth - 1)
-        .add("Tower Shield", map_depth - 1);
+        .add("Tower Shield", map_depth - 1)
+        .add("Bear Trap", 2);
 
     let mut spawn_points: Vec<(i32, i32)> = Vec::new();
 
@@ -144,6 +146,7 @@ pub fn spawn_room(
                 "Shield" => spawn_shield(commands, font, *x, *y),
                 "Longsword" => spawn_longsword(commands, font, *x, *y),
                 "Tower Shield" => spawn_tower_shield(commands, font, *x, *y),
+                "Bear Trap" => spawn_bear_trap(commands, font, *x, *y),
                 _ => {}
             }
         }
@@ -391,6 +394,26 @@ pub fn spawn_magic_mapping_scroll(commands: &mut Commands, font: &TextFont, x: i
         RenderableBundle::new(
             ")",
             palettes::css::CORNFLOWER_BLUE.into(),
+            palettes::basic::BLACK.into(),
+            RenderOrder::ITEM,
+            font,
+        ),
+    ));
+}
+
+pub fn spawn_bear_trap(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
+    commands.spawn((
+        Name {
+            name: "Bear Trap".to_string(),
+        },
+        Position { x, y },
+        Hidden,
+        EntryTrigger,
+        SingleActivation,
+        InflictsDamage { damage: 6 },
+        RenderableBundle::new(
+            "^",
+            palettes::basic::RED.into(),
             palettes::basic::BLACK.into(),
             RenderOrder::ITEM,
             font,

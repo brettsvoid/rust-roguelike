@@ -26,6 +26,7 @@ mod rng;
 mod saveload;
 mod shapes;
 mod spawner;
+mod traps;
 mod viewshed;
 
 const SCREEN_HEIGHT: usize = 50;
@@ -96,6 +97,7 @@ fn main() {
             handle_exit,
             particle::particle_spawn_system,
             particle::particle_cull_system,
+            traps::reveal_hidden_system,
         ))
         // PreRun: run systems then transition to AwaitingInput
         .add_systems(
@@ -106,6 +108,7 @@ fn main() {
         .add_systems(
             Update,
             (
+                traps::trap_trigger_system,
                 inventory::item_collection_system,
                 inventory::item_use_system,
                 inventory::item_drop_system,
@@ -124,6 +127,7 @@ fn main() {
             Update,
             (
                 monsters::monster_ai,
+                traps::trap_trigger_system,
                 combat::melee_combat_system,
                 combat::damage_system,
                 combat::delete_the_dead,
@@ -187,6 +191,18 @@ fn handle_exit(
         ),
         With<components::Item>,
     >,
+    trap_query: Query<
+        (
+            &map::Position,
+            &components::Name,
+            &Text2d,
+            &TextColor,
+            &components::InflictsDamage,
+            Option<&components::Hidden>,
+            Option<&components::SingleActivation>,
+        ),
+        With<components::EntryTrigger>,
+    >,
 ) {
     if keyboard.just_released(KeyCode::KeyQ) {
         // Only save if we're in-game (not in MainMenu) and player is alive
@@ -203,6 +219,7 @@ fn handle_exit(
                     player_query,
                     monster_query,
                     item_query,
+                    trap_query,
                 );
             }
         }

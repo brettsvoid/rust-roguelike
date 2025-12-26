@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use bevy::prelude::*;
 use rand::prelude::*;
 
-use crate::components::RenderOrder;
+use crate::components::{Hidden, RenderOrder};
 use crate::debug::DebugState;
 use crate::distance::DistanceAlg;
 use crate::player::Player;
@@ -591,9 +591,15 @@ fn update_visible_tiles(
 
 fn update_renderable_visibility(
     map: Res<Map>,
-    mut query: Query<(&Position, &mut Visibility), (With<RenderOrder>, Without<Player>)>,
+    mut query: Query<(&Position, &mut Visibility, Option<&Hidden>), (With<RenderOrder>, Without<Player>)>,
 ) {
-    for (pos, mut visibility) in &mut query {
+    for (pos, mut visibility, hidden) in &mut query {
+        // Hidden entities are always invisible
+        if hidden.is_some() {
+            *visibility = Visibility::Hidden;
+            continue;
+        }
+
         let idx = map.xy_idx(pos.x, pos.y);
         if map.visible_tiles[idx] {
             *visibility = Visibility::Visible;
