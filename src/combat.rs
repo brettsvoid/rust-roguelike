@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::components::{DefenseBonus, Equipped, MeleePowerBonus, Name};
+use crate::components::{DefenseBonus, Equipped, HungerClock, HungerState, MeleePowerBonus, Name};
 use crate::debug::GodMode;
 use crate::gamelog::GameLog;
 use crate::map::{Map, Position};
@@ -43,6 +43,7 @@ pub fn melee_combat_system(
     targets: Query<(&Name, &CombatStats, &Position)>,
     melee_bonus_query: Query<(&Equipped, &MeleePowerBonus)>,
     defense_bonus_query: Query<(&Equipped, &DefenseBonus)>,
+    hunger_query: Query<&HungerClock>,
 ) {
     for (entity, wants_melee, name, stats) in &query {
         if stats.hp <= 0 {
@@ -59,6 +60,13 @@ pub fn melee_combat_system(
             for (equipped, bonus) in &melee_bonus_query {
                 if equipped.owner == entity {
                     offense_bonus += bonus.power;
+                }
+            }
+
+            // Add +1 power if well fed
+            if let Ok(hunger) = hunger_query.get(entity) {
+                if hunger.state == HungerState::WellFed {
+                    offense_bonus += 1;
                 }
             }
 

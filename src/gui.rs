@@ -3,7 +3,7 @@ use bevy::input::ButtonState;
 use bevy::prelude::*;
 
 use crate::combat::CombatStats;
-use crate::components::{AreaOfEffect, Equipped, InBackpack, Item, Name, Ranged, Targeting, WantsToDropItem, WantsToRemoveItem, WantsToUseItem};
+use crate::components::{AreaOfEffect, Equipped, HungerClock, HungerState, InBackpack, Item, Name, Ranged, Targeting, WantsToDropItem, WantsToRemoveItem, WantsToUseItem};
 use crate::distance::DistanceAlg;
 use crate::gamelog::GameLog;
 use crate::map::{Map, Position, Revealed, RevealedState, Tile, TileType, FONT_SIZE, GRID_PX, MAP_HEIGHT, MAP_WIDTH};
@@ -19,8 +19,9 @@ pub struct GuiPlugin;
 
 impl Plugin for GuiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_gui)
-            .add_systems(Update, (update_health_bar, update_depth, update_game_log, update_tooltip))
+        app.init_resource::<MenuPage>()
+            .add_systems(Startup, setup_gui)
+            .add_systems(Update, (update_health_bar, update_depth, update_hunger_display, update_game_log, update_tooltip))
             // Main menu
             .add_systems(OnEnter(RunState::MainMenu), (cleanup_game_entities, spawn_main_menu).chain())
             .add_systems(OnExit(RunState::MainMenu), despawn_main_menu)
@@ -29,24 +30,24 @@ impl Plugin for GuiPlugin {
                 handle_main_menu_input.run_if(in_state(RunState::MainMenu)),
             )
             // Inventory
-            .add_systems(OnEnter(RunState::ShowInventory), spawn_inventory_menu)
+            .add_systems(OnEnter(RunState::ShowInventory), reset_menu_page)
             .add_systems(OnExit(RunState::ShowInventory), despawn_inventory_menu)
             .add_systems(
                 Update,
-                handle_inventory_input.run_if(in_state(RunState::ShowInventory)),
+                (spawn_inventory_menu, handle_inventory_input).chain().run_if(in_state(RunState::ShowInventory)),
             )
-            .add_systems(OnEnter(RunState::ShowDropItem), spawn_drop_menu)
+            .add_systems(OnEnter(RunState::ShowDropItem), reset_menu_page)
             .add_systems(OnExit(RunState::ShowDropItem), despawn_drop_menu)
             .add_systems(
                 Update,
-                handle_drop_input.run_if(in_state(RunState::ShowDropItem)),
+                (spawn_drop_menu, handle_drop_input).chain().run_if(in_state(RunState::ShowDropItem)),
             )
             // Remove equipment menu
-            .add_systems(OnEnter(RunState::ShowRemoveItem), spawn_remove_menu)
+            .add_systems(OnEnter(RunState::ShowRemoveItem), reset_menu_page)
             .add_systems(OnExit(RunState::ShowRemoveItem), despawn_remove_menu)
             .add_systems(
                 Update,
-                handle_remove_input.run_if(in_state(RunState::ShowRemoveItem)),
+                (spawn_remove_menu, handle_remove_input).chain().run_if(in_state(RunState::ShowRemoveItem)),
             )
             // Game over
             .add_systems(OnEnter(RunState::GameOver), spawn_game_over)
@@ -76,6 +77,9 @@ struct HealthBar;
 struct DepthText;
 
 #[derive(Component)]
+struct HungerText;
+
+#[derive(Component)]
 struct GameLogText;
 
 #[derive(Component)]
@@ -83,6 +87,11 @@ struct Tooltip;
 
 #[derive(Component)]
 struct CursorHighlight;
+
+const ITEMS_PER_PAGE: usize = 10;
+
+#[derive(Resource, Default)]
+pub struct MenuPage(pub usize);
 
 #[derive(Component)]
 struct InventoryMenu;
@@ -175,6 +184,18 @@ fn setup_gui(mut commands: Commands, font: Res<UiFont>) {
                 DepthText,
             ));
 
+            // Hunger display
+            parent.spawn((
+                Text::new(""),
+                TextFont {
+                    font: font.0.clone(),
+                    font_size: 16.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.0, 1.0, 0.0)), // Green (will be updated)
+                HungerText,
+            ));
+
             // Game log container
             parent
                 .spawn((
@@ -224,6 +245,33 @@ fn update_health_bar(
 fn update_depth(map: Res<Map>, mut depth_text_query: Query<&mut Text, With<DepthText>>) {
     if let Ok(mut text) = depth_text_query.get_single_mut() {
         **text = format!("Depth: {}", map.depth);
+    }
+}
+
+fn update_hunger_display(
+    player_query: Query<&HungerClock, With<Player>>,
+    mut hunger_text_query: Query<(&mut Text, &mut TextColor), With<HungerText>>,
+) {
+    if let Ok(hunger) = player_query.get_single() {
+        if let Ok((mut text, mut color)) = hunger_text_query.get_single_mut() {
+            match hunger.state {
+                HungerState::WellFed => {
+                    **text = "Well Fed".to_string();
+                    color.0 = Color::srgb(0.0, 1.0, 0.0); // Green
+                }
+                HungerState::Normal => {
+                    **text = "".to_string(); // Don't display when normal
+                }
+                HungerState::Hungry => {
+                    **text = "Hungry".to_string();
+                    color.0 = Color::srgb(1.0, 0.65, 0.0); // Orange
+                }
+                HungerState::Starving => {
+                    **text = "Starving!".to_string();
+                    color.0 = Color::srgb(1.0, 0.0, 0.0); // Red
+                }
+            }
+        }
     }
 }
 
@@ -361,12 +409,23 @@ fn update_tooltip(
     ));
 }
 
+fn reset_menu_page(mut menu_page: ResMut<MenuPage>) {
+    menu_page.0 = 0;
+}
+
 fn spawn_inventory_menu(
     mut commands: Commands,
     font: Res<UiFont>,
+    menu_page: Res<MenuPage>,
     player_query: Query<Entity, With<Player>>,
     backpack_query: Query<(&InBackpack, &Name), With<Item>>,
+    existing_menu: Query<Entity, With<InventoryMenu>>,
 ) {
+    // Don't spawn if menu already exists
+    if !existing_menu.is_empty() {
+        return;
+    }
+
     let Ok(player_entity) = player_query.get_single() else {
         return;
     };
@@ -378,6 +437,11 @@ fn spawn_inventory_menu(
         .map(|(_, name)| name.name.as_str())
         .collect();
 
+    let total_items = inventory.len();
+    let total_pages = if total_items == 0 { 1 } else { (total_items + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE };
+    let current_page = menu_page.0.min(total_pages.saturating_sub(1));
+    let start_idx = current_page * ITEMS_PER_PAGE;
+
     // Build inventory text
     let inventory_text = if inventory.is_empty() {
         "Your inventory is empty.\n\n(Press Escape to close)".to_string()
@@ -385,11 +449,19 @@ fn spawn_inventory_menu(
         let items: Vec<String> = inventory
             .iter()
             .enumerate()
-            .map(|(i, name)| format!("({}) {}", (b'a' + i as u8) as char, name))
+            .skip(start_idx)
+            .take(ITEMS_PER_PAGE)
+            .map(|(i, name)| format!("({}) {}", (b'a' + (i - start_idx) as u8) as char, name))
             .collect();
+        let page_info = if total_pages > 1 {
+            format!("\n\nPage {}/{} (</> to navigate)", current_page + 1, total_pages)
+        } else {
+            String::new()
+        };
         format!(
-            "Inventory\n\n{}\n\n(Press Escape to close)",
-            items.join("\n")
+            "Inventory\n\n{}{}\n\n(Press Escape to close)",
+            items.join("\n"),
+            page_info
         )
     };
 
@@ -441,9 +513,11 @@ fn handle_inventory_input(
     mut evr_kbd: EventReader<KeyboardInput>,
     mut next_state: ResMut<NextState<RunState>>,
     mut targeting_info: ResMut<TargetingInfo>,
+    mut menu_page: ResMut<MenuPage>,
     player_query: Query<Entity, With<Player>>,
     backpack_query: Query<(Entity, &InBackpack), With<Item>>,
     ranged_query: Query<&Ranged>,
+    menu_query: Query<Entity, With<InventoryMenu>>,
 ) {
     let Ok(player_entity) = player_query.get_single() else {
         return;
@@ -456,6 +530,11 @@ fn handle_inventory_input(
         .map(|(entity, _)| entity)
         .collect();
 
+    let total_items = items.len();
+    let total_pages = if total_items == 0 { 1 } else { (total_items + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE };
+    let current_page = menu_page.0.min(total_pages.saturating_sub(1));
+    let start_idx = current_page * ITEMS_PER_PAGE;
+
     for ev in evr_kbd.read() {
         if ev.state == ButtonState::Released {
             continue;
@@ -465,12 +544,34 @@ fn handle_inventory_input(
             KeyCode::Escape => {
                 next_state.set(RunState::AwaitingInput);
             }
-            KeyCode::KeyA => try_use_item(&mut commands, &items, 0, player_entity, &mut next_state, &mut targeting_info, &ranged_query),
-            KeyCode::KeyB => try_use_item(&mut commands, &items, 1, player_entity, &mut next_state, &mut targeting_info, &ranged_query),
-            KeyCode::KeyC => try_use_item(&mut commands, &items, 2, player_entity, &mut next_state, &mut targeting_info, &ranged_query),
-            KeyCode::KeyD => try_use_item(&mut commands, &items, 3, player_entity, &mut next_state, &mut targeting_info, &ranged_query),
-            KeyCode::KeyE => try_use_item(&mut commands, &items, 4, player_entity, &mut next_state, &mut targeting_info, &ranged_query),
-            KeyCode::KeyF => try_use_item(&mut commands, &items, 5, player_entity, &mut next_state, &mut targeting_info, &ranged_query),
+            KeyCode::Comma => {
+                if menu_page.0 > 0 {
+                    menu_page.0 -= 1;
+                    // Despawn and respawn menu to update display
+                    for entity in &menu_query {
+                        commands.entity(entity).despawn_recursive();
+                    }
+                }
+            }
+            KeyCode::Period => {
+                if menu_page.0 < total_pages.saturating_sub(1) {
+                    menu_page.0 += 1;
+                    // Despawn and respawn menu to update display
+                    for entity in &menu_query {
+                        commands.entity(entity).despawn_recursive();
+                    }
+                }
+            }
+            KeyCode::KeyA => try_use_item(&mut commands, &items, start_idx + 0, player_entity, &mut next_state, &mut targeting_info, &ranged_query),
+            KeyCode::KeyB => try_use_item(&mut commands, &items, start_idx + 1, player_entity, &mut next_state, &mut targeting_info, &ranged_query),
+            KeyCode::KeyC => try_use_item(&mut commands, &items, start_idx + 2, player_entity, &mut next_state, &mut targeting_info, &ranged_query),
+            KeyCode::KeyD => try_use_item(&mut commands, &items, start_idx + 3, player_entity, &mut next_state, &mut targeting_info, &ranged_query),
+            KeyCode::KeyE => try_use_item(&mut commands, &items, start_idx + 4, player_entity, &mut next_state, &mut targeting_info, &ranged_query),
+            KeyCode::KeyF => try_use_item(&mut commands, &items, start_idx + 5, player_entity, &mut next_state, &mut targeting_info, &ranged_query),
+            KeyCode::KeyG => try_use_item(&mut commands, &items, start_idx + 6, player_entity, &mut next_state, &mut targeting_info, &ranged_query),
+            KeyCode::KeyH => try_use_item(&mut commands, &items, start_idx + 7, player_entity, &mut next_state, &mut targeting_info, &ranged_query),
+            KeyCode::KeyI => try_use_item(&mut commands, &items, start_idx + 8, player_entity, &mut next_state, &mut targeting_info, &ranged_query),
+            KeyCode::KeyJ => try_use_item(&mut commands, &items, start_idx + 9, player_entity, &mut next_state, &mut targeting_info, &ranged_query),
             _ => {}
         }
     }
@@ -502,9 +603,16 @@ fn try_use_item(
 fn spawn_drop_menu(
     mut commands: Commands,
     font: Res<UiFont>,
+    menu_page: Res<MenuPage>,
     player_query: Query<Entity, With<Player>>,
     backpack_query: Query<(&InBackpack, &Name), With<Item>>,
+    existing_menu: Query<Entity, With<DropMenu>>,
 ) {
+    // Don't spawn if menu already exists
+    if !existing_menu.is_empty() {
+        return;
+    }
+
     let Ok(player_entity) = player_query.get_single() else {
         return;
     };
@@ -516,6 +624,11 @@ fn spawn_drop_menu(
         .map(|(_, name)| name.name.as_str())
         .collect();
 
+    let total_items = inventory.len();
+    let total_pages = if total_items == 0 { 1 } else { (total_items + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE };
+    let current_page = menu_page.0.min(total_pages.saturating_sub(1));
+    let start_idx = current_page * ITEMS_PER_PAGE;
+
     // Build drop menu text
     let menu_text = if inventory.is_empty() {
         "Nothing to drop.\n\n(Press Escape to close)".to_string()
@@ -523,11 +636,19 @@ fn spawn_drop_menu(
         let items: Vec<String> = inventory
             .iter()
             .enumerate()
-            .map(|(i, name)| format!("({}) {}", (b'a' + i as u8) as char, name))
+            .skip(start_idx)
+            .take(ITEMS_PER_PAGE)
+            .map(|(i, name)| format!("({}) {}", (b'a' + (i - start_idx) as u8) as char, name))
             .collect();
+        let page_info = if total_pages > 1 {
+            format!("\n\nPage {}/{} (</> to navigate)", current_page + 1, total_pages)
+        } else {
+            String::new()
+        };
         format!(
-            "Drop which item?\n\n{}\n\n(Press Escape to close)",
-            items.join("\n")
+            "Drop which item?\n\n{}{}\n\n(Press Escape to close)",
+            items.join("\n"),
+            page_info
         )
     };
 
@@ -578,8 +699,10 @@ fn handle_drop_input(
     mut commands: Commands,
     mut evr_kbd: EventReader<KeyboardInput>,
     mut next_state: ResMut<NextState<RunState>>,
+    mut menu_page: ResMut<MenuPage>,
     player_query: Query<Entity, With<Player>>,
     backpack_query: Query<(Entity, &InBackpack), With<Item>>,
+    menu_query: Query<Entity, With<DropMenu>>,
 ) {
     let Ok(player_entity) = player_query.get_single() else {
         return;
@@ -592,6 +715,11 @@ fn handle_drop_input(
         .map(|(entity, _)| entity)
         .collect();
 
+    let total_items = items.len();
+    let total_pages = if total_items == 0 { 1 } else { (total_items + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE };
+    let current_page = menu_page.0.min(total_pages.saturating_sub(1));
+    let start_idx = current_page * ITEMS_PER_PAGE;
+
     for ev in evr_kbd.read() {
         if ev.state == ButtonState::Released {
             continue;
@@ -601,12 +729,32 @@ fn handle_drop_input(
             KeyCode::Escape => {
                 next_state.set(RunState::AwaitingInput);
             }
-            KeyCode::KeyA => try_drop_item(&mut commands, &items, 0, player_entity, &mut next_state),
-            KeyCode::KeyB => try_drop_item(&mut commands, &items, 1, player_entity, &mut next_state),
-            KeyCode::KeyC => try_drop_item(&mut commands, &items, 2, player_entity, &mut next_state),
-            KeyCode::KeyD => try_drop_item(&mut commands, &items, 3, player_entity, &mut next_state),
-            KeyCode::KeyE => try_drop_item(&mut commands, &items, 4, player_entity, &mut next_state),
-            KeyCode::KeyF => try_drop_item(&mut commands, &items, 5, player_entity, &mut next_state),
+            KeyCode::Comma => {
+                if menu_page.0 > 0 {
+                    menu_page.0 -= 1;
+                    for entity in &menu_query {
+                        commands.entity(entity).despawn_recursive();
+                    }
+                }
+            }
+            KeyCode::Period => {
+                if menu_page.0 < total_pages.saturating_sub(1) {
+                    menu_page.0 += 1;
+                    for entity in &menu_query {
+                        commands.entity(entity).despawn_recursive();
+                    }
+                }
+            }
+            KeyCode::KeyA => try_drop_item(&mut commands, &items, start_idx + 0, player_entity, &mut next_state),
+            KeyCode::KeyB => try_drop_item(&mut commands, &items, start_idx + 1, player_entity, &mut next_state),
+            KeyCode::KeyC => try_drop_item(&mut commands, &items, start_idx + 2, player_entity, &mut next_state),
+            KeyCode::KeyD => try_drop_item(&mut commands, &items, start_idx + 3, player_entity, &mut next_state),
+            KeyCode::KeyE => try_drop_item(&mut commands, &items, start_idx + 4, player_entity, &mut next_state),
+            KeyCode::KeyF => try_drop_item(&mut commands, &items, start_idx + 5, player_entity, &mut next_state),
+            KeyCode::KeyG => try_drop_item(&mut commands, &items, start_idx + 6, player_entity, &mut next_state),
+            KeyCode::KeyH => try_drop_item(&mut commands, &items, start_idx + 7, player_entity, &mut next_state),
+            KeyCode::KeyI => try_drop_item(&mut commands, &items, start_idx + 8, player_entity, &mut next_state),
+            KeyCode::KeyJ => try_drop_item(&mut commands, &items, start_idx + 9, player_entity, &mut next_state),
             _ => {}
         }
     }
@@ -1353,9 +1501,16 @@ fn handle_main_menu_input(
 fn spawn_remove_menu(
     mut commands: Commands,
     font: Res<UiFont>,
+    menu_page: Res<MenuPage>,
     player_query: Query<Entity, With<Player>>,
     equipped_query: Query<(&Equipped, &Name), With<Item>>,
+    existing_menu: Query<Entity, With<RemoveMenu>>,
 ) {
+    // Don't spawn if menu already exists
+    if !existing_menu.is_empty() {
+        return;
+    }
+
     let Ok(player_entity) = player_query.get_single() else {
         return;
     };
@@ -1367,6 +1522,11 @@ fn spawn_remove_menu(
         .map(|(_, name)| name.name.as_str())
         .collect();
 
+    let total_items = equipped_items.len();
+    let total_pages = if total_items == 0 { 1 } else { (total_items + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE };
+    let current_page = menu_page.0.min(total_pages.saturating_sub(1));
+    let start_idx = current_page * ITEMS_PER_PAGE;
+
     // Build menu text
     let menu_text = if equipped_items.is_empty() {
         "No equipment to remove.\n\n(Press Escape to close)".to_string()
@@ -1374,11 +1534,19 @@ fn spawn_remove_menu(
         let items: Vec<String> = equipped_items
             .iter()
             .enumerate()
-            .map(|(i, name)| format!("({}) {}", (b'a' + i as u8) as char, name))
+            .skip(start_idx)
+            .take(ITEMS_PER_PAGE)
+            .map(|(i, name)| format!("({}) {}", (b'a' + (i - start_idx) as u8) as char, name))
             .collect();
+        let page_info = if total_pages > 1 {
+            format!("\n\nPage {}/{} (</> to navigate)", current_page + 1, total_pages)
+        } else {
+            String::new()
+        };
         format!(
-            "Remove which item?\n\n{}\n\n(Press Escape to close)",
-            items.join("\n")
+            "Remove which item?\n\n{}{}\n\n(Press Escape to close)",
+            items.join("\n"),
+            page_info
         )
     };
 
@@ -1429,8 +1597,10 @@ fn handle_remove_input(
     mut commands: Commands,
     mut evr_kbd: EventReader<KeyboardInput>,
     mut next_state: ResMut<NextState<RunState>>,
+    mut menu_page: ResMut<MenuPage>,
     player_query: Query<Entity, With<Player>>,
     equipped_query: Query<(Entity, &Equipped), With<Item>>,
+    menu_query: Query<Entity, With<RemoveMenu>>,
 ) {
     let Ok(player_entity) = player_query.get_single() else {
         return;
@@ -1443,6 +1613,11 @@ fn handle_remove_input(
         .map(|(entity, _)| entity)
         .collect();
 
+    let total_items = items.len();
+    let total_pages = if total_items == 0 { 1 } else { (total_items + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE };
+    let current_page = menu_page.0.min(total_pages.saturating_sub(1));
+    let start_idx = current_page * ITEMS_PER_PAGE;
+
     for ev in evr_kbd.read() {
         if ev.state == ButtonState::Released {
             continue;
@@ -1452,12 +1627,32 @@ fn handle_remove_input(
             KeyCode::Escape => {
                 next_state.set(RunState::AwaitingInput);
             }
-            KeyCode::KeyA => try_remove_item(&mut commands, &items, 0, player_entity, &mut next_state),
-            KeyCode::KeyB => try_remove_item(&mut commands, &items, 1, player_entity, &mut next_state),
-            KeyCode::KeyC => try_remove_item(&mut commands, &items, 2, player_entity, &mut next_state),
-            KeyCode::KeyD => try_remove_item(&mut commands, &items, 3, player_entity, &mut next_state),
-            KeyCode::KeyE => try_remove_item(&mut commands, &items, 4, player_entity, &mut next_state),
-            KeyCode::KeyF => try_remove_item(&mut commands, &items, 5, player_entity, &mut next_state),
+            KeyCode::Comma => {
+                if menu_page.0 > 0 {
+                    menu_page.0 -= 1;
+                    for entity in &menu_query {
+                        commands.entity(entity).despawn_recursive();
+                    }
+                }
+            }
+            KeyCode::Period => {
+                if menu_page.0 < total_pages.saturating_sub(1) {
+                    menu_page.0 += 1;
+                    for entity in &menu_query {
+                        commands.entity(entity).despawn_recursive();
+                    }
+                }
+            }
+            KeyCode::KeyA => try_remove_item(&mut commands, &items, start_idx + 0, player_entity, &mut next_state),
+            KeyCode::KeyB => try_remove_item(&mut commands, &items, start_idx + 1, player_entity, &mut next_state),
+            KeyCode::KeyC => try_remove_item(&mut commands, &items, start_idx + 2, player_entity, &mut next_state),
+            KeyCode::KeyD => try_remove_item(&mut commands, &items, start_idx + 3, player_entity, &mut next_state),
+            KeyCode::KeyE => try_remove_item(&mut commands, &items, start_idx + 4, player_entity, &mut next_state),
+            KeyCode::KeyF => try_remove_item(&mut commands, &items, start_idx + 5, player_entity, &mut next_state),
+            KeyCode::KeyG => try_remove_item(&mut commands, &items, start_idx + 6, player_entity, &mut next_state),
+            KeyCode::KeyH => try_remove_item(&mut commands, &items, start_idx + 7, player_entity, &mut next_state),
+            KeyCode::KeyI => try_remove_item(&mut commands, &items, start_idx + 8, player_entity, &mut next_state),
+            KeyCode::KeyJ => try_remove_item(&mut commands, &items, start_idx + 9, player_entity, &mut next_state),
             _ => {}
         }
     }

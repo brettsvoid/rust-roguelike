@@ -3,9 +3,9 @@ use bevy::prelude::*;
 use crate::{
     combat::{CombatStats, SufferDamage},
     components::{
-        AreaOfEffect, CausesConfusion, Confusion, Consumable, Equippable, Equipped, InBackpack,
-        InflictsDamage, Name, ProvidesHealing, WantsToDropItem, WantsToPickupItem,
-        WantsToRemoveItem, WantsToUseItem,
+        AreaOfEffect, CausesConfusion, Confusion, Consumable, Equippable, Equipped, HungerClock,
+        HungerState, InBackpack, InflictsDamage, Name, ProvidesFood, ProvidesHealing,
+        WantsToDropItem, WantsToPickupItem, WantsToRemoveItem, WantsToUseItem,
     },
     distance::DistanceAlg,
     gamelog::GameLog,
@@ -36,7 +36,9 @@ pub fn item_collection_system(
 
         // Log the pickup
         if let Ok(name) = name_query.get(wants_pickup.item) {
-            gamelog.entries.push(format!("You pick up the {}.", name.name));
+            gamelog
+                .entries
+                .push(format!("You pick up the {}.", name.name));
         }
     }
 }
@@ -50,10 +52,12 @@ pub fn item_use_system(
     healing_query: Query<(&ProvidesHealing, &Name)>,
     damage_query: Query<(&InflictsDamage, &Name)>,
     confusion_query: Query<(&CausesConfusion, &Name)>,
+    food_query: Query<&ProvidesFood>,
     aoe_query: Query<&AreaOfEffect>,
     equippable_query: Query<(&Equippable, &Name)>,
     equipped_query: Query<(Entity, &Equipped, &Name)>,
     mut stats_query: Query<&mut CombatStats>,
+    mut hunger_query: Query<&mut HungerClock>,
     target_query: Query<(Entity, &Position, &Name), With<CombatStats>>,
 ) {
     for (entity, wants_use, user_pos) in &use_query {
@@ -66,8 +70,12 @@ pub fn item_use_system(
                 if equipped.owner == entity && equipped.slot == target_slot {
                     // Unequip: remove Equipped, add InBackpack
                     commands.entity(equipped_entity).remove::<Equipped>();
-                    commands.entity(equipped_entity).insert(InBackpack { owner: entity });
-                    gamelog.entries.push(format!("You unequip the {}.", equipped_name.name));
+                    commands
+                        .entity(equipped_entity)
+                        .insert(InBackpack { owner: entity });
+                    gamelog
+                        .entries
+                        .push(format!("You unequip the {}.", equipped_name.name));
                 }
             }
 
@@ -77,7 +85,9 @@ pub fn item_use_system(
                 owner: entity,
                 slot: target_slot,
             });
-            gamelog.entries.push(format!("You equip the {}.", item_name.name));
+            gamelog
+                .entries
+                .push(format!("You equip the {}.", item_name.name));
 
             // Remove the intent and continue to next item
             commands.entity(entity).remove::<WantsToUseItem>();
@@ -103,6 +113,15 @@ pub fn item_use_system(
             }
         }
 
+        // Apply food if the item provides it
+        if food_query.get(wants_use.item).is_ok() {
+            if let Ok(mut hunger) = hunger_query.get_mut(entity) {
+                hunger.state = HungerState::WellFed;
+                hunger.duration = 200;
+                gamelog.entries.push("You eat the rations.".to_string());
+            }
+        }
+
         // Apply effects if the item has a target position
         if let Some((target_x, target_y)) = wants_use.target {
             // Apply damage if the item inflicts it
@@ -113,10 +132,8 @@ pub fn item_use_system(
                     let radius = aoe.radius as i32;
                     for dx in -radius..=radius {
                         for dy in -radius..=radius {
-                            let distance = DistanceAlg::Pythagoras.distance2d(
-                                Vec2::ZERO,
-                                Vec2::new(dx as f32, dy as f32),
-                            );
+                            let distance = DistanceAlg::Pythagoras
+                                .distance2d(Vec2::ZERO, Vec2::new(dx as f32, dy as f32));
                             if distance <= aoe.radius as f32 {
                                 particle_builder.request(
                                     target_x + dx,
@@ -146,7 +163,9 @@ pub fn item_use_system(
                         }
                     }
                     if hit_count == 0 {
-                        gamelog.entries.push(format!("{} explodes, but hits nothing.", item_name.name));
+                        gamelog
+                            .entries
+                            .push(format!("{} explodes, but hits nothing.", item_name.name));
                     }
                 } else {
                     // Single target - find entity at exact position
@@ -253,7 +272,9 @@ pub fn item_remove_system(
 
         // Log the removal
         if let Ok(name) = name_query.get(wants_remove.item) {
-            gamelog.entries.push(format!("You unequip the {}.", name.name));
+            gamelog
+                .entries
+                .push(format!("You unequip the {}.", name.name));
         }
 
         // Remove intent component

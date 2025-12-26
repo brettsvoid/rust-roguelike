@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::combat::CombatStats;
-use crate::components::Item;
+use crate::components::{HungerClock, Item};
 use crate::map::{Map, Position, Revealed, RevealedState, Tile, TileType, GRID_PX, MAP_HEIGHT, MAP_WIDTH};
 use crate::monsters::Monster;
 use crate::player::Player;
@@ -199,7 +199,7 @@ pub fn update_state_inspector(
     state: Res<State<RunState>>,
     map: Res<Map>,
     font: Res<UiFont>,
-    player_query: Query<(&Position, &CombatStats), With<Player>>,
+    player_query: Query<(&Position, &CombatStats, &HungerClock), With<Player>>,
     monster_query: Query<Entity, With<Monster>>,
     item_query: Query<Entity, With<Item>>,
     inspector_query: Query<Entity, With<StateInspector>>,
@@ -216,13 +216,14 @@ pub fn update_state_inspector(
     let state_name = format!("{:?}", state.get());
     let depth = map.depth;
 
-    let (player_info, hp_info) = if let Ok((pos, stats)) = player_query.get_single() {
+    let (player_info, hp_info, hunger_info) = if let Ok((pos, stats, hunger)) = player_query.get_single() {
         (
             format!("({}, {})", pos.x, pos.y),
             format!("{}/{}", stats.hp, stats.max_hp),
+            format!("{:?} ({})", hunger.state, hunger.duration),
         )
     } else {
-        ("N/A".to_string(), "N/A".to_string())
+        ("N/A".to_string(), "N/A".to_string(), "N/A".to_string())
     };
 
     let monster_count = monster_query.iter().count();
@@ -275,6 +276,13 @@ pub fn update_state_inspector(
             // Player
             parent.spawn((
                 Text::new(format!("Player: {} HP {}", player_info, hp_info)),
+                text_font.clone(),
+                TextColor(Color::WHITE),
+            ));
+
+            // Hunger
+            parent.spawn((
+                Text::new(format!("Hunger: {}", hunger_info)),
                 text_font.clone(),
                 TextColor(Color::WHITE),
             ));

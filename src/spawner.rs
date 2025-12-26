@@ -5,8 +5,8 @@ use crate::{
     combat::CombatStats,
     components::{
         AreaOfEffect, BlocksTile, CausesConfusion, Consumable, DefenseBonus, EquipmentSlot,
-        Equippable, InflictsDamage, Item, MeleePowerBonus, Name, ProvidesHealing, Ranged,
-        RenderOrder, RenderableBundle, Targeting,
+        Equippable, HungerClock, HungerState, InflictsDamage, Item, MeleePowerBonus, Name,
+        ProvidesFood, ProvidesHealing, Ranged, RenderOrder, RenderableBundle, Targeting,
     },
     map::Position,
     monsters::Monster,
@@ -36,7 +36,17 @@ pub fn spawn_player(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
             range: 8,
             ..default()
         },
-        RenderableBundle::new("☺", palettes::basic::YELLOW.into(), palettes::basic::BLACK.into(), RenderOrder::PLAYER, font),
+        HungerClock {
+            state: HungerState::WellFed,
+            duration: 200,
+        },
+        RenderableBundle::new(
+            "☺",
+            palettes::basic::YELLOW.into(),
+            palettes::basic::BLACK.into(),
+            RenderOrder::PLAYER,
+            font,
+        ),
     ));
 }
 
@@ -70,6 +80,7 @@ pub fn spawn_room(
 
     let item_table = RandomTable::new()
         .add("Health Potion", 7)
+        .add("Rations", 10)
         .add("Magic Missile Scroll", 2)
         .add("Fireball Scroll", map_depth - 1)
         .add("Confusion Scroll", map_depth - 1)
@@ -123,6 +134,7 @@ pub fn spawn_room(
         if let Some(item_name) = item_table.roll(rng) {
             match item_name.as_str() {
                 "Health Potion" => spawn_health_potion(commands, font, *x, *y),
+                "Rations" => spawn_rations(commands, font, *x, *y),
                 "Magic Missile Scroll" => spawn_magic_missile_scroll(commands, font, *x, *y),
                 "Fireball Scroll" => spawn_fireball_scroll(commands, font, *x, *y),
                 "Confusion Scroll" => spawn_confusion_scroll(commands, font, *x, *y),
@@ -144,7 +156,14 @@ fn spawn_goblin(commands: &mut Commands, font: &TextFont, x: i32, y: i32, id: us
     spawn_monster(commands, font, x, y, "g", &format!("Goblin #{}", id));
 }
 
-fn spawn_monster(commands: &mut Commands, font: &TextFont, x: i32, y: i32, glyph: &str, name: &str) {
+fn spawn_monster(
+    commands: &mut Commands,
+    font: &TextFont,
+    x: i32,
+    y: i32,
+    glyph: &str,
+    name: &str,
+) {
     commands.spawn((
         Monster,
         Name {
@@ -162,7 +181,13 @@ fn spawn_monster(commands: &mut Commands, font: &TextFont, x: i32, y: i32, glyph
             range: 8,
             ..default()
         },
-        RenderableBundle::new(glyph, palettes::basic::RED.into(), palettes::basic::BLACK.into(), RenderOrder::MONSTER, font),
+        RenderableBundle::new(
+            glyph,
+            palettes::basic::RED.into(),
+            palettes::basic::BLACK.into(),
+            RenderOrder::MONSTER,
+            font,
+        ),
     ));
 }
 
@@ -175,7 +200,13 @@ pub fn spawn_health_potion(commands: &mut Commands, font: &TextFont, x: i32, y: 
             name: "Health Potion".to_string(),
         },
         Position { x, y },
-        RenderableBundle::new("¡", palettes::basic::FUCHSIA.into(), palettes::basic::BLACK.into(), RenderOrder::ITEM, font),
+        RenderableBundle::new(
+            "¡",
+            palettes::basic::FUCHSIA.into(),
+            palettes::basic::BLACK.into(),
+            RenderOrder::ITEM,
+            font,
+        ),
     ));
 }
 
@@ -190,7 +221,13 @@ pub fn spawn_magic_missile_scroll(commands: &mut Commands, font: &TextFont, x: i
             name: "Magic Missile Scroll".to_string(),
         },
         Position { x, y },
-        RenderableBundle::new(")", palettes::basic::AQUA.into(), palettes::basic::BLACK.into(), RenderOrder::ITEM, font),
+        RenderableBundle::new(
+            ")",
+            palettes::basic::AQUA.into(),
+            palettes::basic::BLACK.into(),
+            RenderOrder::ITEM,
+            font,
+        ),
     ));
 }
 
@@ -205,7 +242,13 @@ pub fn spawn_fireball_scroll(commands: &mut Commands, font: &TextFont, x: i32, y
             name: "Fireball Scroll".to_string(),
         },
         Position { x, y },
-        RenderableBundle::new(")", palettes::css::ORANGE.into(), palettes::basic::BLACK.into(), RenderOrder::ITEM, font),
+        RenderableBundle::new(
+            ")",
+            palettes::css::ORANGE.into(),
+            palettes::basic::BLACK.into(),
+            RenderOrder::ITEM,
+            font,
+        ),
     ));
 }
 
@@ -220,7 +263,13 @@ pub fn spawn_confusion_scroll(commands: &mut Commands, font: &TextFont, x: i32, 
             name: "Confusion Scroll".to_string(),
         },
         Position { x, y },
-        RenderableBundle::new(")", palettes::css::PINK.into(), palettes::basic::BLACK.into(), RenderOrder::ITEM, font),
+        RenderableBundle::new(
+            ")",
+            palettes::css::PINK.into(),
+            palettes::basic::BLACK.into(),
+            RenderOrder::ITEM,
+            font,
+        ),
     ));
 }
 
@@ -228,43 +277,102 @@ pub fn spawn_confusion_scroll(commands: &mut Commands, font: &TextFont, x: i32, 
 pub fn spawn_dagger(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
     commands.spawn((
         Item,
-        Equippable { slot: EquipmentSlot::Melee },
+        Equippable {
+            slot: EquipmentSlot::Melee,
+        },
         MeleePowerBonus { power: 2 },
-        Name { name: "Dagger".to_string() },
+        Name {
+            name: "Dagger".to_string(),
+        },
         Position { x, y },
-        RenderableBundle::new("/", palettes::basic::AQUA.into(), palettes::basic::BLACK.into(), RenderOrder::ITEM, font),
+        RenderableBundle::new(
+            "/",
+            palettes::basic::AQUA.into(),
+            palettes::basic::BLACK.into(),
+            RenderOrder::ITEM,
+            font,
+        ),
     ));
 }
 
 pub fn spawn_shield(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
     commands.spawn((
         Item,
-        Equippable { slot: EquipmentSlot::Shield },
+        Equippable {
+            slot: EquipmentSlot::Shield,
+        },
         DefenseBonus { defense: 1 },
-        Name { name: "Shield".to_string() },
+        Name {
+            name: "Shield".to_string(),
+        },
         Position { x, y },
-        RenderableBundle::new("(", palettes::basic::AQUA.into(), palettes::basic::BLACK.into(), RenderOrder::ITEM, font),
+        RenderableBundle::new(
+            "(",
+            palettes::basic::AQUA.into(),
+            palettes::basic::BLACK.into(),
+            RenderOrder::ITEM,
+            font,
+        ),
     ));
 }
 
 pub fn spawn_longsword(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
     commands.spawn((
         Item,
-        Equippable { slot: EquipmentSlot::Melee },
+        Equippable {
+            slot: EquipmentSlot::Melee,
+        },
         MeleePowerBonus { power: 4 },
-        Name { name: "Longsword".to_string() },
+        Name {
+            name: "Longsword".to_string(),
+        },
         Position { x, y },
-        RenderableBundle::new("/", palettes::basic::YELLOW.into(), palettes::basic::BLACK.into(), RenderOrder::ITEM, font),
+        RenderableBundle::new(
+            "/",
+            palettes::basic::YELLOW.into(),
+            palettes::basic::BLACK.into(),
+            RenderOrder::ITEM,
+            font,
+        ),
     ));
 }
 
 pub fn spawn_tower_shield(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
     commands.spawn((
         Item,
-        Equippable { slot: EquipmentSlot::Shield },
+        Equippable {
+            slot: EquipmentSlot::Shield,
+        },
         DefenseBonus { defense: 3 },
-        Name { name: "Tower Shield".to_string() },
+        Name {
+            name: "Tower Shield".to_string(),
+        },
         Position { x, y },
-        RenderableBundle::new("(", palettes::basic::YELLOW.into(), palettes::basic::BLACK.into(), RenderOrder::ITEM, font),
+        RenderableBundle::new(
+            "(",
+            palettes::basic::YELLOW.into(),
+            palettes::basic::BLACK.into(),
+            RenderOrder::ITEM,
+            font,
+        ),
+    ));
+}
+
+pub fn spawn_rations(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
+    commands.spawn((
+        Item,
+        Consumable,
+        ProvidesFood,
+        Name {
+            name: "Rations".to_string(),
+        },
+        Position { x, y },
+        RenderableBundle::new(
+            "%",
+            palettes::basic::GREEN.into(),
+            palettes::basic::BLACK.into(),
+            RenderOrder::ITEM,
+            font,
+        ),
     ));
 }

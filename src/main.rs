@@ -13,6 +13,7 @@ mod debug;
 mod distance;
 mod gamelog;
 mod gui;
+mod hunger;
 mod inventory;
 mod map;
 mod map_indexing;
@@ -103,6 +104,7 @@ fn main() {
                 combat::melee_combat_system,
                 combat::damage_system,
                 combat::delete_the_dead,
+                hunger::hunger_system,
                 transition_to_monster_turn,
             )
                 .chain()
@@ -140,7 +142,7 @@ fn handle_exit(
     map: Res<map::Map>,
     game_log: Res<gamelog::GameLog>,
     player_query: Query<
-        (Entity, &map::Position, &components::Name, &combat::CombatStats, &viewshed::Viewshed),
+        (Entity, &map::Position, &components::Name, &combat::CombatStats, &viewshed::Viewshed, &components::HungerClock),
         With<player::Player>,
     >,
     monster_query: Query<
@@ -157,6 +159,7 @@ fn handle_exit(
             Option<&components::InBackpack>,
             Option<&components::Consumable>,
             Option<&components::ProvidesHealing>,
+            Option<&components::ProvidesFood>,
             Option<&components::Ranged>,
             Option<&components::InflictsDamage>,
             Option<&components::AreaOfEffect>,
@@ -171,7 +174,7 @@ fn handle_exit(
         if *state.get() != RunState::MainMenu {
             let player_alive = player_query
                 .get_single()
-                .map(|(_, _, _, stats, _)| stats.hp > 0)
+                .map(|(_, _, _, stats, _, _)| stats.hp > 0)
                 .unwrap_or(false);
 
             if player_alive {

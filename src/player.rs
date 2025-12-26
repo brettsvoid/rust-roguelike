@@ -5,7 +5,7 @@ use bevy::{
 
 use crate::{
     combat::{CombatStats, WantsToMelee},
-    components::{Item, WantsToPickupItem},
+    components::{HungerClock, HungerState, Item, WantsToPickupItem},
     debug::DebugMode,
     gamelog::GameLog,
     map::{xy_idx, Map, Position, TileType},
@@ -78,7 +78,7 @@ fn handle_player_input(
     map: Res<Map>,
     debug_mode: Res<DebugMode>,
     mut gamelog: ResMut<GameLog>,
-    mut query: Single<(Entity, &mut Position, &Viewshed, &mut CombatStats), With<Player>>,
+    mut query: Single<(Entity, &mut Position, &Viewshed, &mut CombatStats, &HungerClock), With<Player>>,
     mut next_state: ResMut<NextState<RunState>>,
     other_combat_stats: Query<&CombatStats, Without<Player>>,
     items: Query<(Entity, &Position), (With<Item>, Without<Player>)>,
@@ -89,7 +89,7 @@ fn handle_player_input(
         return;
     }
 
-    let (player_entity, ref mut pos, viewshed, ref mut player_stats) = *query;
+    let (player_entity, ref mut pos, viewshed, ref mut player_stats, hunger) = *query;
     let mut player_acted = false;
 
     for ev in evr_kbd.read() {
@@ -189,7 +189,11 @@ fn handle_player_input(
                         break;
                     }
                 }
-                // Heal 1 HP if no monsters visible
+                // Can't heal while starving
+                if hunger.state == HungerState::Starving {
+                    can_heal = false;
+                }
+                // Heal 1 HP if no monsters visible and not starving
                 if can_heal && player_stats.hp < player_stats.max_hp {
                     player_stats.hp = (player_stats.hp + 1).min(player_stats.max_hp);
                     gamelog.entries.push("You rest and recover 1 HP.".to_string());

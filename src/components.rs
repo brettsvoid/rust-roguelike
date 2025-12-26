@@ -138,3 +138,22 @@ pub struct DefenseBonus {
 pub struct WantsToRemoveItem {
     pub item: Entity,
 }
+
+// Hunger system
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub enum HungerState {
+    #[default]
+    WellFed,
+    Normal,
+    Hungry,
+    Starving,
+}
+
+#[derive(Component, Debug)]
+pub struct HungerClock {
+    pub state: HungerState,
+    pub duration: i32,
+}
+
+#[derive(Component, Debug)]
+pub struct ProvidesFood;

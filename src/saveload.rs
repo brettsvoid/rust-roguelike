@@ -9,8 +9,9 @@ use std::path::Path;
 
 use crate::combat::CombatStats;
 use crate::components::{
-    AreaOfEffect, BlocksTile, CausesConfusion, Confusion, Consumable, InBackpack, InflictsDamage,
-    Item, Name, ProvidesHealing, Ranged, RenderOrder, RenderableBundle, Targeting,
+    AreaOfEffect, BlocksTile, CausesConfusion, Confusion, Consumable, HungerClock, HungerState,
+    InBackpack, InflictsDamage, Item, Name, ProvidesFood, ProvidesHealing, Ranged, RenderOrder,
+    RenderableBundle, Targeting,
 };
 use crate::gamelog::GameLog;
 use crate::map::{Map, Position, Revealed, RevealedState, Tile, TileType, MAP_WIDTH};
@@ -58,6 +59,14 @@ pub struct SerializedPlayer {
     pub defense: i32,
     pub power: i32,
     pub viewshed_range: i32,
+    #[serde(default)]
+    pub hunger_state: HungerState,
+    #[serde(default = "default_hunger_duration")]
+    pub hunger_duration: i32,
+}
+
+fn default_hunger_duration() -> i32 {
+    20
 }
 
 #[derive(Serialize, Deserialize)]
@@ -93,6 +102,7 @@ pub enum ItemLocation {
 pub struct ItemProperties {
     pub consumable: bool,
     pub provides_healing: Option<i32>,
+    pub provides_food: bool,
     pub ranged_range: Option<i32>,
     pub inflicts_damage: Option<i32>,
     pub area_of_effect: Option<i32>,
@@ -115,7 +125,10 @@ pub struct SerializedColor {
 pub fn save_game(
     map: Res<Map>,
     game_log: Res<GameLog>,
-    player_query: Query<(Entity, &Position, &Name, &CombatStats, &Viewshed), With<Player>>,
+    player_query: Query<
+        (Entity, &Position, &Name, &CombatStats, &Viewshed, &HungerClock),
+        With<Player>,
+    >,
     monster_query: Query<
         (
             &Position,
@@ -137,6 +150,7 @@ pub fn save_game(
             Option<&InBackpack>,
             Option<&Consumable>,
             Option<&ProvidesHealing>,
+            Option<&ProvidesFood>,
             Option<&Ranged>,
             Option<&InflictsDamage>,
             Option<&AreaOfEffect>,
@@ -146,7 +160,7 @@ pub fn save_game(
         With<Item>,
     >,
 ) {
-    let Ok((player_entity, player_pos, player_name, player_stats, player_viewshed)) =
+    let Ok((player_entity, player_pos, player_name, player_stats, player_viewshed, player_hunger)) =
         player_query.get_single()
     else {
         warn!("Cannot save: no player found");
@@ -163,6 +177,8 @@ pub fn save_game(
         defense: player_stats.defense,
         power: player_stats.power,
         viewshed_range: player_viewshed.range,
+        hunger_state: player_hunger.state,
+        hunger_duration: player_hunger.duration,
     };
 
     // Serialize monsters
@@ -197,6 +213,7 @@ pub fn save_game(
                 in_backpack,
                 consumable,
                 healing,
+                food,
                 ranged,
                 damage,
                 aoe,
@@ -233,6 +250,7 @@ pub fn save_game(
                     properties: ItemProperties {
                         consumable: consumable.is_some(),
                         provides_healing: healing.map(|h| h.heal_amount),
+                        provides_food: food.is_some(),
                         ranged_range: ranged.map(|r| r.range),
                         inflicts_damage: damage.map(|d| d.damage),
                         area_of_effect: aoe.map(|a| a.radius),
@@ -413,6 +431,10 @@ pub fn load_game(
                 visible_tiles: Vec::new(),
                 dirty: true,
             },
+            HungerClock {
+                state: save_data.player.hunger_state,
+                duration: save_data.player.hunger_duration,
+            },
             RenderableBundle::new(
                 "☺",
                 palettes::basic::YELLOW.into(),
@@ -493,6 +515,9 @@ pub fn load_game(
         if let Some(heal) = item.properties.provides_healing {
             entity_commands.insert(ProvidesHealing { heal_amount: heal });
         }
+        if item.properties.provides_food {
+            entity_commands.insert(ProvidesFood);
+        }
         if let Some(range) = item.properties.ranged_range {
             entity_commands.insert(Ranged { range });
         }
@@ -529,7 +554,10 @@ pub fn load_game(
 pub fn save_game(
     _map: Res<Map>,
     _game_log: Res<GameLog>,
-    _player_query: Query<(Entity, &Position, &Name, &CombatStats, &Viewshed), With<Player>>,
+    _player_query: Query<
+        (Entity, &Position, &Name, &CombatStats, &Viewshed, &HungerClock),
+        With<Player>,
+    >,
     _monster_query: Query<
         (
             &Position,
@@ -551,6 +579,7 @@ pub fn save_game(
             Option<&InBackpack>,
             Option<&Consumable>,
             Option<&ProvidesHealing>,
+            Option<&ProvidesFood>,
             Option<&Ranged>,
             Option<&InflictsDamage>,
             Option<&AreaOfEffect>,
