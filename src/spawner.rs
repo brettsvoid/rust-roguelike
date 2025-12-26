@@ -166,7 +166,7 @@ fn spawn_monster(commands: &mut Commands, font: &TextFont, x: i32, y: i32, glyph
     ));
 }
 
-fn spawn_health_potion(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
+pub fn spawn_health_potion(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
     commands.spawn((
         Item,
         Consumable,
@@ -179,7 +179,7 @@ fn spawn_health_potion(commands: &mut Commands, font: &TextFont, x: i32, y: i32)
     ));
 }
 
-fn spawn_magic_missile_scroll(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
+pub fn spawn_magic_missile_scroll(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
     commands.spawn((
         Item,
         Consumable,
@@ -194,7 +194,7 @@ fn spawn_magic_missile_scroll(commands: &mut Commands, font: &TextFont, x: i32, 
     ));
 }
 
-fn spawn_fireball_scroll(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
+pub fn spawn_fireball_scroll(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
     commands.spawn((
         Item,
         Consumable,
@@ -209,7 +209,7 @@ fn spawn_fireball_scroll(commands: &mut Commands, font: &TextFont, x: i32, y: i3
     ));
 }
 
-fn spawn_confusion_scroll(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
+pub fn spawn_confusion_scroll(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
     commands.spawn((
         Item,
         Consumable,
@@ -225,7 +225,7 @@ fn spawn_confusion_scroll(commands: &mut Commands, font: &TextFont, x: i32, y: i
 }
 
 // Equipment spawners
-fn spawn_dagger(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
+pub fn spawn_dagger(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
     commands.spawn((
         Item,
         Equippable { slot: EquipmentSlot::Melee },
@@ -236,7 +236,7 @@ fn spawn_dagger(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
     ));
 }
 
-fn spawn_shield(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
+pub fn spawn_shield(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
     commands.spawn((
         Item,
         Equippable { slot: EquipmentSlot::Shield },
@@ -247,7 +247,7 @@ fn spawn_shield(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
     ));
 }
 
-fn spawn_longsword(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
+pub fn spawn_longsword(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
     commands.spawn((
         Item,
         Equippable { slot: EquipmentSlot::Melee },
@@ -258,7 +258,7 @@ fn spawn_longsword(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
     ));
 }
 
-fn spawn_tower_shield(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
+pub fn spawn_tower_shield(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
     commands.spawn((
         Item,
         Equippable { slot: EquipmentSlot::Shield },

@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use crate::components::{DefenseBonus, Equipped, MeleePowerBonus, Name};
+use crate::debug::GodMode;
 use crate::gamelog::GameLog;
 use crate::player::Player;
 use crate::saveload;
@@ -91,9 +92,18 @@ pub fn melee_combat_system(
 
 pub fn damage_system(
     mut commands: Commands,
+    god_mode: Res<GodMode>,
     mut query: Query<(Entity, &mut CombatStats, &SufferDamage)>,
+    player_query: Query<Entity, With<Player>>,
 ) {
+    let player = player_query.get_single().ok();
+
     for (entity, mut stats, damage) in &mut query {
+        // Skip damage to player if god mode is on
+        if god_mode.0 && Some(entity) == player {
+            commands.entity(entity).remove::<SufferDamage>();
+            continue;
+        }
         stats.hp -= damage.amount.iter().sum::<i32>();
         commands.entity(entity).remove::<SufferDamage>();
     }

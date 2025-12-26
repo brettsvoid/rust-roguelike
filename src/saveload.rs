@@ -13,7 +13,7 @@ use crate::components::{
     Item, Name, ProvidesHealing, Ranged, RenderOrder, RenderableBundle, Targeting,
 };
 use crate::gamelog::GameLog;
-use crate::map::{Map, Position, Revealed, RevealedState, Tile, TileType, MAP_WIDTH};
+use crate::map::{Map, Position, Revealed, RevealedState, Tile, TileType, WallGlyph, MAP_WIDTH};
 use crate::monsters::Monster;
 use crate::player::Player;
 use crate::resources::UiFont;
@@ -352,10 +352,12 @@ pub fn load_game(
                 ));
             }
             TileType::Wall => {
+                let glyph = map.wall_glyph_at(x, y);
                 commands.spawn((
                     Tile,
                     Position { x, y },
-                    Text2d::new("#"),
+                    glyph,
+                    Text2d::new(glyph.to_char().to_string()),
                     text_font.clone(),
                     TextColor(Color::srgb(0.0, 1.0, 0.0)),
                     Revealed(revealed_state),

@@ -4,6 +4,7 @@ use bevy::prelude::*;
 use rand::prelude::*;
 
 use crate::components::RenderOrder;
+use crate::debug::DebugState;
 use crate::distance::DistanceAlg;
 use crate::player::Player;
 use crate::resources::UiFont;
@@ -27,6 +28,53 @@ pub struct Position {
 
 #[derive(Component)]
 pub struct Tile;
+
+/// Wall glyph based on 4-bit bitmask of cardinal neighbors (N=1, S=2, W=4, E=8)
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct WallGlyph(pub u8);
+
+impl WallGlyph {
+    /// Calculate wall glyph based on neighboring walls
+    pub fn from_neighbors(north: bool, south: bool, west: bool, east: bool) -> Self {
+        let mut mask = 0u8;
+        if north {
+            mask |= 1;
+        }
+        if south {
+            mask |= 2;
+        }
+        if west {
+            mask |= 4;
+        }
+        if east {
+            mask |= 8;
+        }
+        WallGlyph(mask)
+    }
+
+    /// Get the box-drawing character for this wall configuration (CP437-style)
+    pub fn to_char(&self) -> char {
+        match self.0 {
+            0 => '○',   // Pillar (no neighbors)
+            1 => '│',   // N only
+            2 => '│',   // S only
+            3 => '│',   // N+S (vertical)
+            4 => '─',   // W only
+            5 => '┘',   // N+W (bottom-right corner)
+            6 => '┐',   // S+W (top-right corner)
+            7 => '┤',   // N+S+W (right T)
+            8 => '─',   // E only
+            9 => '└',   // N+E (bottom-left corner)
+            10 => '┌',  // S+E (top-left corner)
+            11 => '├',  // N+S+E (left T)
+            12 => '─',  // W+E (horizontal)
+            13 => '┴',  // N+W+E (bottom T)
+            14 => '┬',  // S+W+E (top T)
+            15 => '┼',  // All 4 (cross)
+            _ => '#',
+        }
+    }
+}
 
 #[derive(PartialEq, Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum TileType {
@@ -61,6 +109,20 @@ pub struct Map {
 impl Map {
     pub fn xy_idx(&self, x: i32, y: i32) -> usize {
         (y as usize * self.width as usize) + x as usize
+    }
+
+    /// Check if a wall at (x, y) is adjacent to at least one floor tile (including diagonals)
+    pub fn is_adjacent_to_floor(&self, x: i32, y: i32) -> bool {
+        let check = |tx: i32, ty: i32| -> bool {
+            if tx < 0 || tx >= self.width || ty < 0 || ty >= self.height {
+                return false;
+            }
+            self.tiles[self.xy_idx(tx, ty)] == TileType::Floor
+        };
+        // Cardinal directions
+        check(x, y - 1) || check(x, y + 1) || check(x - 1, y) || check(x + 1, y) ||
+        // Diagonal directions (for corners)
+        check(x - 1, y - 1) || check(x + 1, y - 1) || check(x - 1, y + 1) || check(x + 1, y + 1)
     }
 
     fn apply_room_to_map(&mut self, room: &Rect) {
@@ -202,6 +264,53 @@ impl Map {
         for content in self.tile_content.iter_mut() {
             content.clear();
         }
+    }
+
+    /// Calculate wall glyph for a given position based on neighbors
+    pub fn wall_glyph_at(&self, x: i32, y: i32) -> WallGlyph {
+        // Check if a tile is a floor
+        let is_floor_at = |tx: i32, ty: i32| -> bool {
+            if tx < 0 || tx >= self.width || ty < 0 || ty >= self.height {
+                return false;
+            }
+            self.tiles[self.xy_idx(tx, ty)] == TileType::Floor
+        };
+
+        // Check if a wall at (nx, ny) is a "boundary wall" (adjacent to at least one floor, including diagonals)
+        let is_boundary_wall = |nx: i32, ny: i32| -> bool {
+            if nx < 0 || nx >= self.width || ny < 0 || ny >= self.height {
+                return false;
+            }
+            if self.tiles[self.xy_idx(nx, ny)] != TileType::Wall {
+                return false;
+            }
+            // Check if this wall is adjacent to any floor (cardinal + diagonal)
+            is_floor_at(nx, ny - 1)
+                || is_floor_at(nx, ny + 1)
+                || is_floor_at(nx - 1, ny)
+                || is_floor_at(nx + 1, ny)
+                || is_floor_at(nx - 1, ny - 1)
+                || is_floor_at(nx + 1, ny - 1)
+                || is_floor_at(nx - 1, ny + 1)
+                || is_floor_at(nx + 1, ny + 1)
+        };
+
+        // Draw wall segments only toward boundary walls (walls next to floors)
+        let mut mask = 0u8;
+        if is_boundary_wall(x, y - 1) {
+            mask |= 1;
+        } // North
+        if is_boundary_wall(x, y + 1) {
+            mask |= 2;
+        } // South
+        if is_boundary_wall(x - 1, y) {
+            mask |= 4;
+        } // West
+        if is_boundary_wall(x + 1, y) {
+            mask |= 8;
+        } // East
+
+        WallGlyph(mask)
     }
 
     pub fn new_map_rooms_and_corridors() -> Map {
@@ -351,14 +460,19 @@ fn draw_map(mut commands: Commands, map: Res<Map>, font: Res<UiFont>) {
                 ));
             }
             TileType::Wall => {
-                commands.spawn((
-                    Tile,
-                    Position { x, y },
-                    Text2d::new("#"),
-                    text_font.clone(),
-                    TextColor(Color::srgb(0.0, 1.0, 0.0)),
-                    Revealed(RevealedState::Hidden),
-                ));
+                // Only spawn walls adjacent to floors (boundary walls)
+                if map.is_adjacent_to_floor(x, y) {
+                    let glyph = map.wall_glyph_at(x, y);
+                    commands.spawn((
+                        Tile,
+                        Position { x, y },
+                        glyph,
+                        Text2d::new(glyph.to_char().to_string()),
+                        text_font.clone(),
+                        TextColor(Color::srgb(0.0, 1.0, 0.0)),
+                        Revealed(RevealedState::Hidden),
+                    ));
+                }
             }
             TileType::DownStairs => {
                 commands.spawn((
@@ -382,6 +496,7 @@ fn draw_map(mut commands: Commands, map: Res<Map>, font: Res<UiFont>) {
 
 fn update_revealed_tiles(
     mut map: ResMut<Map>,
+    debug_state: Res<DebugState>,
     query: Single<&Viewshed, With<Player>>,
     mut tiles_query: Query<(&Position, &mut Revealed), With<Tile>>,
 ) {
@@ -392,6 +507,9 @@ fn update_revealed_tiles(
         let point = (pos.x, pos.y);
         if viewshed.visible_tiles.contains(&point) {
             map.revealed_tiles[idx] = true;
+            revealed.0 = RevealedState::Visible;
+        } else if debug_state.no_fog && map.revealed_tiles[idx] {
+            // No fog mode: keep revealed tiles fully visible
             revealed.0 = RevealedState::Visible;
         } else if matches!(revealed.0, RevealedState::Visible) {
             revealed.0 = RevealedState::Explored;
@@ -434,12 +552,27 @@ fn translate_positions(
     }
 }
 
-fn update_visible_tiles(mut map: ResMut<Map>, player: Single<&Viewshed, With<Player>>) {
+fn update_visible_tiles(
+    mut map: ResMut<Map>,
+    debug_state: Res<DebugState>,
+    player: Single<&Viewshed, With<Player>>,
+) {
     let viewshed = player.into_inner();
     map.visible_tiles = vec![false; MAP_WIDTH * MAP_HEIGHT];
-    for (pos_x, pos_y) in viewshed.visible_tiles.iter() {
-        let idx = map.xy_idx(*pos_x, *pos_y);
-        map.visible_tiles[idx] = true;
+
+    if debug_state.no_fog {
+        // No fog mode: all revealed tiles are visible
+        for idx in 0..map.revealed_tiles.len() {
+            if map.revealed_tiles[idx] {
+                map.visible_tiles[idx] = true;
+            }
+        }
+    } else {
+        // Normal mode: only viewshed tiles are visible
+        for (pos_x, pos_y) in viewshed.visible_tiles.iter() {
+            let idx = map.xy_idx(*pos_x, *pos_y);
+            map.visible_tiles[idx] = true;
+        }
     }
 }
 
@@ -454,5 +587,205 @@ fn update_renderable_visibility(
         } else {
             *visibility = Visibility::Hidden;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Creates a small test map with given dimensions and all walls
+    fn create_test_map(width: i32, height: i32) -> Map {
+        let size = (width * height) as usize;
+        Map {
+            rooms: Vec::new(),
+            tiles: vec![TileType::Wall; size],
+            width,
+            height,
+            depth: 1,
+            revealed_tiles: vec![false; size],
+            visible_tiles: vec![false; size],
+            blocked_tiles: vec![false; size],
+            tile_content: vec![Vec::new(); size],
+        }
+    }
+
+    #[test]
+    fn test_wall_glyph_isolated_wall() {
+        // 3x3 map with single wall in center, floors around it
+        // . . .
+        // . # .
+        // . . .
+        let mut map = create_test_map(3, 3);
+        // Set all tiles to floor except center
+        for i in 0..9 {
+            map.tiles[i] = TileType::Floor;
+        }
+        map.tiles[4] = TileType::Wall; // Center tile (1,1)
+
+        let glyph = map.wall_glyph_at(1, 1);
+        // All neighbors are floors, so mask = 0 (pillar)
+        assert_eq!(
+            glyph.0, 0,
+            "Isolated wall should have mask 0, got {}",
+            glyph.0
+        );
+        assert_eq!(glyph.to_char(), '○', "Isolated wall should be pillar");
+    }
+
+    #[test]
+    fn test_wall_glyph_vertical_wall() {
+        // 3x3 map with vertical wall in center column
+        // . # .
+        // . # .
+        // . # .
+        let mut map = create_test_map(3, 3);
+        for i in 0..9 {
+            map.tiles[i] = TileType::Floor;
+        }
+        map.tiles[1] = TileType::Wall; // (1,0)
+        map.tiles[4] = TileType::Wall; // (1,1)
+        map.tiles[7] = TileType::Wall; // (1,2)
+
+        let glyph = map.wall_glyph_at(1, 1);
+        // N=wall (not floor), S=wall (not floor), W=floor, E=floor
+        // mask = N(1) + S(2) = 3
+        assert_eq!(
+            glyph.0, 3,
+            "Vertical wall should have mask 3 (N+S), got {}",
+            glyph.0
+        );
+        assert_eq!(glyph.to_char(), '│', "Vertical wall should be │");
+    }
+
+    #[test]
+    fn test_wall_glyph_horizontal_wall() {
+        // 3x3 map with horizontal wall in center row
+        // . . .
+        // # # #
+        // . . .
+        let mut map = create_test_map(3, 3);
+        for i in 0..9 {
+            map.tiles[i] = TileType::Floor;
+        }
+        map.tiles[3] = TileType::Wall; // (0,1)
+        map.tiles[4] = TileType::Wall; // (1,1)
+        map.tiles[5] = TileType::Wall; // (2,1)
+
+        let glyph = map.wall_glyph_at(1, 1);
+        // N=floor, S=floor, W=wall (not floor), E=wall (not floor)
+        // mask = W(4) + E(8) = 12
+        assert_eq!(
+            glyph.0, 12,
+            "Horizontal wall should have mask 12 (W+E), got {}",
+            glyph.0
+        );
+        assert_eq!(glyph.to_char(), '─', "Horizontal wall should be ─");
+    }
+
+    #[test]
+    fn test_wall_glyph_corner_top_left() {
+        // 3x3 map: top-left corner of a room
+        // # # .
+        // # . .
+        // . . .
+        let mut map = create_test_map(3, 3);
+        for i in 0..9 {
+            map.tiles[i] = TileType::Floor;
+        }
+        map.tiles[0] = TileType::Wall; // (0,0)
+        map.tiles[1] = TileType::Wall; // (1,0)
+        map.tiles[3] = TileType::Wall; // (0,1)
+
+        // Test the corner wall at (0,0)
+        let glyph = map.wall_glyph_at(0, 0);
+        // N=out of bounds (false), S=wall, W=out of bounds (false), E=wall
+        // mask = S(2) + E(8) = 10
+        assert_eq!(
+            glyph.0, 10,
+            "Corner at (0,0) should have mask 10 (S+E), got {}",
+            glyph.0
+        );
+        assert_eq!(glyph.to_char(), '┌', "Top-left corner should be ┌");
+    }
+
+    #[test]
+    fn test_wall_glyph_t_junction() {
+        // 3x3 map: T-junction
+        // . # .
+        // # # #
+        // . . .
+        let mut map = create_test_map(3, 3);
+        for i in 0..9 {
+            map.tiles[i] = TileType::Floor;
+        }
+        map.tiles[1] = TileType::Wall; // (1,0) - top
+        map.tiles[3] = TileType::Wall; // (0,1) - left
+        map.tiles[4] = TileType::Wall; // (1,1) - center
+        map.tiles[5] = TileType::Wall; // (2,1) - right
+
+        let glyph = map.wall_glyph_at(1, 1);
+        // N=wall, S=floor, W=wall, E=wall
+        // mask = N(1) + W(4) + E(8) = 13
+        assert_eq!(
+            glyph.0, 13,
+            "T-junction should have mask 13 (N+W+E), got {}",
+            glyph.0
+        );
+        assert_eq!(glyph.to_char(), '┴', "T-junction opening south should be ┴");
+    }
+
+    #[test]
+    fn test_wall_glyph_cross() {
+        // 3x3 map: cross/plus shape
+        // . # .
+        // # # #
+        // . # .
+        let mut map = create_test_map(3, 3);
+        for i in 0..9 {
+            map.tiles[i] = TileType::Floor;
+        }
+        map.tiles[1] = TileType::Wall; // (1,0)
+        map.tiles[3] = TileType::Wall; // (0,1)
+        map.tiles[4] = TileType::Wall; // (1,1)
+        map.tiles[5] = TileType::Wall; // (2,1)
+        map.tiles[7] = TileType::Wall; // (1,2)
+
+        let glyph = map.wall_glyph_at(1, 1);
+        // All 4 neighbors are walls (not floors)
+        // mask = N(1) + S(2) + W(4) + E(8) = 15
+        assert_eq!(
+            glyph.0, 15,
+            "Cross should have mask 15 (all), got {}",
+            glyph.0
+        );
+        assert_eq!(glyph.to_char(), '┼', "Cross should be ┼");
+    }
+
+    #[test]
+    fn test_wall_glyph_horizontal_cap() {
+        // 3x3 map: horizontal cap
+        // . . .
+        // . # .
+        // . # .
+        let mut map = create_test_map(3, 3);
+        for i in 0..9 {
+            map.tiles[i] = TileType::Floor;
+        }
+        map.tiles[1] = TileType::Wall; // (1,0)
+        map.tiles[3] = TileType::Wall; // (0,1)
+        map.tiles[4] = TileType::Wall; // (1,1)
+        map.tiles[5] = TileType::Wall; // (2,1)
+        map.tiles[7] = TileType::Wall; // (1,2)
+
+        let glyph = map.wall_glyph_at(1, 1);
+        // All 4 neighbors are walls (not floors)
+        // mask = N(1) + S(2) + W(4) + E(8) = 15
+        assert_eq!(
+            glyph.0, 15,
+            "Cross should have mask 15 (all), got {}",
+            glyph.0
+        );
+        assert_eq!(glyph.to_char(), '┼', "Cross should be ┼");
     }
 }

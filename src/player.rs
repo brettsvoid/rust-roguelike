@@ -6,6 +6,7 @@ use bevy::{
 use crate::{
     combat::{CombatStats, WantsToMelee},
     components::{Item, WantsToPickupItem},
+    debug::DebugMode,
     gamelog::GameLog,
     map::{xy_idx, Map, Position, TileType, FONT_SIZE},
     monsters::Monster,
@@ -89,6 +90,7 @@ fn handle_player_input(
     mut commands: Commands,
     mut evr_kbd: EventReader<KeyboardInput>,
     map: Res<Map>,
+    debug_mode: Res<DebugMode>,
     mut gamelog: ResMut<GameLog>,
     mut query: Single<(Entity, &mut Position, &Viewshed, &mut CombatStats), With<Player>>,
     mut next_state: ResMut<NextState<RunState>>,
@@ -96,6 +98,11 @@ fn handle_player_input(
     items: Query<(Entity, &Position), (With<Item>, Without<Player>)>,
     monsters: Query<&Position, (With<Monster>, Without<Player>)>,
 ) {
+    // Don't process player input if debug console is open
+    if debug_mode.show_console {
+        return;
+    }
+
     let (player_entity, ref mut pos, viewshed, ref mut player_stats) = *query;
     let mut player_acted = false;
 

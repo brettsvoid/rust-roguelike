@@ -9,6 +9,7 @@ use viewshed::ViewshedPlugin;
 
 mod combat;
 mod components;
+mod debug;
 mod distance;
 mod gamelog;
 mod gui;
@@ -75,6 +76,7 @@ fn main() {
             MapPlugin,
             MonstersPlugin,
             gui::GuiPlugin,
+            debug::DebugPlugin,
         ))
         .add_systems(Startup, setup)
         .add_systems(Update, (map_indexing::map_indexing_system, handle_exit))
@@ -246,14 +248,19 @@ fn go_next_level(
                 ));
             }
             map::TileType::Wall => {
-                commands.spawn((
-                    map::Tile,
-                    map::Position { x, y },
-                    Text2d::new("#"),
-                    text_font.clone(),
-                    TextColor(Color::srgb(0.0, 1.0, 0.0)),
-                    map::Revealed(map::RevealedState::Hidden),
-                ));
+                // Only spawn walls adjacent to floors (boundary walls)
+                if map.is_adjacent_to_floor(x, y) {
+                    let glyph = map.wall_glyph_at(x, y);
+                    commands.spawn((
+                        map::Tile,
+                        map::Position { x, y },
+                        glyph,
+                        Text2d::new(glyph.to_char().to_string()),
+                        text_font.clone(),
+                        TextColor(Color::srgb(0.0, 1.0, 0.0)),
+                        map::Revealed(map::RevealedState::Hidden),
+                    ));
+                }
             }
             map::TileType::DownStairs => {
                 commands.spawn((
