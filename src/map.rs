@@ -11,6 +11,7 @@ use crate::player::Player;
 use crate::resources::UiFont;
 use crate::shapes::Rect;
 use crate::viewshed::Viewshed;
+use crate::RunState;
 
 pub const FONT_SIZE: f32 = 16.;
 pub const MAP_HEIGHT: usize = 43;
@@ -392,19 +393,20 @@ impl Default for Map {
 pub struct MapPlugin;
 impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Map>()
-            .add_systems(Startup, draw_map)
-            .add_systems(
-                Update,
-                (
-                    translate_positions,
-                    update_revealed_state,
-                    update_revealed_tiles,
-                    update_visible_tiles,
-                    update_renderable_visibility,
-                    update_bloodstains,
-                ),
-            );
+        // Run condition: only when player exists (not in MainMenu or GameOver)
+        let has_player = not(in_state(RunState::MainMenu)).and(not(in_state(RunState::GameOver)));
+
+        app.init_resource::<Map>().add_systems(
+            Update,
+            (
+                translate_positions,
+                update_revealed_state,
+                update_revealed_tiles.run_if(has_player.clone()),
+                update_visible_tiles.run_if(has_player.clone()),
+                update_renderable_visibility,
+                update_bloodstains,
+            ),
+        );
     }
 }
 
@@ -504,10 +506,12 @@ fn draw_map(mut commands: Commands, map: Res<Map>, font: Res<UiFont>) {
 fn update_revealed_tiles(
     mut map: ResMut<Map>,
     debug_state: Res<DebugState>,
-    query: Single<&Viewshed, With<Player>>,
+    query: Query<&Viewshed, With<Player>>,
     mut tiles_query: Query<(&Position, &mut Revealed), With<Tile>>,
 ) {
-    let viewshed = &query.into_inner();
+    let Ok(viewshed) = query.get_single() else {
+        return;
+    };
 
     for (pos, mut revealed) in &mut tiles_query {
         let idx = map.xy_idx(pos.x, pos.y);
@@ -562,9 +566,11 @@ fn translate_positions(
 fn update_visible_tiles(
     mut map: ResMut<Map>,
     debug_state: Res<DebugState>,
-    player: Single<&Viewshed, With<Player>>,
+    player: Query<&Viewshed, With<Player>>,
 ) {
-    let viewshed = player.into_inner();
+    let Ok(viewshed) = player.get_single() else {
+        return;
+    };
     map.visible_tiles = vec![false; MAP_WIDTH * MAP_HEIGHT];
 
     if debug_state.no_fog {

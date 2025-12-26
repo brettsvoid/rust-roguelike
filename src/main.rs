@@ -188,12 +188,28 @@ fn handle_exit(
     }
 }
 
-fn transition_to_awaiting_input(mut next_state: ResMut<NextState<RunState>>) {
-    next_state.set(RunState::AwaitingInput);
+fn transition_to_awaiting_input(
+    mut next_state: ResMut<NextState<RunState>>,
+    player_query: Query<&combat::CombatStats, With<player::Player>>,
+) {
+    // Don't transition if player is dead (GameOver state should take priority)
+    if let Ok(stats) = player_query.get_single() {
+        if stats.hp > 0 {
+            next_state.set(RunState::AwaitingInput);
+        }
+    }
 }
 
-fn transition_to_monster_turn(mut next_state: ResMut<NextState<RunState>>) {
-    next_state.set(RunState::MonsterTurn);
+fn transition_to_monster_turn(
+    mut next_state: ResMut<NextState<RunState>>,
+    player_query: Query<&combat::CombatStats, With<player::Player>>,
+) {
+    // Don't transition if player is dead (GameOver state should take priority)
+    if let Ok(stats) = player_query.get_single() {
+        if stats.hp > 0 {
+            next_state.set(RunState::MonsterTurn);
+        }
+    }
 }
 
 fn go_next_level(

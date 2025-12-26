@@ -5,13 +5,10 @@ use crate::{
     components::{Confusion, Name},
     distance::DistanceAlg,
     gamelog::GameLog,
-    map::{Map, Position, TileType, FONT_SIZE, MAP_HEIGHT, MAP_WIDTH},
+    map::{Map, Position, TileType, MAP_HEIGHT, MAP_WIDTH},
     particle::ParticleBuilder,
     pathfinding,
     player::Player,
-    resources::UiFont,
-    rng::GameRng,
-    spawner,
     viewshed::Viewshed,
     RunState,
 };
@@ -22,25 +19,10 @@ pub struct Monster;
 pub struct MonstersPlugin;
 impl Plugin for MonstersPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_monsters).add_systems(
+        app.add_systems(
             Update,
             update_blocked_tiles.run_if(in_state(RunState::MonsterTurn)),
         );
-    }
-}
-
-fn setup_monsters(mut commands: Commands, font: Res<UiFont>, map: Res<Map>, mut rng: ResMut<GameRng>) {
-    let text_font = TextFont {
-        font: font.0.clone(),
-        font_size: FONT_SIZE,
-        ..default()
-    };
-
-    let mut monster_id: usize = 0;
-
-    // Skip the first room because that's where the player starts
-    for room in map.rooms.iter().skip(1) {
-        spawner::spawn_room(&mut commands, &mut rng, &text_font, room, &mut monster_id, map.depth);
     }
 }
 

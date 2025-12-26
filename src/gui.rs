@@ -6,11 +6,13 @@ use crate::combat::CombatStats;
 use crate::components::{AreaOfEffect, Equipped, InBackpack, Item, Name, Ranged, Targeting, WantsToDropItem, WantsToRemoveItem, WantsToUseItem};
 use crate::distance::DistanceAlg;
 use crate::gamelog::GameLog;
-use crate::map::{Map, Position, Tile, TileType, GRID_PX, MAP_HEIGHT, MAP_WIDTH};
+use crate::map::{Map, Position, Revealed, RevealedState, Tile, TileType, FONT_SIZE, GRID_PX, MAP_HEIGHT, MAP_WIDTH};
 use crate::monsters::Monster;
 use crate::player::Player;
 use crate::resources::UiFont;
+use crate::rng::GameRng;
 use crate::saveload;
+use crate::spawner;
 use crate::{RunState, TargetingInfo};
 
 pub struct GuiPlugin;
@@ -20,7 +22,7 @@ impl Plugin for GuiPlugin {
         app.add_systems(Startup, setup_gui)
             .add_systems(Update, (update_health_bar, update_depth, update_game_log, update_tooltip))
             // Main menu
-            .add_systems(OnEnter(RunState::MainMenu), spawn_main_menu)
+            .add_systems(OnEnter(RunState::MainMenu), (cleanup_game_entities, spawn_main_menu).chain())
             .add_systems(OnExit(RunState::MainMenu), despawn_main_menu)
             .add_systems(
                 Update,
@@ -1154,6 +1156,98 @@ fn handle_targeting(
 // Main Menu
 // ============================================================================
 
+fn cleanup_game_entities(
+    mut commands: Commands,
+    entities: Query<Entity, Or<(With<Player>, With<Monster>, With<Item>, With<Tile>)>>,
+    mut map: ResMut<Map>,
+    mut game_log: ResMut<GameLog>,
+) {
+    // Despawn all game entities
+    for entity in &entities {
+        commands.entity(entity).despawn_recursive();
+    }
+
+    // Reset map to default (will be regenerated on New Game)
+    *map = Map::default();
+
+    // Clear game log
+    game_log.entries.clear();
+}
+
+fn spawn_new_game(
+    commands: &mut Commands,
+    map: &mut ResMut<Map>,
+    rng: &mut ResMut<GameRng>,
+    font: &Res<UiFont>,
+) {
+    // Generate new map
+    *map.as_mut() = Map::new_map_rooms_and_corridors();
+
+    let text_font = TextFont {
+        font: font.0.clone(),
+        font_size: FONT_SIZE,
+        ..default()
+    };
+
+    // Spawn map tiles
+    let mut y = 0;
+    let mut x = 0;
+    for tile in map.tiles.iter() {
+        match tile {
+            TileType::Floor => {
+                commands.spawn((
+                    Tile,
+                    Position { x, y },
+                    Text2d::new("."),
+                    text_font.clone(),
+                    TextColor(Color::srgb(0.5, 0.5, 0.5)),
+                    Revealed(RevealedState::Hidden),
+                ));
+            }
+            TileType::Wall => {
+                if map.is_adjacent_to_floor(x, y) {
+                    let glyph = map.wall_glyph_at(x, y);
+                    commands.spawn((
+                        Tile,
+                        Position { x, y },
+                        glyph,
+                        Text2d::new(glyph.to_char().to_string()),
+                        text_font.clone(),
+                        TextColor(Color::srgb(0.0, 1.0, 0.0)),
+                        Revealed(RevealedState::Hidden),
+                    ));
+                }
+            }
+            TileType::DownStairs => {
+                commands.spawn((
+                    Tile,
+                    Position { x, y },
+                    Text2d::new(">"),
+                    text_font.clone(),
+                    TextColor(Color::srgb(0.0, 1.0, 1.0)),
+                    Revealed(RevealedState::Hidden),
+                ));
+            }
+        }
+
+        x += 1;
+        if x > MAP_WIDTH as i32 - 1 {
+            x = 0;
+            y += 1;
+        }
+    }
+
+    // Spawn player at first room center
+    let (player_x, player_y) = map.rooms[0].center();
+    spawner::spawn_player(commands, &text_font, player_x, player_y);
+
+    // Spawn monsters and items in rooms (skip first room - player starts there)
+    let mut monster_id: usize = 0;
+    for room in map.rooms.iter().skip(1) {
+        spawner::spawn_room(commands, rng, &text_font, room, &mut monster_id, map.depth);
+    }
+}
+
 fn spawn_main_menu(mut commands: Commands, font: Res<UiFont>) {
     let has_save = saveload::has_save_file();
 
@@ -1212,10 +1306,11 @@ fn handle_main_menu_input(
     mut evr_kbd: EventReader<KeyboardInput>,
     mut next_state: ResMut<NextState<RunState>>,
     mut exit: EventWriter<AppExit>,
-    // Resources needed for loading
+    // Resources needed for loading/new game
     entities_to_despawn: Query<Entity, Or<(With<Player>, With<Monster>, With<Item>, With<Tile>)>>,
     mut map: ResMut<Map>,
     mut game_log: ResMut<GameLog>,
+    mut rng: ResMut<crate::rng::GameRng>,
     font: Res<UiFont>,
 ) {
     for ev in evr_kbd.read() {
@@ -1225,7 +1320,8 @@ fn handle_main_menu_input(
 
         match ev.key_code {
             KeyCode::KeyN => {
-                // New Game - just close menu and continue with already-spawned game
+                // New Game - spawn fresh game
+                spawn_new_game(&mut commands, &mut map, &mut rng, &font);
                 next_state.set(RunState::PreRun);
             }
             KeyCode::KeyC => {

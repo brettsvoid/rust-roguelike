@@ -8,10 +8,8 @@ use crate::{
     components::{Item, WantsToPickupItem},
     debug::DebugMode,
     gamelog::GameLog,
-    map::{xy_idx, Map, Position, TileType, FONT_SIZE},
+    map::{xy_idx, Map, Position, TileType},
     monsters::Monster,
-    resources::UiFont,
-    spawner,
     viewshed::Viewshed,
     RunState,
 };
@@ -23,20 +21,8 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_player)
-            .add_systems(Update, handle_player_input.run_if(in_state(RunState::AwaitingInput)));
+        app.add_systems(Update, handle_player_input.run_if(in_state(RunState::AwaitingInput)));
     }
-}
-
-fn spawn_player(mut commands: Commands, font: Res<UiFont>, map: Res<Map>) {
-    let text_font = TextFont {
-        font: font.0.clone(),
-        font_size: FONT_SIZE,
-        ..default()
-    };
-
-    let (player_x, player_y) = map.rooms[0].center();
-    spawner::spawn_player(&mut commands, &text_font, player_x, player_y);
 }
 
 fn try_move_player(
