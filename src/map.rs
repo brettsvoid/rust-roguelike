@@ -1,4 +1,5 @@
 use std::cmp::{max, min};
+use std::collections::HashSet;
 
 use bevy::prelude::*;
 use rand::prelude::*;
@@ -55,22 +56,22 @@ impl WallGlyph {
     /// Get the box-drawing character for this wall configuration (CP437-style)
     pub fn to_char(&self) -> char {
         match self.0 {
-            0 => '○',   // Pillar (no neighbors)
-            1 => '│',   // N only
-            2 => '│',   // S only
-            3 => '│',   // N+S (vertical)
-            4 => '─',   // W only
-            5 => '┘',   // N+W (bottom-right corner)
-            6 => '┐',   // S+W (top-right corner)
-            7 => '┤',   // N+S+W (right T)
-            8 => '─',   // E only
-            9 => '└',   // N+E (bottom-left corner)
-            10 => '┌',  // S+E (top-left corner)
-            11 => '├',  // N+S+E (left T)
-            12 => '─',  // W+E (horizontal)
-            13 => '┴',  // N+W+E (bottom T)
-            14 => '┬',  // S+W+E (top T)
-            15 => '┼',  // All 4 (cross)
+            0 => '○',  // Pillar (no neighbors)
+            1 => '│',  // N only
+            2 => '│',  // S only
+            3 => '│',  // N+S (vertical)
+            4 => '─',  // W only
+            5 => '┘',  // N+W (bottom-right corner)
+            6 => '┐',  // S+W (top-right corner)
+            7 => '┤',  // N+S+W (right T)
+            8 => '─',  // E only
+            9 => '└',  // N+E (bottom-left corner)
+            10 => '┌', // S+E (top-left corner)
+            11 => '├', // N+S+E (left T)
+            12 => '─', // W+E (horizontal)
+            13 => '┴', // N+W+E (bottom T)
+            14 => '┬', // S+W+E (top T)
+            15 => '┼', // All 4 (cross)
             _ => '#',
         }
     }
@@ -93,6 +94,9 @@ pub enum RevealedState {
 #[derive(Component)]
 pub struct Revealed(pub RevealedState);
 
+#[derive(Component)]
+pub struct BloodstainMarker;
+
 #[derive(Resource)]
 pub struct Map {
     pub rooms: Vec<Rect>,
@@ -104,6 +108,7 @@ pub struct Map {
     pub visible_tiles: Vec<bool>,
     pub blocked_tiles: Vec<bool>,
     pub tile_content: Vec<Vec<Entity>>,
+    pub bloodstains: HashSet<usize>,
 }
 
 impl Map {
@@ -325,6 +330,7 @@ impl Map {
             visible_tiles: vec![false; size],
             blocked_tiles: vec![false; size],
             tile_content: vec![Vec::new(); size],
+            bloodstains: HashSet::new(),
         };
 
         const MAX_ROOMS: i32 = 30;
@@ -396,6 +402,7 @@ impl Plugin for MapPlugin {
                     update_revealed_tiles,
                     update_visible_tiles,
                     update_renderable_visibility,
+                    update_bloodstains,
                 ),
             );
     }
@@ -590,6 +597,46 @@ fn update_renderable_visibility(
     }
 }
 
+fn update_bloodstains(
+    mut commands: Commands,
+    map: Res<Map>,
+    window: Query<&Window>,
+    existing: Query<Entity, With<BloodstainMarker>>,
+) {
+    // Despawn existing bloodstain sprites
+    for entity in &existing {
+        commands.entity(entity).despawn();
+    }
+
+    let Ok(window) = window.get_single() else {
+        return;
+    };
+
+    let half_width = window.width() / 2.0;
+    let half_height = window.height() / 2.0;
+
+    // Spawn bloodstain sprites for visible bloody tiles
+    for &idx in &map.bloodstains {
+        if map.visible_tiles[idx] {
+            let x = (idx % MAP_WIDTH) as i32;
+            let y = (idx / MAP_WIDTH) as i32;
+
+            let screen_x = (x as f32) * GRID_PX.x + (GRID_PX.x / 2.0) - half_width;
+            let screen_y = (y as f32) * -GRID_PX.y - (GRID_PX.y / 2.0) + half_height;
+
+            commands.spawn((
+                BloodstainMarker,
+                Sprite {
+                    color: Color::srgba(0.75, 0.0, 0.0, 0.25),
+                    custom_size: Some(Vec2::new(GRID_PX.x, GRID_PX.y)),
+                    ..default()
+                },
+                Transform::from_xyz(screen_x, screen_y, 0.5), // Just above floor
+            ));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -607,6 +654,7 @@ mod tests {
             visible_tiles: vec![false; size],
             blocked_tiles: vec![false; size],
             tile_content: vec![Vec::new(); size],
+            bloodstains: HashSet::new(),
         }
     }
 

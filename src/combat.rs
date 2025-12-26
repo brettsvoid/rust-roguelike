@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::components::{DefenseBonus, Equipped, MeleePowerBonus, Name};
 use crate::debug::GodMode;
 use crate::gamelog::GameLog;
+use crate::map::{Map, Position};
 use crate::player::Player;
 use crate::saveload;
 use crate::RunState;
@@ -93,7 +94,9 @@ pub fn melee_combat_system(
 pub fn damage_system(
     mut commands: Commands,
     god_mode: Res<GodMode>,
+    mut map: ResMut<Map>,
     mut query: Query<(Entity, &mut CombatStats, &SufferDamage)>,
+    position_query: Query<&Position>,
     player_query: Query<Entity, With<Player>>,
 ) {
     let player = player_query.get_single().ok();
@@ -105,6 +108,13 @@ pub fn damage_system(
             continue;
         }
         stats.hp -= damage.amount.iter().sum::<i32>();
+
+        // Mark tile as bloody
+        if let Ok(pos) = position_query.get(entity) {
+            let idx = map.xy_idx(pos.x, pos.y);
+            map.bloodstains.insert(idx);
+        }
+
         commands.entity(entity).remove::<SufferDamage>();
     }
 }

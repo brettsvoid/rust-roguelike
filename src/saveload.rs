@@ -13,7 +13,7 @@ use crate::components::{
     Item, Name, ProvidesHealing, Ranged, RenderOrder, RenderableBundle, Targeting,
 };
 use crate::gamelog::GameLog;
-use crate::map::{Map, Position, Revealed, RevealedState, Tile, TileType, WallGlyph, MAP_WIDTH};
+use crate::map::{Map, Position, Revealed, RevealedState, Tile, TileType, MAP_WIDTH};
 use crate::monsters::Monster;
 use crate::player::Player;
 use crate::resources::UiFont;
@@ -44,6 +44,8 @@ pub struct SerializedMap {
     pub width: i32,
     pub height: i32,
     pub depth: i32,
+    #[serde(default)]
+    pub bloodstains: Vec<usize>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -115,7 +117,14 @@ pub fn save_game(
     game_log: Res<GameLog>,
     player_query: Query<(Entity, &Position, &Name, &CombatStats, &Viewshed), With<Player>>,
     monster_query: Query<
-        (&Position, &Name, &CombatStats, &Viewshed, &Text2d, Option<&Confusion>),
+        (
+            &Position,
+            &Name,
+            &CombatStats,
+            &Viewshed,
+            &Text2d,
+            Option<&Confusion>,
+        ),
         With<Monster>,
     >,
     item_query: Query<
@@ -159,18 +168,20 @@ pub fn save_game(
     // Serialize monsters
     let monsters: Vec<SerializedMonster> = monster_query
         .iter()
-        .map(|(pos, name, stats, viewshed, text, confusion)| SerializedMonster {
-            x: pos.x,
-            y: pos.y,
-            name: name.name.clone(),
-            glyph: text.0.clone(),
-            max_hp: stats.max_hp,
-            hp: stats.hp,
-            defense: stats.defense,
-            power: stats.power,
-            viewshed_range: viewshed.range,
-            confusion_turns: confusion.map(|c| c.turns),
-        })
+        .map(
+            |(pos, name, stats, viewshed, text, confusion)| SerializedMonster {
+                x: pos.x,
+                y: pos.y,
+                name: name.name.clone(),
+                glyph: text.0.clone(),
+                max_hp: stats.max_hp,
+                hp: stats.hp,
+                defense: stats.defense,
+                power: stats.power,
+                viewshed_range: viewshed.range,
+                confusion_turns: confusion.map(|c| c.turns),
+            },
+        )
         .collect();
 
     // Serialize items
@@ -244,6 +255,7 @@ pub fn save_game(
         width: map.width,
         height: map.height,
         depth: map.depth,
+        bloodstains: map.bloodstains.iter().copied().collect(),
     };
 
     let save_data = SaveData {
@@ -313,13 +325,10 @@ pub fn load_game(
     map.height = save_data.map.height;
     map.depth = save_data.map.depth;
     // Recalculate blocked tiles
-    map.blocked_tiles = map
-        .tiles
-        .iter()
-        .map(|t| *t == TileType::Wall)
-        .collect();
+    map.blocked_tiles = map.tiles.iter().map(|t| *t == TileType::Wall).collect();
     map.visible_tiles = vec![false; map.tiles.len()];
     map.tile_content = vec![Vec::new(); map.tiles.len()];
+    map.bloodstains = save_data.map.bloodstains.into_iter().collect();
 
     // Restore game log
     game_log.entries = save_data.game_log;
@@ -522,7 +531,14 @@ pub fn save_game(
     _game_log: Res<GameLog>,
     _player_query: Query<(Entity, &Position, &Name, &CombatStats, &Viewshed), With<Player>>,
     _monster_query: Query<
-        (&Position, &Name, &CombatStats, &Viewshed, &Text2d, Option<&Confusion>),
+        (
+            &Position,
+            &Name,
+            &CombatStats,
+            &Viewshed,
+            &Text2d,
+            Option<&Confusion>,
+        ),
         With<Monster>,
     >,
     _item_query: Query<
