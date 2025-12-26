@@ -17,6 +17,7 @@ mod inventory;
 mod map;
 mod map_indexing;
 mod monsters;
+mod particle;
 mod pathfinding;
 mod player;
 mod resources;
@@ -68,6 +69,7 @@ fn main() {
         .init_resource::<gamelog::GameLog>()
         .init_resource::<rng::GameRng>()
         .init_resource::<TargetingInfo>()
+        .init_resource::<particle::ParticleBuilder>()
         .add_event::<AppExit>()
         .add_plugins((
             ResourcesPlugin,
@@ -79,7 +81,12 @@ fn main() {
             debug::DebugPlugin,
         ))
         .add_systems(Startup, setup)
-        .add_systems(Update, (map_indexing::map_indexing_system, handle_exit))
+        .add_systems(Update, (
+            map_indexing::map_indexing_system,
+            handle_exit,
+            particle::particle_spawn_system,
+            particle::particle_cull_system,
+        ))
         // PreRun: run systems then transition to AwaitingInput
         .add_systems(
             Update,

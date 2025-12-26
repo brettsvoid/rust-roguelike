@@ -4,6 +4,7 @@ use crate::components::{DefenseBonus, Equipped, MeleePowerBonus, Name};
 use crate::debug::GodMode;
 use crate::gamelog::GameLog;
 use crate::map::{Map, Position};
+use crate::particle::ParticleBuilder;
 use crate::player::Player;
 use crate::saveload;
 use crate::RunState;
@@ -37,8 +38,9 @@ impl SufferDamage {
 pub fn melee_combat_system(
     mut commands: Commands,
     mut log: ResMut<GameLog>,
+    mut particle_builder: ResMut<ParticleBuilder>,
     query: Query<(Entity, &WantsToMelee, &Name, &CombatStats)>,
-    targets: Query<(&Name, &CombatStats)>,
+    targets: Query<(&Name, &CombatStats, &Position)>,
     melee_bonus_query: Query<(&Equipped, &MeleePowerBonus)>,
     defense_bonus_query: Query<(&Equipped, &DefenseBonus)>,
 ) {
@@ -47,7 +49,7 @@ pub fn melee_combat_system(
             continue;
         }
 
-        if let Ok((target_name, target_stats)) = targets.get(wants_melee.target) {
+        if let Ok((target_name, target_stats, target_pos)) = targets.get(wants_melee.target) {
             if target_stats.hp <= 0 {
                 continue;
             }
@@ -84,6 +86,15 @@ pub fn melee_combat_system(
                     name.name, target_name.name, damage
                 ));
                 SufferDamage::new_damage(&mut commands, wants_melee.target, damage);
+
+                // Spawn hit particle
+                particle_builder.request(
+                    target_pos.x,
+                    target_pos.y,
+                    "!",
+                    Color::srgb(1.0, 0.5, 0.0), // Orange
+                    200.0,
+                );
             }
         }
 

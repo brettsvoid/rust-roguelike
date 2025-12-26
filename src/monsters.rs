@@ -6,6 +6,7 @@ use crate::{
     distance::DistanceAlg,
     gamelog::GameLog,
     map::{Map, Position, TileType, FONT_SIZE, MAP_HEIGHT, MAP_WIDTH},
+    particle::ParticleBuilder,
     pathfinding,
     player::Player,
     resources::UiFont,
@@ -61,6 +62,7 @@ pub fn monster_ai(
     mut commands: Commands,
     mut map: ResMut<Map>,
     mut gamelog: ResMut<GameLog>,
+    mut particle_builder: ResMut<ParticleBuilder>,
     mut monster_query: Query<
         (Entity, &mut Position, &mut Viewshed, &Name, &CombatStats, Option<&mut Confusion>),
         (With<Monster>, Without<Player>),
@@ -83,6 +85,15 @@ pub fn monster_ai(
                 gamelog.entries.push(format!("{} is no longer confused.", name.name));
             } else {
                 gamelog.entries.push(format!("{} is confused and stumbles around.", name.name));
+
+                // Spawn confusion particle
+                particle_builder.request(
+                    pos.x,
+                    pos.y,
+                    "?",
+                    Color::srgb(1.0, 0.0, 1.0), // Magenta
+                    200.0,
+                );
             }
             continue; // Skip normal AI while confused
         }
