@@ -5,8 +5,8 @@ use crate::{
     combat::CombatStats,
     components::{
         AreaOfEffect, BlocksTile, CausesConfusion, Consumable, DefenseBonus, EquipmentSlot,
-        Equippable, HungerClock, HungerState, InflictsDamage, Item, MeleePowerBonus, Name,
-        ProvidesFood, ProvidesHealing, Ranged, RenderOrder, RenderableBundle, Targeting,
+        Equippable, HungerClock, HungerState, InflictsDamage, Item, MagicMapper, MeleePowerBonus,
+        Name, ProvidesFood, ProvidesHealing, Ranged, RenderOrder, RenderableBundle, Targeting,
     },
     map::Position,
     monsters::Monster,
@@ -84,6 +84,7 @@ pub fn spawn_room(
         .add("Magic Missile Scroll", 2)
         .add("Fireball Scroll", map_depth - 1)
         .add("Confusion Scroll", map_depth - 1)
+        .add("Magic Mapping Scroll", 2)
         .add("Dagger", 3)
         .add("Shield", 3)
         .add("Longsword", map_depth - 1)
@@ -138,6 +139,7 @@ pub fn spawn_room(
                 "Magic Missile Scroll" => spawn_magic_missile_scroll(commands, font, *x, *y),
                 "Fireball Scroll" => spawn_fireball_scroll(commands, font, *x, *y),
                 "Confusion Scroll" => spawn_confusion_scroll(commands, font, *x, *y),
+                "Magic Mapping Scroll" => spawn_magic_mapping_scroll(commands, font, *x, *y),
                 "Dagger" => spawn_dagger(commands, font, *x, *y),
                 "Shield" => spawn_shield(commands, font, *x, *y),
                 "Longsword" => spawn_longsword(commands, font, *x, *y),
@@ -370,6 +372,25 @@ pub fn spawn_rations(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
         RenderableBundle::new(
             "%",
             palettes::basic::GREEN.into(),
+            palettes::basic::BLACK.into(),
+            RenderOrder::ITEM,
+            font,
+        ),
+    ));
+}
+
+pub fn spawn_magic_mapping_scroll(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
+    commands.spawn((
+        Item,
+        Consumable,
+        MagicMapper,
+        Name {
+            name: "Scroll of Magic Mapping".to_string(),
+        },
+        Position { x, y },
+        RenderableBundle::new(
+            ")",
+            palettes::css::CORNFLOWER_BLUE.into(),
             palettes::basic::BLACK.into(),
             RenderOrder::ITEM,
             font,

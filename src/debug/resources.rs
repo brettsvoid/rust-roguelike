@@ -14,6 +14,7 @@ pub struct DebugState {
     pub console_input: String,
     pub console_output: Vec<String>,
     pub command_history: Vec<String>,
+    pub history_index: usize,
     pub reveal_map: bool,
     pub no_fog: bool,
 }

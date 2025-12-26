@@ -47,8 +47,15 @@ pub enum RunState {
     ShowRemoveItem,
     ShowTargeting,
     NextLevel,
+    MagicMapReveal,
     GameOver,
 }
+
+#[derive(Resource, Default)]
+pub struct MagicMapRevealRow(pub i32);
+
+#[derive(Resource, Default)]
+pub struct PendingMagicMap(pub bool);
 
 #[derive(Resource, Default)]
 pub struct TargetingInfo {
@@ -70,6 +77,8 @@ fn main() {
         .init_resource::<gamelog::GameLog>()
         .init_resource::<rng::GameRng>()
         .init_resource::<TargetingInfo>()
+        .init_resource::<MagicMapRevealRow>()
+        .init_resource::<PendingMagicMap>()
         .init_resource::<particle::ParticleBuilder>()
         .add_event::<AppExit>()
         .add_plugins((
@@ -128,6 +137,15 @@ fn main() {
             Update,
             go_next_level.run_if(in_state(RunState::NextLevel)),
         )
+        // MagicMapReveal: reveal map row by row
+        .add_systems(
+            OnEnter(RunState::MagicMapReveal),
+            reset_magic_map_row,
+        )
+        .add_systems(
+            Update,
+            magic_map_reveal.run_if(in_state(RunState::MagicMapReveal)),
+        )
         .run();
 }
 
@@ -165,6 +183,7 @@ fn handle_exit(
             Option<&components::AreaOfEffect>,
             Option<&components::Targeting>,
             Option<&components::CausesConfusion>,
+            Option<&components::MagicMapper>,
         ),
         With<components::Item>,
     >,
@@ -205,12 +224,19 @@ fn transition_to_awaiting_input(
 
 fn transition_to_monster_turn(
     mut next_state: ResMut<NextState<RunState>>,
+    mut pending_magic_map: ResMut<PendingMagicMap>,
     player_query: Query<&combat::CombatStats, With<player::Player>>,
 ) {
     // Don't transition if player is dead (GameOver state should take priority)
     if let Ok(stats) = player_query.get_single() {
         if stats.hp > 0 {
-            next_state.set(RunState::MonsterTurn);
+            // Check if magic map reveal is pending
+            if pending_magic_map.0 {
+                pending_magic_map.0 = false;
+                next_state.set(RunState::MagicMapReveal);
+            } else {
+                next_state.set(RunState::MonsterTurn);
+            }
         }
     }
 }
@@ -338,6 +364,40 @@ fn go_next_level(
     ));
 
     next_state.set(RunState::PreRun);
+}
+
+fn reset_magic_map_row(mut reveal_row: ResMut<MagicMapRevealRow>) {
+    reveal_row.0 = 0;
+}
+
+fn magic_map_reveal(
+    mut reveal_row: ResMut<MagicMapRevealRow>,
+    mut map: ResMut<map::Map>,
+    mut next_state: ResMut<NextState<RunState>>,
+    mut tile_query: Query<(&map::Position, &mut map::Revealed), With<map::Tile>>,
+) {
+    let row = reveal_row.0;
+
+    if row >= map::MAP_HEIGHT as i32 {
+        // Done revealing, return to awaiting input
+        next_state.set(RunState::AwaitingInput);
+        return;
+    }
+
+    // Reveal all tiles in this row
+    for x in 0..map::MAP_WIDTH as i32 {
+        let idx = map.xy_idx(x, row);
+        map.revealed_tiles[idx] = true;
+    }
+
+    // Update tile entities in this row
+    for (pos, mut revealed) in &mut tile_query {
+        if pos.y == row {
+            *revealed = map::Revealed(map::RevealedState::Explored);
+        }
+    }
+
+    reveal_row.0 += 1;
 }
 
 fn run_loop(mut app: App) -> AppExit {

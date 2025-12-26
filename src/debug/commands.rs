@@ -158,6 +158,14 @@ fn cmd_spawn(
             crate::spawner::spawn_tower_shield(commands, &text_font, x, y);
             format!("Spawned Tower Shield at ({}, {})", x, y)
         }
+        "rations" | "food" => {
+            crate::spawner::spawn_rations(commands, &text_font, x, y);
+            format!("Spawned Rations at ({}, {})", x, y)
+        }
+        "magic_map" | "map" => {
+            crate::spawner::spawn_magic_mapping_scroll(commands, &text_font, x, y);
+            format!("Spawned Magic Mapping Scroll at ({}, {})", x, y)
+        }
         _ => format!("Unknown item: {}", item_name),
     }
 }

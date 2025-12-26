@@ -10,8 +10,8 @@ use std::path::Path;
 use crate::combat::CombatStats;
 use crate::components::{
     AreaOfEffect, BlocksTile, CausesConfusion, Confusion, Consumable, HungerClock, HungerState,
-    InBackpack, InflictsDamage, Item, Name, ProvidesFood, ProvidesHealing, Ranged, RenderOrder,
-    RenderableBundle, Targeting,
+    InBackpack, InflictsDamage, Item, MagicMapper, Name, ProvidesFood, ProvidesHealing, Ranged,
+    RenderOrder, RenderableBundle, Targeting,
 };
 use crate::gamelog::GameLog;
 use crate::map::{Map, Position, Revealed, RevealedState, Tile, TileType, MAP_WIDTH};
@@ -108,6 +108,8 @@ pub struct ItemProperties {
     pub area_of_effect: Option<i32>,
     pub targeting: Option<String>,
     pub causes_confusion: Option<i32>,
+    #[serde(default)]
+    pub magic_mapper: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -156,6 +158,7 @@ pub fn save_game(
             Option<&AreaOfEffect>,
             Option<&Targeting>,
             Option<&CausesConfusion>,
+            Option<&MagicMapper>,
         ),
         With<Item>,
     >,
@@ -219,6 +222,7 @@ pub fn save_game(
                 aoe,
                 targeting,
                 causes_confusion,
+                magic_mapper,
             )| {
                 let location = if let Some(backpack) = in_backpack {
                     if backpack.owner == player_entity {
@@ -259,6 +263,7 @@ pub fn save_game(
                             Targeting::SingleEntity => "SingleEntity".to_string(),
                         }),
                         causes_confusion: causes_confusion.map(|c| c.turns),
+                        magic_mapper: magic_mapper.is_some(),
                     },
                 }
             },
@@ -379,16 +384,19 @@ pub fn load_game(
                 ));
             }
             TileType::Wall => {
-                let glyph = map.wall_glyph_at(x, y);
-                commands.spawn((
-                    Tile,
-                    Position { x, y },
-                    glyph,
-                    Text2d::new(glyph.to_char().to_string()),
-                    text_font.clone(),
-                    TextColor(Color::srgb(0.0, 1.0, 0.0)),
-                    Revealed(revealed_state),
-                ));
+                // Only spawn walls adjacent to floors (boundary walls)
+                if map.is_adjacent_to_floor(x, y) {
+                    let glyph = map.wall_glyph_at(x, y);
+                    commands.spawn((
+                        Tile,
+                        Position { x, y },
+                        glyph,
+                        Text2d::new(glyph.to_char().to_string()),
+                        text_font.clone(),
+                        TextColor(Color::srgb(0.0, 1.0, 0.0)),
+                        Revealed(revealed_state),
+                    ));
+                }
             }
             TileType::DownStairs => {
                 commands.spawn((
@@ -537,6 +545,9 @@ pub fn load_game(
         if let Some(turns) = item.properties.causes_confusion {
             entity_commands.insert(CausesConfusion { turns });
         }
+        if item.properties.magic_mapper {
+            entity_commands.insert(MagicMapper);
+        }
     }
 
     // Delete save file (permadeath)
@@ -585,6 +596,7 @@ pub fn save_game(
             Option<&AreaOfEffect>,
             Option<&Targeting>,
             Option<&CausesConfusion>,
+            Option<&MagicMapper>,
         ),
         With<Item>,
     >,

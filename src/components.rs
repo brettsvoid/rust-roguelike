@@ -157,3 +157,6 @@ pub struct HungerClock {
 
 #[derive(Component, Debug)]
 pub struct ProvidesFood;
+
+#[derive(Component, Debug)]
+pub struct MagicMapper;

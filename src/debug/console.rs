@@ -156,12 +156,44 @@ pub fn handle_console_input(
                 debug_state.console_input.pop();
             }
 
+            // Handle up arrow - previous command in history
+            KeyCode::ArrowUp => {
+                if !debug_state.command_history.is_empty() {
+                    // If at end of history (or uninitialized), go to last command
+                    if debug_state.history_index >= debug_state.command_history.len() {
+                        debug_state.history_index = debug_state.command_history.len() - 1;
+                        debug_state.console_input =
+                            debug_state.command_history[debug_state.history_index].clone();
+                    } else if debug_state.history_index > 0 {
+                        debug_state.history_index -= 1;
+                        debug_state.console_input =
+                            debug_state.command_history[debug_state.history_index].clone();
+                    }
+                }
+            }
+
+            // Handle down arrow - next command in history
+            KeyCode::ArrowDown => {
+                if debug_state.history_index < debug_state.command_history.len() {
+                    debug_state.history_index += 1;
+                    if debug_state.history_index < debug_state.command_history.len() {
+                        debug_state.console_input =
+                            debug_state.command_history[debug_state.history_index].clone();
+                    } else {
+                        // Past the end of history, clear input
+                        debug_state.console_input.clear();
+                    }
+                }
+            }
+
             // Handle enter - execute command
             KeyCode::Enter => {
                 if !debug_state.console_input.is_empty() {
                     let input = debug_state.console_input.clone();
                     debug_state.console_output.push(format!("> {}", input));
                     debug_state.command_history.push(input.clone());
+                    // Reset history index to point past the end
+                    debug_state.history_index = debug_state.command_history.len();
 
                     // Parse and execute command
                     let output = execute_command(

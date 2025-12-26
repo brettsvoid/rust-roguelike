@@ -4,13 +4,14 @@ use crate::{
     combat::{CombatStats, SufferDamage},
     components::{
         AreaOfEffect, CausesConfusion, Confusion, Consumable, Equippable, Equipped, HungerClock,
-        HungerState, InBackpack, InflictsDamage, Name, ProvidesFood, ProvidesHealing,
+        HungerState, InBackpack, InflictsDamage, MagicMapper, Name, ProvidesFood, ProvidesHealing,
         WantsToDropItem, WantsToPickupItem, WantsToRemoveItem, WantsToUseItem,
     },
     distance::DistanceAlg,
     gamelog::GameLog,
     map::Position,
     particle::ParticleBuilder,
+    PendingMagicMap,
 };
 
 pub fn item_collection_system(
@@ -47,12 +48,13 @@ pub fn item_use_system(
     mut commands: Commands,
     mut gamelog: ResMut<GameLog>,
     mut particle_builder: ResMut<ParticleBuilder>,
+    mut pending_magic_map: ResMut<PendingMagicMap>,
     use_query: Query<(Entity, &WantsToUseItem, &Position)>,
     consumable_query: Query<&Consumable>,
     healing_query: Query<(&ProvidesHealing, &Name)>,
     damage_query: Query<(&InflictsDamage, &Name)>,
     confusion_query: Query<(&CausesConfusion, &Name)>,
-    food_query: Query<&ProvidesFood>,
+    food_mapper_query: Query<(Option<&ProvidesFood>, Option<&MagicMapper>)>,
     aoe_query: Query<&AreaOfEffect>,
     equippable_query: Query<(&Equippable, &Name)>,
     equipped_query: Query<(Entity, &Equipped, &Name)>,
@@ -113,12 +115,20 @@ pub fn item_use_system(
             }
         }
 
-        // Apply food if the item provides it
-        if food_query.get(wants_use.item).is_ok() {
-            if let Ok(mut hunger) = hunger_query.get_mut(entity) {
-                hunger.state = HungerState::WellFed;
-                hunger.duration = 200;
-                gamelog.entries.push("You eat the rations.".to_string());
+        // Apply food or magic mapper effects
+        if let Ok((food, mapper)) = food_mapper_query.get(wants_use.item) {
+            if food.is_some() {
+                if let Ok(mut hunger) = hunger_query.get_mut(entity) {
+                    hunger.state = HungerState::WellFed;
+                    hunger.duration = 200;
+                    gamelog.entries.push("You eat the rations.".to_string());
+                }
+            }
+            if mapper.is_some() {
+                gamelog
+                    .entries
+                    .push("The map is revealed to your mind!".to_string());
+                pending_magic_map.0 = true;
             }
         }
 
