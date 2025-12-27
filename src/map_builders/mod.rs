@@ -1,4 +1,5 @@
 mod bsp_dungeon;
+mod bsp_interior;
 mod common;
 mod simple_map;
 
@@ -10,6 +11,7 @@ use crate::rng::GameRng;
 use crate::shapes::Rect;
 
 pub use bsp_dungeon::BspDungeonBuilder;
+pub use bsp_interior::BspInteriorBuilder;
 pub use simple_map::SimpleMapBuilder;
 
 pub trait MapBuilder {
@@ -24,8 +26,9 @@ pub trait MapBuilder {
 }
 
 pub fn random_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
-    match rng.0.gen_range(0..2) {
+    match rng.0.gen_range(0..3) {
         0 => Box::new(SimpleMapBuilder::new(depth)),
-        _ => Box::new(BspDungeonBuilder::new(depth)),
+        1 => Box::new(BspDungeonBuilder::new(depth)),
+        _ => Box::new(BspInteriorBuilder::new(depth)),
     }
 }
