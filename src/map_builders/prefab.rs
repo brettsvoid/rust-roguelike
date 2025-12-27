@@ -30,20 +30,45 @@ pub enum VerticalPlacement {
 // Prefab Definitions
 // ============================================================================
 
-/// A small vault/room that can be placed in the map
-#[derive(Clone)]
-pub struct PrefabVault {
+/// Pure visual definition - just the ASCII art and dimensions
+#[derive(Clone, Copy)]
+pub struct PrefabTemplate {
     pub template: &'static str,
     pub width: usize,
     pub height: usize,
 }
 
+/// Placement constraints - when/where a prefab can appear
+#[derive(Clone, Copy)]
+pub struct VaultConstraints {
+    pub min_depth: i32,
+    pub max_depth: i32,
+    pub spawn_chance: f32,
+    pub min_floor_percent: u8,
+}
+
+impl Default for VaultConstraints {
+    fn default() -> Self {
+        Self {
+            min_depth: 1,
+            max_depth: i32::MAX,
+            spawn_chance: 1.0,
+            min_floor_percent: 80,
+        }
+    }
+}
+
+/// A vault combines a template with its constraints
+#[derive(Clone, Copy)]
+pub struct PrefabVault {
+    pub template: PrefabTemplate,
+    pub constraints: VaultConstraints,
+}
+
 /// A larger section placed at map edges
 #[derive(Clone)]
 pub struct PrefabSection {
-    pub template: &'static str,
-    pub width: usize,
-    pub height: usize,
+    pub template: PrefabTemplate,
     pub placement: (HorizontalPlacement, VerticalPlacement),
 }
 
@@ -51,7 +76,8 @@ pub struct PrefabSection {
 // Example Prefabs
 // ============================================================================
 
-pub const TOTALLY_NOT_A_TRAP: PrefabVault = PrefabVault {
+// Templates (pure visual definitions)
+pub const TOTALLY_NOT_A_TRAP_TEMPLATE: PrefabTemplate = PrefabTemplate {
     template: "
 
  ^^^
@@ -63,7 +89,7 @@ pub const TOTALLY_NOT_A_TRAP: PrefabVault = PrefabVault {
     height: 5,
 };
 
-pub const MONSTER_DEN: PrefabVault = PrefabVault {
+pub const MONSTER_DEN_TEMPLATE: PrefabTemplate = PrefabTemplate {
     template: "
 
  gggg
@@ -75,7 +101,7 @@ pub const MONSTER_DEN: PrefabVault = PrefabVault {
     height: 5,
 };
 
-pub const CHECKERBOARD_TRAP: PrefabVault = PrefabVault {
+pub const CHECKERBOARD_TRAP_TEMPLATE: PrefabTemplate = PrefabTemplate {
     template: "
 
  ^.^.^
@@ -87,10 +113,7 @@ pub const CHECKERBOARD_TRAP: PrefabVault = PrefabVault {
     height: 5,
 };
 
-/// All available vaults
-pub const VAULTS: &[PrefabVault] = &[TOTALLY_NOT_A_TRAP, MONSTER_DEN, CHECKERBOARD_TRAP];
-
-pub const CORNER_FORT: PrefabSection = PrefabSection {
+pub const CORNER_FORT_TEMPLATE: PrefabTemplate = PrefabTemplate {
     template: "
 #########
 #.......#
@@ -104,6 +127,45 @@ pub const CORNER_FORT: PrefabSection = PrefabSection {
 ",
     width: 9,
     height: 9,
+};
+
+// Vaults (template + constraints)
+pub const TOTALLY_NOT_A_TRAP: PrefabVault = PrefabVault {
+    template: TOTALLY_NOT_A_TRAP_TEMPLATE,
+    constraints: VaultConstraints {
+        min_depth: 1,
+        max_depth: i32::MAX,
+        spawn_chance: 1.0,
+        min_floor_percent: 80,
+    },
+};
+
+pub const MONSTER_DEN: PrefabVault = PrefabVault {
+    template: MONSTER_DEN_TEMPLATE,
+    constraints: VaultConstraints {
+        min_depth: 2,          // Only appears on level 2+
+        max_depth: i32::MAX,
+        spawn_chance: 0.7,     // 70% chance to spawn
+        min_floor_percent: 80,
+    },
+};
+
+pub const CHECKERBOARD_TRAP: PrefabVault = PrefabVault {
+    template: CHECKERBOARD_TRAP_TEMPLATE,
+    constraints: VaultConstraints {
+        min_depth: 1,
+        max_depth: 5,          // Only on early levels
+        spawn_chance: 0.5,     // 50% chance
+        min_floor_percent: 80,
+    },
+};
+
+/// All available vaults
+pub const VAULTS: &[PrefabVault] = &[TOTALLY_NOT_A_TRAP, MONSTER_DEN, CHECKERBOARD_TRAP];
+
+// Sections (template + placement)
+pub const CORNER_FORT: PrefabSection = PrefabSection {
+    template: CORNER_FORT_TEMPLATE,
     placement: (HorizontalPlacement::Right, VerticalPlacement::Top),
 };
 
@@ -240,10 +302,11 @@ impl PrefabBuilder {
 
     /// Apply a vault at a specific position
     fn apply_vault(&mut self, vault: &PrefabVault, start_x: i32, start_y: i32) {
-        let chars = Self::read_template(vault.template, vault.width, vault.height);
+        let template = &vault.template;
+        let chars = Self::read_template(template.template, template.width, template.height);
 
-        for y in 0..vault.height as i32 {
-            for x in 0..vault.width as i32 {
+        for y in 0..template.height as i32 {
+            for x in 0..template.width as i32 {
                 let map_x = start_x + x;
                 let map_y = start_y + y;
 
@@ -253,7 +316,7 @@ impl PrefabBuilder {
                     && map_y < MAP_HEIGHT as i32
                 {
                     let map_idx = self.map.xy_idx(map_x, map_y);
-                    let char_idx = (y as usize) * vault.width + (x as usize);
+                    let char_idx = (y as usize) * template.width + (x as usize);
                     self.char_to_map(chars[char_idx], map_idx);
                 }
             }
@@ -262,25 +325,26 @@ impl PrefabBuilder {
 
     /// Apply a section at its specified placement
     fn apply_section(&mut self, section: &PrefabSection) {
+        let template = &section.template;
         let start_x = match section.placement.0 {
             HorizontalPlacement::Left => 1,
-            HorizontalPlacement::Center => (MAP_WIDTH as i32 / 2) - (section.width as i32 / 2),
-            HorizontalPlacement::Right => MAP_WIDTH as i32 - section.width as i32 - 1,
+            HorizontalPlacement::Center => (MAP_WIDTH as i32 / 2) - (template.width as i32 / 2),
+            HorizontalPlacement::Right => MAP_WIDTH as i32 - template.width as i32 - 1,
         };
 
         let start_y = match section.placement.1 {
             VerticalPlacement::Top => 1,
-            VerticalPlacement::Center => (MAP_HEIGHT as i32 / 2) - (section.height as i32 / 2),
-            VerticalPlacement::Bottom => MAP_HEIGHT as i32 - section.height as i32 - 1,
+            VerticalPlacement::Center => (MAP_HEIGHT as i32 / 2) - (template.height as i32 / 2),
+            VerticalPlacement::Bottom => MAP_HEIGHT as i32 - template.height as i32 - 1,
         };
 
-        let chars = Self::read_template(section.template, section.width, section.height);
+        let chars = Self::read_template(template.template, template.width, template.height);
 
         // Clear spawn regions that overlap with the section
         let section_left = start_x;
-        let section_right = start_x + section.width as i32;
+        let section_right = start_x + template.width as i32;
         let section_top = start_y;
-        let section_bottom = start_y + section.height as i32;
+        let section_bottom = start_y + template.height as i32;
 
         for region in &mut self.spawn_regions {
             region.retain(|&idx| {
@@ -291,8 +355,8 @@ impl PrefabBuilder {
         }
 
         // Apply the section
-        for y in 0..section.height as i32 {
-            for x in 0..section.width as i32 {
+        for y in 0..template.height as i32 {
+            for x in 0..template.width as i32 {
                 let map_x = start_x + x;
                 let map_y = start_y + y;
 
@@ -302,7 +366,7 @@ impl PrefabBuilder {
                     && map_y < MAP_HEIGHT as i32
                 {
                     let map_idx = self.map.xy_idx(map_x, map_y);
-                    let char_idx = (y as usize) * section.width + (x as usize);
+                    let char_idx = (y as usize) * template.width + (x as usize);
                     self.char_to_map(chars[char_idx], map_idx);
                 }
             }
@@ -311,18 +375,37 @@ impl PrefabBuilder {
 
     /// Find suitable locations and apply random vaults
     fn apply_random_vaults(&mut self, rng: &mut GameRng) {
+        // Filter vaults by depth constraints
+        let eligible_vaults: Vec<&PrefabVault> = VAULTS
+            .iter()
+            .filter(|vault| {
+                self.depth >= vault.constraints.min_depth
+                    && self.depth <= vault.constraints.max_depth
+            })
+            .collect();
+
+        if eligible_vaults.is_empty() {
+            return;
+        }
+
         // Try to place 1-3 vaults
         let num_vaults = rng.0.gen_range(1..=3);
 
         for _ in 0..num_vaults {
-            // Pick a random vault
-            let vault_idx = rng.0.gen_range(0..VAULTS.len());
-            let vault = &VAULTS[vault_idx];
+            // Pick a random vault from eligible ones
+            let vault_idx = rng.0.gen_range(0..eligible_vaults.len());
+            let vault = eligible_vaults[vault_idx];
+
+            // Check spawn probability
+            if rng.0.gen::<f32>() > vault.constraints.spawn_chance {
+                continue;
+            }
 
             // Try to find a valid placement (up to 50 attempts)
+            let template = &vault.template;
             for _ in 0..50 {
-                let x = rng.0.gen_range(2..MAP_WIDTH as i32 - vault.width as i32 - 2);
-                let y = rng.0.gen_range(2..MAP_HEIGHT as i32 - vault.height as i32 - 2);
+                let x = rng.0.gen_range(2..MAP_WIDTH as i32 - template.width as i32 - 2);
+                let y = rng.0.gen_range(2..MAP_HEIGHT as i32 - template.height as i32 - 2);
 
                 if self.can_place_vault(vault, x, y) {
                     self.apply_vault(vault, x, y);
@@ -334,11 +417,12 @@ impl PrefabBuilder {
 
     /// Check if a vault can be placed at a position (needs mostly floor tiles)
     fn can_place_vault(&self, vault: &PrefabVault, start_x: i32, start_y: i32) -> bool {
+        let template = &vault.template;
         let mut floor_count = 0;
-        let total_tiles = vault.width * vault.height;
+        let total_tiles = template.width * template.height;
 
-        for y in 0..vault.height as i32 {
-            for x in 0..vault.width as i32 {
+        for y in 0..template.height as i32 {
+            for x in 0..template.width as i32 {
                 let map_x = start_x + x;
                 let map_y = start_y + y;
 
@@ -354,8 +438,8 @@ impl PrefabBuilder {
             }
         }
 
-        // Require at least 80% floor tiles
-        floor_count * 100 / total_tiles >= 80
+        // Check against the vault's minimum floor percentage constraint
+        floor_count * 100 / total_tiles >= vault.constraints.min_floor_percent as usize
     }
 }
 
