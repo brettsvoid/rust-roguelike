@@ -93,6 +93,12 @@ pub struct MapGenSpawnData {
     pub pending: bool,
 }
 
+#[derive(Resource, Default)]
+pub struct MapGenBuilderName(pub String);
+
+#[derive(Component)]
+struct MapGenUI;
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -114,6 +120,7 @@ fn main() {
         .init_resource::<MapGenIndex>()
         .init_resource::<MapGenTimer>()
         .init_resource::<MapGenSpawnData>()
+        .init_resource::<MapGenBuilderName>()
         .add_event::<AppExit>()
         .add_plugins((
             ResourcesPlugin,
@@ -140,9 +147,9 @@ fn main() {
         .add_systems(OnEnter(RunState::MapGeneration), setup_mapgen_visualization)
         .add_systems(
             Update,
-            mapgen_visualization.run_if(in_state(RunState::MapGeneration)),
+            (mapgen_visualization, mapgen_input).run_if(in_state(RunState::MapGeneration)),
         )
-        .add_systems(OnExit(RunState::MapGeneration), finalize_mapgen)
+        .add_systems(OnExit(RunState::MapGeneration), (finalize_mapgen, cleanup_mapgen_ui))
         // PreRun: run systems then transition to AwaitingInput
         .add_systems(
             Update,
@@ -335,7 +342,7 @@ fn go_next_level(
 
     // Generate new map with increased depth using builder
     let new_depth = map.depth + 1;
-    let mut builder = map_builders::random_builder(new_depth);
+    let mut builder = map_builders::random_builder(new_depth, &mut rng);
     builder.build_map(&mut rng);
     *map = builder.get_map();
 
@@ -462,6 +469,8 @@ fn setup_mapgen_visualization(
     mut commands: Commands,
     mut index: ResMut<MapGenIndex>,
     mut timer: ResMut<MapGenTimer>,
+    builder_name: Res<MapGenBuilderName>,
+    font: Res<resources::UiFont>,
     // Despawn all text entities to ensure clean slate
     text_query: Query<Entity, With<Text2d>>,
 ) {
@@ -472,6 +481,29 @@ fn setup_mapgen_visualization(
     for entity in &text_query {
         commands.entity(entity).despawn();
     }
+
+    // Spawn UI showing builder name and controls
+    commands.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(10.0),
+            left: Val::Px(10.0),
+            padding: UiRect::all(Val::Px(10.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
+        MapGenUI,
+    )).with_children(|parent| {
+        parent.spawn((
+            Text::new(format!("Builder: {}\n\nSpace: Regenerate\nQ: Exit", builder_name.0)),
+            TextFont {
+                font: font.0.clone(),
+                font_size: 16.0,
+                ..default()
+            },
+            TextColor(Color::srgb(1.0, 1.0, 0.0)),
+        ));
+    });
 }
 
 fn finalize_mapgen(
@@ -643,6 +675,98 @@ fn mapgen_visualization(
     }
 
     index.0 += 1;
+}
+
+fn mapgen_input(
+    mut commands: Commands,
+    mut evr_kbd: EventReader<bevy::input::keyboard::KeyboardInput>,
+    mut next_state: ResMut<NextState<RunState>>,
+    mut map: ResMut<map::Map>,
+    mut rng: ResMut<rng::GameRng>,
+    mut mapgen_history: ResMut<MapGenHistory>,
+    mut spawn_data: ResMut<MapGenSpawnData>,
+    mut builder_name: ResMut<MapGenBuilderName>,
+    mut index: ResMut<MapGenIndex>,
+    mut timer: ResMut<MapGenTimer>,
+    font: Res<resources::UiFont>,
+    tile_query: Query<Entity, With<map::Tile>>,
+    ui_query: Query<Entity, With<MapGenUI>>,
+) {
+    use bevy::input::ButtonState;
+
+    for ev in evr_kbd.read() {
+        if ev.state != ButtonState::Pressed {
+            continue;
+        }
+
+        match ev.key_code {
+            KeyCode::KeyQ => {
+                // Exit to main menu
+                spawn_data.pending = false;
+                next_state.set(RunState::MainMenu);
+            }
+            KeyCode::Space => {
+                // Regenerate map
+                // Despawn existing tiles
+                for entity in &tile_query {
+                    commands.entity(entity).despawn();
+                }
+
+                // Despawn existing UI
+                for entity in &ui_query {
+                    commands.entity(entity).despawn_recursive();
+                }
+
+                // Generate new map
+                let mut builder = map_builders::random_builder(1, &mut rng);
+                builder_name.0 = builder.get_name().to_string();
+                builder.build_map(&mut rng);
+                *map = builder.get_map();
+                mapgen_history.0 = builder.get_snapshot_history();
+                spawn_data.starting_pos = builder.get_starting_position();
+                spawn_data.spawn_regions = builder.get_spawn_regions();
+                spawn_data.depth = 1;
+                spawn_data.pending = true;
+
+                // Reset visualization
+                index.0 = 0;
+                timer.0.reset();
+
+                // Respawn UI with new builder name
+                commands.spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        top: Val::Px(10.0),
+                        left: Val::Px(10.0),
+                        padding: UiRect::all(Val::Px(10.0)),
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
+                    MapGenUI,
+                )).with_children(|parent| {
+                    parent.spawn((
+                        Text::new(format!("Builder: {}\n\nSpace: Regenerate\nQ: Exit", builder_name.0)),
+                        TextFont {
+                            font: font.0.clone(),
+                            font_size: 16.0,
+                            ..default()
+                        },
+                        TextColor(Color::srgb(1.0, 1.0, 0.0)),
+                    ));
+                });
+            }
+            _ => {}
+        }
+    }
+}
+
+fn cleanup_mapgen_ui(
+    mut commands: Commands,
+    ui_query: Query<Entity, With<MapGenUI>>,
+) {
+    for entity in &ui_query {
+        commands.entity(entity).despawn_recursive();
+    }
 }
 
 fn run_loop(mut app: App) -> AppExit {

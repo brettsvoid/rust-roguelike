@@ -14,7 +14,7 @@ use crate::resources::{MenuBackground, UiFont};
 use crate::rng::GameRng;
 use crate::saveload;
 use crate::spawner;
-use crate::{MapGenHistory, MapGenSpawnData, RunState, TargetingInfo, SHOW_MAPGEN_VISUALIZER};
+use crate::{MapGenBuilderName, MapGenHistory, MapGenSpawnData, RunState, TargetingInfo, SHOW_MAPGEN_VISUALIZER};
 
 pub struct GuiPlugin;
 
@@ -1339,9 +1339,11 @@ fn spawn_new_game(
     font: &Res<UiFont>,
     mapgen_history: &mut ResMut<MapGenHistory>,
     spawn_data: &mut ResMut<MapGenSpawnData>,
+    builder_name: &mut ResMut<MapGenBuilderName>,
 ) {
     // Generate new map using builder
-    let mut builder = map_builders::random_builder(1);
+    let mut builder = map_builders::random_builder(1, rng);
+    builder_name.0 = builder.get_name().to_string();
     builder.build_map(rng);
     *map.as_mut() = builder.get_map();
 
@@ -1486,6 +1488,7 @@ fn handle_main_menu_input(
     font: Res<UiFont>,
     mut mapgen_history: ResMut<MapGenHistory>,
     mut spawn_data: ResMut<MapGenSpawnData>,
+    mut builder_name: ResMut<MapGenBuilderName>,
 ) {
     for ev in evr_kbd.read() {
         if ev.state != ButtonState::Pressed {
@@ -1495,7 +1498,7 @@ fn handle_main_menu_input(
         match ev.key_code {
             KeyCode::KeyN => {
                 // New Game - spawn fresh game
-                spawn_new_game(&mut commands, &mut map, &mut rng, &font, &mut mapgen_history, &mut spawn_data);
+                spawn_new_game(&mut commands, &mut map, &mut rng, &font, &mut mapgen_history, &mut spawn_data, &mut builder_name);
                 if SHOW_MAPGEN_VISUALIZER && !mapgen_history.0.is_empty() {
                     next_state.set(RunState::MapGeneration);
                 } else {

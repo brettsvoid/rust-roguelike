@@ -97,4 +97,8 @@ impl MapBuilder for SimpleMapBuilder {
     fn get_spawn_regions(&self) -> Vec<crate::shapes::Rect> {
         self.rooms.clone()
     }
+
+    fn get_name(&self) -> &'static str {
+        "Simple Map"
+    }
 }

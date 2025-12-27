@@ -1,12 +1,15 @@
+mod bsp_dungeon;
 mod common;
 mod simple_map;
 
 use bevy::prelude::*;
+use rand::Rng;
 
 use crate::map::Map;
 use crate::rng::GameRng;
 use crate::shapes::Rect;
 
+pub use bsp_dungeon::BspDungeonBuilder;
 pub use simple_map::SimpleMapBuilder;
 
 pub trait MapBuilder {
@@ -17,10 +20,12 @@ pub trait MapBuilder {
     fn get_snapshot_history(&self) -> Vec<Map>;
     fn take_snapshot(&mut self);
     fn get_spawn_regions(&self) -> Vec<Rect>;
+    fn get_name(&self) -> &'static str;
 }
 
-pub fn random_builder(depth: i32) -> Box<dyn MapBuilder> {
-    // For now, always return simple map builder
-    // Later chapters add more builders here
-    Box::new(SimpleMapBuilder::new(depth))
+pub fn random_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
+    match rng.0.gen_range(0..2) {
+        0 => Box::new(SimpleMapBuilder::new(depth)),
+        _ => Box::new(BspDungeonBuilder::new(depth)),
+    }
 }
