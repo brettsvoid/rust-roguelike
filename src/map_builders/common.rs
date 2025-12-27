@@ -1,5 +1,64 @@
-use crate::map::{Map, TileType};
+use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
 use crate::shapes::Rect;
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum Symmetry {
+    None,
+    Horizontal,
+    Vertical,
+    Both,
+}
+
+pub fn paint(map: &mut Map, symmetry: Symmetry, brush_size: i32, x: i32, y: i32) {
+    match symmetry {
+        Symmetry::None => {
+            apply_paint(map, brush_size, x, y);
+        }
+        Symmetry::Horizontal => {
+            let center_x = MAP_WIDTH as i32 / 2;
+            if x == center_x {
+                apply_paint(map, brush_size, x, y);
+            } else {
+                let dist = (center_x - x).abs();
+                apply_paint(map, brush_size, center_x + dist, y);
+                apply_paint(map, brush_size, center_x - dist, y);
+            }
+        }
+        Symmetry::Vertical => {
+            let center_y = MAP_HEIGHT as i32 / 2;
+            if y == center_y {
+                apply_paint(map, brush_size, x, y);
+            } else {
+                let dist = (center_y - y).abs();
+                apply_paint(map, brush_size, x, center_y + dist);
+                apply_paint(map, brush_size, x, center_y - dist);
+            }
+        }
+        Symmetry::Both => {
+            let center_x = MAP_WIDTH as i32 / 2;
+            let center_y = MAP_HEIGHT as i32 / 2;
+            let dist_x = (center_x - x).abs();
+            let dist_y = (center_y - y).abs();
+            apply_paint(map, brush_size, center_x + dist_x, center_y + dist_y);
+            apply_paint(map, brush_size, center_x - dist_x, center_y + dist_y);
+            apply_paint(map, brush_size, center_x + dist_x, center_y - dist_y);
+            apply_paint(map, brush_size, center_x - dist_x, center_y - dist_y);
+        }
+    }
+}
+
+pub fn apply_paint(map: &mut Map, brush_size: i32, x: i32, y: i32) {
+    for dy in -brush_size..=brush_size {
+        for dx in -brush_size..=brush_size {
+            let px = x + dx;
+            let py = y + dy;
+            if px > 0 && px < MAP_WIDTH as i32 - 1 && py > 0 && py < MAP_HEIGHT as i32 - 1 {
+                let idx = map.xy_idx(px, py);
+                map.tiles[idx] = TileType::Floor;
+            }
+        }
+    }
+}
 
 pub fn apply_room_to_map(map: &mut Map, room: &Rect) {
     for y in room.y1 + 1..=room.y2 {

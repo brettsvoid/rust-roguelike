@@ -7,6 +7,7 @@ use crate::rng::GameRng;
 use crate::shapes::Rect;
 use crate::spawner;
 
+use super::common::{paint, Symmetry};
 use super::MapBuilder;
 
 #[derive(Clone, Copy)]
@@ -20,6 +21,8 @@ pub struct DrunkardSettings {
     pub spawn_mode: DrunkSpawnMode,
     pub lifetime: i32,
     pub floor_percent: f32,
+    pub brush_size: i32,
+    pub symmetry: Symmetry,
 }
 
 pub struct DrunkardsWalkBuilder {
@@ -51,6 +54,8 @@ impl DrunkardsWalkBuilder {
                 spawn_mode: DrunkSpawnMode::StartingPoint,
                 lifetime: 400,
                 floor_percent: 0.5,
+                brush_size: 0,
+                symmetry: Symmetry::None,
             },
         )
     }
@@ -63,6 +68,8 @@ impl DrunkardsWalkBuilder {
                 spawn_mode: DrunkSpawnMode::Random,
                 lifetime: 400,
                 floor_percent: 0.5,
+                brush_size: 0,
+                symmetry: Symmetry::None,
             },
         )
     }
@@ -75,6 +82,36 @@ impl DrunkardsWalkBuilder {
                 spawn_mode: DrunkSpawnMode::Random,
                 lifetime: 100,
                 floor_percent: 0.4,
+                brush_size: 0,
+                symmetry: Symmetry::None,
+            },
+        )
+    }
+
+    /// Wide passages using larger brush
+    pub fn fat_passages(depth: i32) -> Self {
+        Self::new(
+            depth,
+            DrunkardSettings {
+                spawn_mode: DrunkSpawnMode::Random,
+                lifetime: 100,
+                floor_percent: 0.4,
+                brush_size: 1,
+                symmetry: Symmetry::None,
+            },
+        )
+    }
+
+    /// Symmetric mirrored pattern
+    pub fn fearful_symmetry(depth: i32) -> Self {
+        Self::new(
+            depth,
+            DrunkardSettings {
+                spawn_mode: DrunkSpawnMode::Random,
+                lifetime: 100,
+                floor_percent: 0.4,
+                brush_size: 0,
+                symmetry: Symmetry::Both,
             },
         )
     }
@@ -149,8 +186,13 @@ impl MapBuilder for DrunkardsWalkBuilder {
                         }
                     }
                 }
-                let idx = self.map.xy_idx(x, y);
-                self.map.tiles[idx] = TileType::Floor;
+                paint(
+                    &mut self.map,
+                    self.settings.symmetry,
+                    self.settings.brush_size,
+                    x,
+                    y,
+                );
             }
 
             iterations += 1;
@@ -246,6 +288,12 @@ impl MapBuilder for DrunkardsWalkBuilder {
     }
 
     fn get_name(&self) -> &'static str {
+        if self.settings.symmetry != Symmetry::None {
+            return "Drunkard (Fearful Symmetry)";
+        }
+        if self.settings.brush_size > 0 {
+            return "Drunkard (Fat Passages)";
+        }
         match self.settings.spawn_mode {
             DrunkSpawnMode::StartingPoint => "Drunkard (Open Area)",
             DrunkSpawnMode::Random => {

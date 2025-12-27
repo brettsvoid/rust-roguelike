@@ -34,7 +34,7 @@ pub trait MapBuilder {
 }
 
 pub fn random_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
-    match rng.0.gen_range(0..12) {
+    match rng.0.gen_range(0..14) {
         0 => Box::new(SimpleMapBuilder::new(depth)),
         1 => Box::new(BspDungeonBuilder::new(depth)),
         2 => Box::new(BspInteriorBuilder::new(depth)),
@@ -42,10 +42,12 @@ pub fn random_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
         4 => Box::new(DrunkardsWalkBuilder::open_area(depth)),
         5 => Box::new(DrunkardsWalkBuilder::open_halls(depth)),
         6 => Box::new(DrunkardsWalkBuilder::winding_passages(depth)),
-        7 => Box::new(MazeBuilder::new(depth)),
-        8 => Box::new(DLABuilder::walk_inwards(depth)),
-        9 => Box::new(DLABuilder::walk_outwards(depth)),
-        10 => Box::new(DLABuilder::central_attractor(depth)),
+        7 => Box::new(DrunkardsWalkBuilder::fat_passages(depth)),
+        8 => Box::new(DrunkardsWalkBuilder::fearful_symmetry(depth)),
+        9 => Box::new(MazeBuilder::new(depth)),
+        10 => Box::new(DLABuilder::walk_inwards(depth)),
+        11 => Box::new(DLABuilder::walk_outwards(depth)),
+        12 => Box::new(DLABuilder::central_attractor(depth)),
         _ => Box::new(DLABuilder::insectoid(depth)),
     }
 }
