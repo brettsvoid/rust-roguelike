@@ -33,7 +33,7 @@ fn update_viewshed(map: Res<Map>, mut query: Query<(&Position, &mut Viewshed)>) 
 }
 
 /// Returns a vector of all points on a line from (x0, y0) to (x1, y1).
-fn bresenham_line(x0: i32, y0: i32, x1: i32, y1: i32) -> Vec<(i32, i32)> {
+pub fn bresenham_line(x0: i32, y0: i32, x1: i32, y1: i32) -> Vec<(i32, i32)> {
     let mut points = Vec::new();
     let dx = (x1 - x0).abs();
     let sx = if x0 < x1 { 1 } else { -1 };
