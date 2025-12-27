@@ -3,6 +3,7 @@ mod bsp_interior;
 mod cellular_automata;
 mod common;
 mod drunkard;
+mod maze;
 mod simple_map;
 
 use bevy::prelude::*;
@@ -16,6 +17,7 @@ pub use bsp_dungeon::BspDungeonBuilder;
 pub use bsp_interior::BspInteriorBuilder;
 pub use cellular_automata::CellularAutomataBuilder;
 pub use drunkard::DrunkardsWalkBuilder;
+pub use maze::MazeBuilder;
 pub use simple_map::SimpleMapBuilder;
 
 pub trait MapBuilder {
@@ -30,13 +32,14 @@ pub trait MapBuilder {
 }
 
 pub fn random_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
-    match rng.0.gen_range(0..7) {
+    match rng.0.gen_range(0..8) {
         0 => Box::new(SimpleMapBuilder::new(depth)),
         1 => Box::new(BspDungeonBuilder::new(depth)),
         2 => Box::new(BspInteriorBuilder::new(depth)),
         3 => Box::new(CellularAutomataBuilder::new(depth)),
         4 => Box::new(DrunkardsWalkBuilder::open_area(depth)),
         5 => Box::new(DrunkardsWalkBuilder::open_halls(depth)),
-        _ => Box::new(DrunkardsWalkBuilder::winding_passages(depth)),
+        6 => Box::new(DrunkardsWalkBuilder::winding_passages(depth)),
+        _ => Box::new(MazeBuilder::new(depth)),
     }
 }
