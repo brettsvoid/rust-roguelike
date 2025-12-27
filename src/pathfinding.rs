@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 
-use crate::map::Map;
+use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
 
 #[derive(Clone, Eq, PartialEq)]
 struct Node {
@@ -119,4 +119,45 @@ pub fn a_star_ignoring_entities(map: &Map, start: usize, end: usize) -> Option<V
     }
 
     None // No path found
+}
+
+/// Dijkstra map - computes distances from start position(s) to all reachable tiles.
+/// Returns a vector of distances (f32::MAX for unreachable tiles).
+pub fn dijkstra_map(map: &Map, starts: &[usize]) -> Vec<f32> {
+    let mut distances = vec![f32::MAX; map.tiles.len()];
+    let mut open = Vec::new();
+
+    for &start in starts {
+        distances[start] = 0.0;
+        open.push(start);
+    }
+
+    while let Some(current) = open.pop() {
+        let current_dist = distances[current];
+        let cx = (current % MAP_WIDTH) as i32;
+        let cy = (current / MAP_WIDTH) as i32;
+
+        for dy in -1..=1i32 {
+            for dx in -1..=1i32 {
+                if dx == 0 && dy == 0 {
+                    continue;
+                }
+                let nx = cx + dx;
+                let ny = cy + dy;
+                if nx < 0 || nx >= MAP_WIDTH as i32 || ny < 0 || ny >= MAP_HEIGHT as i32 {
+                    continue;
+                }
+                let neighbor_idx = map.xy_idx(nx, ny);
+                if map.tiles[neighbor_idx] != TileType::Wall {
+                    let new_dist = current_dist + 1.0;
+                    if new_dist < distances[neighbor_idx] {
+                        distances[neighbor_idx] = new_dist;
+                        open.push(neighbor_idx);
+                    }
+                }
+            }
+        }
+    }
+
+    distances
 }
