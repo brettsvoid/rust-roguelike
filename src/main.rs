@@ -29,6 +29,7 @@ mod saveload;
 mod shapes;
 mod spawner;
 mod traps;
+mod ui;
 mod viewshed;
 
 const SCREEN_HEIGHT: usize = 50;
@@ -135,6 +136,11 @@ fn main() {
             MapPlugin,
             MonstersPlugin,
             gui::GuiPlugin,
+            ui::HudPlugin,
+            ui::TooltipPlugin,
+            ui::TargetingPlugin,
+            ui::GameOverPlugin,
+            ui::InventoryPlugin,
             debug::DebugPlugin,
         ))
         .add_systems(Startup, setup)
