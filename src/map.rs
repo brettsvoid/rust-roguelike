@@ -74,7 +74,7 @@ impl WallGlyph {
     }
 }
 
-#[derive(PartialEq, Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum TileType {
     Floor,
     Wall,

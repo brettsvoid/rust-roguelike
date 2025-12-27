@@ -7,6 +7,7 @@ mod drunkard;
 mod maze;
 mod simple_map;
 mod voronoi;
+mod wfc;
 
 use bevy::prelude::*;
 use rand::Rng;
@@ -23,6 +24,7 @@ pub use drunkard::DrunkardsWalkBuilder;
 pub use maze::MazeBuilder;
 pub use simple_map::SimpleMapBuilder;
 pub use voronoi::VoronoiCellBuilder;
+pub use wfc::WfcBuilder;
 
 /// All available map builder types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,6 +46,10 @@ pub enum BuilderType {
     VoronoiEuclidean,
     VoronoiManhattan,
     VoronoiChebyshev,
+    WfcCellularAutomata,
+    WfcBspDungeon,
+    WfcBspInterior,
+    WfcDla,
 }
 
 impl BuilderType {
@@ -66,6 +72,10 @@ impl BuilderType {
         BuilderType::VoronoiEuclidean,
         BuilderType::VoronoiManhattan,
         BuilderType::VoronoiChebyshev,
+        BuilderType::WfcCellularAutomata,
+        BuilderType::WfcBspDungeon,
+        BuilderType::WfcBspInterior,
+        BuilderType::WfcDla,
     ];
 
     /// Get the display name for this builder type
@@ -88,6 +98,10 @@ impl BuilderType {
             BuilderType::VoronoiEuclidean => "Voronoi (Euclidean)",
             BuilderType::VoronoiManhattan => "Voronoi (Manhattan)",
             BuilderType::VoronoiChebyshev => "Voronoi (Chebyshev)",
+            BuilderType::WfcCellularAutomata => "WFC (Cellular Automata)",
+            BuilderType::WfcBspDungeon => "WFC (BSP Dungeon)",
+            BuilderType::WfcBspInterior => "WFC (BSP Interior)",
+            BuilderType::WfcDla => "WFC (DLA)",
         }
     }
 
@@ -113,6 +127,10 @@ impl BuilderType {
             BuilderType::VoronoiEuclidean => Box::new(VoronoiCellBuilder::euclidean(depth)),
             BuilderType::VoronoiManhattan => Box::new(VoronoiCellBuilder::manhattan(depth)),
             BuilderType::VoronoiChebyshev => Box::new(VoronoiCellBuilder::chebyshev(depth)),
+            BuilderType::WfcCellularAutomata => Box::new(WfcBuilder::cellular_automata(depth)),
+            BuilderType::WfcBspDungeon => Box::new(WfcBuilder::bsp_dungeon(depth)),
+            BuilderType::WfcBspInterior => Box::new(WfcBuilder::bsp_interior(depth)),
+            BuilderType::WfcDla => Box::new(WfcBuilder::dla(depth)),
         }
     }
 
