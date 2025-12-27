@@ -8,7 +8,7 @@ use crate::shapes::Rect;
 use crate::spawner;
 
 use super::common::{paint, Symmetry};
-use super::MapBuilder;
+use super::{BuilderMap, InitialMapBuilder, MapBuilder};
 
 #[derive(Clone, Copy)]
 pub enum DrunkSpawnMode {
@@ -304,5 +304,121 @@ impl MapBuilder for DrunkardsWalkBuilder {
                 }
             }
         }
+    }
+}
+
+// ============================================================================
+// New InitialMapBuilder trait implementation
+// ============================================================================
+
+fn count_floors(map: &Map) -> usize {
+    map.tiles.iter().filter(|t| **t == TileType::Floor).count()
+}
+
+fn random_floor_tile(map: &Map, rng: &mut GameRng) -> (i32, i32) {
+    loop {
+        let x = rng.0.gen_range(1..MAP_WIDTH as i32 - 1);
+        let y = rng.0.gen_range(1..MAP_HEIGHT as i32 - 1);
+        let idx = map.xy_idx(x, y);
+        if map.tiles[idx] == TileType::Floor {
+            return (x, y);
+        }
+    }
+}
+
+impl InitialMapBuilder for DrunkardsWalkBuilder {
+    fn build_map(&mut self, rng: &mut GameRng, build_data: &mut BuilderMap) {
+        build_data.take_snapshot();
+
+        let starting_position = (MAP_WIDTH as i32 / 2, MAP_HEIGHT as i32 / 2);
+
+        // Start with floor at center
+        let start_idx = build_data.map.xy_idx(starting_position.0, starting_position.1);
+        build_data.map.tiles[start_idx] = TileType::Floor;
+
+        let total_tiles = (MAP_WIDTH * MAP_HEIGHT) as f32;
+        let target_floor = (total_tiles * self.settings.floor_percent) as usize;
+
+        let mut iterations = 0;
+        while count_floors(&build_data.map) < target_floor && iterations < 10000 {
+            // Determine spawn position
+            let (mut x, mut y) = match self.settings.spawn_mode {
+                DrunkSpawnMode::StartingPoint => starting_position,
+                DrunkSpawnMode::Random => {
+                    if count_floors(&build_data.map) == 1 {
+                        starting_position
+                    } else {
+                        random_floor_tile(&build_data.map, rng)
+                    }
+                }
+            };
+
+            // Drunkard walks for its lifetime
+            for _ in 0..self.settings.lifetime {
+                let direction = rng.0.gen_range(0..4);
+                match direction {
+                    0 => {
+                        if y > 1 {
+                            y -= 1;
+                        }
+                    }
+                    1 => {
+                        if y < MAP_HEIGHT as i32 - 2 {
+                            y += 1;
+                        }
+                    }
+                    2 => {
+                        if x > 1 {
+                            x -= 1;
+                        }
+                    }
+                    _ => {
+                        if x < MAP_WIDTH as i32 - 2 {
+                            x += 1;
+                        }
+                    }
+                }
+                paint(
+                    &mut build_data.map,
+                    self.settings.symmetry,
+                    self.settings.brush_size,
+                    x,
+                    y,
+                );
+            }
+
+            iterations += 1;
+            if iterations % 10 == 0 {
+                build_data.take_snapshot();
+            }
+        }
+
+        build_data.take_snapshot();
+
+        // Use Dijkstra to find reachable tiles and cull unreachable
+        let dijkstra = dijkstra_map(&build_data.map, &[start_idx]);
+
+        // Find the furthest reachable tile for stairs
+        let mut exit_idx = 0;
+        let mut max_distance = 0.0f32;
+
+        for (idx, &dist) in dijkstra.iter().enumerate() {
+            if dist < f32::MAX {
+                if dist > max_distance {
+                    max_distance = dist;
+                    exit_idx = idx;
+                }
+            } else if build_data.map.tiles[idx] == TileType::Floor {
+                // Unreachable floor - convert to wall
+                build_data.map.tiles[idx] = TileType::Wall;
+            }
+        }
+
+        build_data.take_snapshot();
+
+        // Place stairs at furthest point
+        build_data.map.tiles[exit_idx] = TileType::DownStairs;
+        build_data.starting_position = Some(starting_position);
+        build_data.take_snapshot();
     }
 }

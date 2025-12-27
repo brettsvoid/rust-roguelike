@@ -7,7 +7,7 @@ use crate::rng::GameRng;
 use crate::shapes::Rect;
 use crate::spawner;
 
-use super::MapBuilder;
+use super::{BuilderMap, InitialMapBuilder, MapBuilder};
 
 const TOP: usize = 0;
 const RIGHT: usize = 1;
@@ -299,5 +299,71 @@ impl MapBuilder for MazeBuilder {
 
     fn get_name(&self) -> &'static str {
         "Maze"
+    }
+}
+
+// ============================================================================
+// New InitialMapBuilder trait implementation
+// ============================================================================
+
+impl InitialMapBuilder for MazeBuilder {
+    fn build_map(&mut self, rng: &mut GameRng, build_data: &mut BuilderMap) {
+        build_data.take_snapshot();
+
+        // Grid is half the map size (each cell becomes 2x2 in the map)
+        let grid_width = (MAP_WIDTH / 2) as i32 - 1;
+        let grid_height = (MAP_HEIGHT / 2) as i32 - 1;
+
+        let mut grid = Grid::new(grid_width, grid_height);
+
+        // Generate the maze
+        let mut iteration = 0;
+        grid.cells[0].visited = true;
+        grid.current = 0;
+
+        loop {
+            let neighbors = grid.get_available_neighbors();
+            if !neighbors.is_empty() {
+                let next = neighbors[rng.0.gen_range(0..neighbors.len())];
+                grid.backtrace.push(grid.current);
+                grid.remove_walls(grid.current, next);
+                grid.current = next;
+                grid.cells[next].visited = true;
+            } else if !grid.backtrace.is_empty() {
+                grid.current = grid.backtrace.pop().unwrap();
+            } else {
+                break;
+            }
+
+            iteration += 1;
+            if iteration % 50 == 0 {
+                grid.copy_to_map(&mut build_data.map);
+                build_data.take_snapshot();
+            }
+        }
+
+        // Final copy
+        grid.copy_to_map(&mut build_data.map);
+        build_data.take_snapshot();
+
+        // Starting position
+        build_data.starting_position = Some((2, 2));
+        let start_idx = build_data.map.xy_idx(2, 2);
+
+        // Use Dijkstra to find furthest point for stairs
+        let dijkstra = dijkstra_map(&build_data.map, &[start_idx]);
+
+        let mut exit_idx = 0;
+        let mut max_distance = 0.0f32;
+
+        for (idx, &dist) in dijkstra.iter().enumerate() {
+            if dist < f32::MAX && dist > max_distance {
+                max_distance = dist;
+                exit_idx = idx;
+            }
+        }
+
+        build_data.map.tiles[exit_idx] = TileType::DownStairs;
+        build_data.take_snapshot();
     }
 }

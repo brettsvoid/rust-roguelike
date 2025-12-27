@@ -7,9 +7,10 @@ use crate::shapes::Rect;
 use crate::spawner;
 
 use super::common::*;
-use super::MapBuilder;
+use super::{BuilderMap, InitialMapBuilder, MapBuilder};
 
 pub struct BspDungeonBuilder {
+    // Legacy fields for MapBuilder trait compatibility
     map: Map,
     rooms: Vec<Rect>,
     rects: Vec<Rect>,
@@ -28,27 +29,26 @@ impl BspDungeonBuilder {
         }
     }
 
-    fn add_subrects(&mut self, rect: Rect) {
+    fn add_subrects(rects: &mut Vec<Rect>, rect: Rect) {
         let width = i32::abs(rect.x1 - rect.x2);
         let height = i32::abs(rect.y1 - rect.y2);
         let half_width = i32::max(width / 2, 1);
         let half_height = i32::max(height / 2, 1);
 
-        self.rects
-            .push(Rect::new(rect.x1, rect.y1, half_width, half_height));
-        self.rects.push(Rect::new(
+        rects.push(Rect::new(rect.x1, rect.y1, half_width, half_height));
+        rects.push(Rect::new(
             rect.x1,
             rect.y1 + half_height,
             half_width,
             half_height,
         ));
-        self.rects.push(Rect::new(
+        rects.push(Rect::new(
             rect.x1 + half_width,
             rect.y1,
             half_width,
             half_height,
         ));
-        self.rects.push(Rect::new(
+        rects.push(Rect::new(
             rect.x1 + half_width,
             rect.y1 + half_height,
             half_width,
@@ -56,15 +56,15 @@ impl BspDungeonBuilder {
         ));
     }
 
-    fn get_random_rect(&self, rng: &mut GameRng) -> Rect {
-        if self.rects.len() == 1 {
-            return self.rects[0].clone();
+    fn get_random_rect(rects: &[Rect], rng: &mut GameRng) -> Rect {
+        if rects.len() == 1 {
+            return rects[0].clone();
         }
-        let idx = rng.0.gen_range(0..self.rects.len());
-        self.rects[idx].clone()
+        let idx = rng.0.gen_range(0..rects.len());
+        rects[idx].clone()
     }
 
-    fn get_random_sub_rect(&self, rect: &Rect, rng: &mut GameRng) -> Rect {
+    fn get_random_sub_rect(rect: &Rect, rng: &mut GameRng) -> Rect {
         let rect_width = i32::abs(rect.x1 - rect.x2);
         let rect_height = i32::abs(rect.y1 - rect.y2);
 
@@ -77,7 +77,7 @@ impl BspDungeonBuilder {
         Rect::new(rect.x1 + x_offset, rect.y1 + y_offset, w, h)
     }
 
-    fn is_possible(&self, rect: &Rect) -> bool {
+    fn is_possible(map: &Map, rect: &Rect) -> bool {
         // Check with 2-tile buffer to prevent overlaps
         let expanded_x1 = rect.x1 - 2;
         let expanded_y1 = rect.y1 - 2;
@@ -98,62 +98,101 @@ impl BspDungeonBuilder {
                 if y < 1 {
                     return false;
                 }
-                let idx = self.map.xy_idx(x, y);
-                if self.map.tiles[idx] != TileType::Wall {
+                let idx = map.xy_idx(x, y);
+                if map.tiles[idx] != TileType::Wall {
                     return false;
                 }
             }
         }
         true
     }
-}
 
-impl MapBuilder for BspDungeonBuilder {
-    fn build_map(&mut self, rng: &mut GameRng) {
-        self.take_snapshot();
+    /// Core BSP generation logic shared by both traits
+    fn generate_bsp(rng: &mut GameRng, map: &mut Map) -> Vec<Rect> {
+        let mut rects = Vec::new();
+        let mut rooms = Vec::new();
 
         // Start with single rect covering most of the map
-        self.rects.clear();
-        self.rects
-            .push(Rect::new(2, 2, MAP_WIDTH as i32 - 5, MAP_HEIGHT as i32 - 5));
-        let first_room = self.rects[0].clone();
-        self.add_subrects(first_room);
+        rects.push(Rect::new(2, 2, MAP_WIDTH as i32 - 5, MAP_HEIGHT as i32 - 5));
+        let first_room = rects[0].clone();
+        Self::add_subrects(&mut rects, first_room);
 
         let mut n_rooms = 0;
         while n_rooms < 240 {
-            let rect = self.get_random_rect(rng);
-            let candidate = self.get_random_sub_rect(&rect, rng);
+            let rect = Self::get_random_rect(&rects, rng);
+            let candidate = Self::get_random_sub_rect(&rect, rng);
 
-            if self.is_possible(&candidate) {
-                apply_room_to_map(&mut self.map, &candidate);
-                self.rooms.push(candidate);
-                self.add_subrects(rect);
-                self.take_snapshot();
+            if Self::is_possible(map, &candidate) {
+                apply_room_to_map(map, &candidate);
+                rooms.push(candidate);
+                Self::add_subrects(&mut rects, rect);
             }
             n_rooms += 1;
         }
 
         // Sort rooms by x position for corridor generation
-        self.rooms.sort_by(|a, b| a.x1.cmp(&b.x1));
+        rooms.sort_by(|a, b| a.x1.cmp(&b.x1));
 
         // Connect rooms with corridors
-        for i in 0..self.rooms.len() - 1 {
-            let room = &self.rooms[i];
-            let next_room = &self.rooms[i + 1];
+        for i in 0..rooms.len().saturating_sub(1) {
+            let room = &rooms[i];
+            let next_room = &rooms[i + 1];
             let start_x = room.x1 + rng.0.gen_range(0..i32::abs(room.x1 - room.x2).max(1));
             let start_y = room.y1 + rng.0.gen_range(0..i32::abs(room.y1 - room.y2).max(1));
             let end_x =
                 next_room.x1 + rng.0.gen_range(0..i32::abs(next_room.x1 - next_room.x2).max(1));
             let end_y =
                 next_room.y1 + rng.0.gen_range(0..i32::abs(next_room.y1 - next_room.y2).max(1));
-            draw_corridor(&mut self.map, start_x, start_y, end_x, end_y);
-            self.take_snapshot();
+            draw_corridor(map, start_x, start_y, end_x, end_y);
+        }
+
+        rooms
+    }
+}
+
+// ============================================================================
+// New InitialMapBuilder trait implementation
+// ============================================================================
+
+impl InitialMapBuilder for BspDungeonBuilder {
+    fn build_map(&mut self, rng: &mut GameRng, build_data: &mut BuilderMap) {
+        build_data.take_snapshot();
+
+        let rooms = Self::generate_bsp(rng, &mut build_data.map);
+
+        // Set starting position to first room center
+        if let Some(first_room) = rooms.first() {
+            build_data.starting_position = Some(first_room.center());
         }
 
         // Place stairs in last room
-        let (stairs_x, stairs_y) = self.rooms.last().unwrap().center();
-        let stairs_idx = self.map.xy_idx(stairs_x, stairs_y);
-        self.map.tiles[stairs_idx] = TileType::DownStairs;
+        if let Some(last_room) = rooms.last() {
+            let (stairs_x, stairs_y) = last_room.center();
+            let stairs_idx = build_data.map.xy_idx(stairs_x, stairs_y);
+            build_data.map.tiles[stairs_idx] = TileType::DownStairs;
+        }
+
+        build_data.rooms = Some(rooms);
+        build_data.take_snapshot();
+    }
+}
+
+// ============================================================================
+// Legacy MapBuilder trait implementation (for backwards compatibility)
+// ============================================================================
+
+impl MapBuilder for BspDungeonBuilder {
+    fn build_map(&mut self, rng: &mut GameRng) {
+        self.take_snapshot();
+
+        self.rooms = Self::generate_bsp(rng, &mut self.map);
+
+        // Place stairs in last room
+        if let Some(last_room) = self.rooms.last() {
+            let (stairs_x, stairs_y) = last_room.center();
+            let stairs_idx = self.map.xy_idx(stairs_x, stairs_y);
+            self.map.tiles[stairs_idx] = TileType::DownStairs;
+        }
         self.take_snapshot();
     }
 
@@ -169,7 +208,7 @@ impl MapBuilder for BspDungeonBuilder {
     }
 
     fn get_starting_position(&self) -> (i32, i32) {
-        self.rooms[0].center()
+        self.rooms.first().map(|r| r.center()).unwrap_or((MAP_WIDTH as i32 / 2, MAP_HEIGHT as i32 / 2))
     }
 
     fn get_snapshot_history(&self) -> Vec<Map> {

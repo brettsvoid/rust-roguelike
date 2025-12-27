@@ -8,7 +8,7 @@ use crate::rng::GameRng;
 use crate::shapes::Rect;
 use crate::spawner;
 
-use super::MapBuilder;
+use super::{BuilderMap, MapBuilder, MetaMapBuilder};
 
 /// Default chunk size for pattern extraction (in tiles)
 /// Smaller = faster but less variety, larger = slower but more detail
@@ -675,6 +675,86 @@ impl MapBuilder for WfcBuilder {
             WfcSourceType::BspDungeon => "WFC (BSP Dungeon)",
             WfcSourceType::BspInterior => "WFC (BSP Interior)",
             WfcSourceType::Dla => "WFC (DLA)",
+        }
+    }
+}
+
+// ============================================================================
+// MetaMapBuilder Implementation
+// ============================================================================
+
+impl MetaMapBuilder for WfcBuilder {
+    fn build_map(&mut self, rng: &mut GameRng, build_data: &mut BuilderMap) {
+        build_data.take_snapshot();
+
+        // Use the existing map as the source for WFC patterns
+        let source = build_data.map.clone();
+
+        // Try WFC generation with retries
+        let mut success = false;
+        for _attempt in 0..MAX_RETRIES {
+            // Reset map to walls
+            build_data.map = Map::new(MAP_WIDTH, MAP_HEIGHT, build_data.depth);
+
+            let mut solver = WfcSolver::new(&source, self.chunk_size);
+
+            if solver.solve(rng, &mut build_data.map, &mut build_data.history) {
+                solver.render_to_map(&mut build_data.map);
+                build_data.take_snapshot();
+                success = true;
+                break;
+            }
+        }
+
+        // Fallback: use source map directly if WFC fails
+        if !success {
+            build_data.map = source;
+        }
+
+        // Apply border walls
+        for x in 0..MAP_WIDTH as i32 {
+            let idx_top = build_data.map.xy_idx(x, 0);
+            let idx_bottom = build_data.map.xy_idx(x, MAP_HEIGHT as i32 - 1);
+            build_data.map.tiles[idx_top] = TileType::Wall;
+            build_data.map.tiles[idx_bottom] = TileType::Wall;
+        }
+        for y in 0..MAP_HEIGHT as i32 {
+            let idx_left = build_data.map.xy_idx(0, y);
+            let idx_right = build_data.map.xy_idx(MAP_WIDTH as i32 - 1, y);
+            build_data.map.tiles[idx_left] = TileType::Wall;
+            build_data.map.tiles[idx_right] = TileType::Wall;
+        }
+
+        build_data.take_snapshot();
+
+        // Find a starting position if not already set
+        if build_data.starting_position.is_none() {
+            let mut start_x = MAP_WIDTH as i32 / 2;
+            let start_y = MAP_HEIGHT as i32 / 2;
+
+            while start_x > 1 {
+                let idx = build_data.map.xy_idx(start_x, start_y);
+                if build_data.map.tiles[idx] == TileType::Floor {
+                    break;
+                }
+                start_x -= 1;
+            }
+
+            if build_data.map.tiles[build_data.map.xy_idx(start_x, start_y)] != TileType::Floor {
+                for y in 1..MAP_HEIGHT as i32 - 1 {
+                    for x in 1..MAP_WIDTH as i32 - 1 {
+                        if build_data.map.tiles[build_data.map.xy_idx(x, y)] == TileType::Floor {
+                            build_data.starting_position = Some((x, y));
+                            break;
+                        }
+                    }
+                    if build_data.starting_position.is_some() {
+                        break;
+                    }
+                }
+            } else {
+                build_data.starting_position = Some((start_x, start_y));
+            }
         }
     }
 }
