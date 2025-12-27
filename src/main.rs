@@ -43,6 +43,7 @@ pub const SHOW_MAPGEN_VISUALIZER: bool = true;
 pub enum RunState {
     #[default]
     MainMenu,
+    MapBuilderSelect,
     MapGeneration,
     PreRun,
     AwaitingInput,
@@ -96,6 +97,10 @@ pub struct MapGenSpawnData {
 #[derive(Resource, Default)]
 pub struct MapGenBuilderName(pub String);
 
+/// None = random builder, Some(index) = specific builder
+#[derive(Resource, Default)]
+pub struct SelectedBuilder(pub Option<usize>);
+
 #[derive(Component)]
 struct MapGenUI;
 
@@ -121,6 +126,7 @@ fn main() {
         .init_resource::<MapGenTimer>()
         .init_resource::<MapGenSpawnData>()
         .init_resource::<MapGenBuilderName>()
+        .init_resource::<SelectedBuilder>()
         .add_event::<AppExit>()
         .add_plugins((
             ResourcesPlugin,
@@ -495,7 +501,7 @@ fn setup_mapgen_visualization(
         MapGenUI,
     )).with_children(|parent| {
         parent.spawn((
-            Text::new(format!("Builder: {}\n\nSpace: Regenerate\nQ: Exit", builder_name.0)),
+            Text::new(format!("Builder: {}\n\nSpace: Regenerate\nEsc: Back", builder_name.0)),
             TextFont {
                 font: font.0.clone(),
                 font_size: 16.0,
@@ -688,6 +694,7 @@ fn mapgen_input(
     mut builder_name: ResMut<MapGenBuilderName>,
     mut index: ResMut<MapGenIndex>,
     mut timer: ResMut<MapGenTimer>,
+    selected_builder: Res<SelectedBuilder>,
     font: Res<resources::UiFont>,
     tile_query: Query<Entity, With<map::Tile>>,
     ui_query: Query<Entity, With<MapGenUI>>,
@@ -700,10 +707,10 @@ fn mapgen_input(
         }
 
         match ev.key_code {
-            KeyCode::KeyQ => {
-                // Exit to main menu
+            KeyCode::Escape => {
+                // Go back to builder selection menu
                 spawn_data.pending = false;
-                next_state.set(RunState::MainMenu);
+                next_state.set(RunState::MapBuilderSelect);
             }
             KeyCode::Space => {
                 // Regenerate map
@@ -717,8 +724,13 @@ fn mapgen_input(
                     commands.entity(entity).despawn_recursive();
                 }
 
-                // Generate new map
-                let mut builder = map_builders::random_builder(1, &mut rng);
+                // Generate new map using selected builder or random
+                // Preserve pending state (true for new game, false for visualizer)
+                let was_pending = spawn_data.pending;
+                let mut builder = match selected_builder.0 {
+                    Some(idx) => map_builders::builder_by_index(idx, 1),
+                    None => map_builders::random_builder(1, &mut rng),
+                };
                 builder_name.0 = builder.get_name().to_string();
                 builder.build_map(&mut rng);
                 *map = builder.get_map();
@@ -726,7 +738,7 @@ fn mapgen_input(
                 spawn_data.starting_pos = builder.get_starting_position();
                 spawn_data.spawn_regions = builder.get_spawn_regions();
                 spawn_data.depth = 1;
-                spawn_data.pending = true;
+                spawn_data.pending = was_pending;
 
                 // Reset visualization
                 index.0 = 0;
@@ -745,7 +757,7 @@ fn mapgen_input(
                     MapGenUI,
                 )).with_children(|parent| {
                     parent.spawn((
-                        Text::new(format!("Builder: {}\n\nSpace: Regenerate\nQ: Exit", builder_name.0)),
+                        Text::new(format!("Builder: {}\n\nSpace: Regenerate\nEsc: Back", builder_name.0)),
                         TextFont {
                             font: font.0.clone(),
                             font_size: 16.0,

@@ -142,7 +142,7 @@ pub fn item_use_system(
                     let radius = aoe.radius as i32;
                     for dx in -radius..=radius {
                         for dy in -radius..=radius {
-                            let distance = DistanceAlg::Pythagoras
+                            let distance = DistanceAlg::Euclidean
                                 .distance2d(Vec2::ZERO, Vec2::new(dx as f32, dy as f32));
                             if distance <= aoe.radius as f32 {
                                 particle_builder.request(
@@ -159,7 +159,7 @@ pub fn item_use_system(
                     // Find all entities within the AoE radius
                     let mut hit_count = 0;
                     for (target_entity, pos, target_name) in &target_query {
-                        let distance = DistanceAlg::Pythagoras.distance2d(
+                        let distance = DistanceAlg::Euclidean.distance2d(
                             Vec2::new(target_x as f32, target_y as f32),
                             Vec2::new(pos.x as f32, pos.y as f32),
                         );

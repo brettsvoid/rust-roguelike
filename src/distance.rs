@@ -4,7 +4,7 @@ use bevy::prelude::*;
 pub enum DistanceAlg {
     /// Straight-line distance: sqrt((x2-x1)² + (y2-y1)²)
     /// Best for: circular ranges, spell AOE.
-    Pythagoras,
+    Euclidean,
     /// No diagonal movement: |x2-x1| + |y2-y1|
     /// Best for: 4-directional movement only.
     Manhattan,
@@ -18,7 +18,7 @@ impl DistanceAlg {
         let delta = (p2 - p1).abs();
 
         match self {
-            DistanceAlg::Pythagoras => delta.length(),
+            DistanceAlg::Euclidean => delta.length(),
             DistanceAlg::Manhattan => delta.x + delta.y,
             DistanceAlg::Chebyshev => delta.x.max(delta.y),
         }
