@@ -5,6 +5,7 @@ mod common;
 mod dla;
 mod drunkard;
 mod maze;
+mod prefab;
 mod simple_map;
 mod voronoi;
 mod wfc;
@@ -22,6 +23,7 @@ pub use cellular_automata::CellularAutomataBuilder;
 pub use dla::DLABuilder;
 pub use drunkard::DrunkardsWalkBuilder;
 pub use maze::MazeBuilder;
+pub use prefab::{PrefabBuilder, CORNER_FORT};
 pub use simple_map::SimpleMapBuilder;
 pub use voronoi::VoronoiCellBuilder;
 pub use wfc::WfcBuilder;
@@ -50,6 +52,8 @@ pub enum BuilderType {
     WfcBspDungeon,
     WfcBspInterior,
     WfcDla,
+    PrefabVaults,
+    PrefabSectional,
 }
 
 impl BuilderType {
@@ -76,6 +80,8 @@ impl BuilderType {
         BuilderType::WfcBspDungeon,
         BuilderType::WfcBspInterior,
         BuilderType::WfcDla,
+        BuilderType::PrefabVaults,
+        BuilderType::PrefabSectional,
     ];
 
     /// Get the display name for this builder type
@@ -102,6 +108,8 @@ impl BuilderType {
             BuilderType::WfcBspDungeon => "WFC (BSP Dungeon)",
             BuilderType::WfcBspInterior => "WFC (BSP Interior)",
             BuilderType::WfcDla => "WFC (DLA)",
+            BuilderType::PrefabVaults => "Prefab (Vaults)",
+            BuilderType::PrefabSectional => "Prefab (Sectional)",
         }
     }
 
@@ -131,6 +139,15 @@ impl BuilderType {
             BuilderType::WfcBspDungeon => Box::new(WfcBuilder::bsp_dungeon(depth)),
             BuilderType::WfcBspInterior => Box::new(WfcBuilder::bsp_interior(depth)),
             BuilderType::WfcDla => Box::new(WfcBuilder::dla(depth)),
+            BuilderType::PrefabVaults => Box::new(PrefabBuilder::vaults(
+                depth,
+                Box::new(CellularAutomataBuilder::new(depth)),
+            )),
+            BuilderType::PrefabSectional => Box::new(PrefabBuilder::sectional(
+                depth,
+                Box::new(CellularAutomataBuilder::new(depth)),
+                CORNER_FORT.clone(),
+            )),
         }
     }
 
