@@ -69,8 +69,8 @@ fn spawn_new_game_immediate(
     rng: &mut ResMut<GameRng>,
     font: &Res<UiFont>,
 ) {
-    // Generate new map using random builder
-    let mut builder = map_builders::random_builder(1, rng);
+    // Generate new map using default builder
+    let mut builder = map_builders::default_builder(1);
     builder.build_map(rng);
     *map.as_mut() = builder.get_map();
 
@@ -425,7 +425,7 @@ fn start_visualizer(
 ) {
     let mut builder = match builder_index {
         Some(idx) => map_builders::builder_by_index(idx, 1),
-        None => map_builders::random_builder(1, rng),
+        None => map_builders::default_builder(1),
     };
     builder_name.0 = builder.get_name().to_string();
     builder.build_map(rng);

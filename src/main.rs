@@ -161,7 +161,10 @@ fn main() {
             Update,
             (mapgen_visualization, mapgen_input).run_if(in_state(RunState::MapGeneration)),
         )
-        .add_systems(OnExit(RunState::MapGeneration), (finalize_mapgen, cleanup_mapgen_ui))
+        .add_systems(
+            OnExit(RunState::MapGeneration),
+            (finalize_mapgen, cleanup_mapgen_ui),
+        )
         // PreRun: run systems then transition to AwaitingInput
         .add_systems(
             Update,
@@ -200,15 +203,9 @@ fn main() {
                 .run_if(in_state(RunState::MonsterTurn)),
         )
         // NextLevel: generate new level and transition to PreRun
-        .add_systems(
-            Update,
-            go_next_level.run_if(in_state(RunState::NextLevel)),
-        )
+        .add_systems(Update, go_next_level.run_if(in_state(RunState::NextLevel)))
         // MagicMapReveal: reveal map row by row
-        .add_systems(
-            OnEnter(RunState::MagicMapReveal),
-            reset_magic_map_row,
-        )
+        .add_systems(OnEnter(RunState::MagicMapReveal), reset_magic_map_row)
         .add_systems(
             Update,
             magic_map_reveal.run_if(in_state(RunState::MagicMapReveal)),
@@ -227,11 +224,25 @@ fn handle_exit(
     map: Res<map::Map>,
     game_log: Res<gamelog::GameLog>,
     player_query: Query<
-        (Entity, &map::Position, &components::Name, &combat::CombatStats, &viewshed::Viewshed, &components::HungerClock),
+        (
+            Entity,
+            &map::Position,
+            &components::Name,
+            &combat::CombatStats,
+            &viewshed::Viewshed,
+            &components::HungerClock,
+        ),
         With<player::Player>,
     >,
     monster_query: Query<
-        (&map::Position, &components::Name, &combat::CombatStats, &viewshed::Viewshed, &Text2d, Option<&components::Confusion>),
+        (
+            &map::Position,
+            &components::Name,
+            &combat::CombatStats,
+            &viewshed::Viewshed,
+            &Text2d,
+            Option<&components::Confusion>,
+        ),
         With<monsters::Monster>,
     >,
     item_query: Query<
@@ -332,7 +343,12 @@ fn go_next_level(
     backpack_query: Query<(Entity, &components::InBackpack)>,
     entities_to_delete: Query<
         Entity,
-        Or<(With<monsters::Monster>, With<map::Tile>, With<components::Item>, With<components::EntryTrigger>)>,
+        Or<(
+            With<monsters::Monster>,
+            With<map::Tile>,
+            With<components::Item>,
+            With<components::EntryTrigger>,
+        )>,
     >,
 ) {
     // Get player entity and items in their backpack
@@ -352,9 +368,9 @@ fn go_next_level(
         }
     }
 
-    // Generate new map with increased depth using builder
+    // Generate new map with increased depth using default builder
     let new_depth = map.depth + 1;
-    let mut builder = map_builders::random_builder(new_depth, &mut rng);
+    let mut builder = map_builders::default_builder(new_depth);
     builder.build_map(&mut rng);
     *map = builder.get_map();
 
@@ -418,22 +434,21 @@ fn go_next_level(
 
     // Move player to starting position
     let (player_x, player_y) = builder.get_starting_position();
-    commands
-        .entity(player_entity)
-        .insert(map::Position { x: player_x, y: player_y });
+    commands.entity(player_entity).insert(map::Position {
+        x: player_x,
+        y: player_y,
+    });
 
     // Heal player (restore up to 50% of max HP)
     let heal_amount = player_stats.max_hp / 2;
     player_stats.hp = (player_stats.hp + heal_amount).min(player_stats.max_hp);
 
     // Mark player's viewshed as dirty to recalculate visibility
-    commands
-        .entity(player_entity)
-        .insert(viewshed::Viewshed {
-            range: 8,
-            visible_tiles: Vec::new(),
-            dirty: true,
-        });
+    commands.entity(player_entity).insert(viewshed::Viewshed {
+        range: 8,
+        visible_tiles: Vec::new(),
+        dirty: true,
+    });
 
     gamelog.entries.push(format!(
         "You descend to level {}. You feel slightly rejuvenated.",
@@ -495,27 +510,32 @@ fn setup_mapgen_visualization(
     }
 
     // Spawn UI showing builder name and controls
-    commands.spawn((
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(10.0),
-            left: Val::Px(10.0),
-            padding: UiRect::all(Val::Px(10.0)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
-        MapGenUI,
-    )).with_children(|parent| {
-        parent.spawn((
-            Text::new(format!("Builder: {}\n\nSpace: Regenerate\nEsc: Back", builder_name.0)),
-            TextFont {
-                font: font.0.clone(),
-                font_size: 16.0,
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                top: Val::Px(10.0),
+                left: Val::Px(10.0),
+                padding: UiRect::all(Val::Px(10.0)),
                 ..default()
             },
-            TextColor(Color::srgb(1.0, 1.0, 0.0)),
-        ));
-    });
+            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
+            MapGenUI,
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Text::new(format!(
+                    "Builder: {}\n\nSpace: Regenerate\nEsc: Back",
+                    builder_name.0
+                )),
+                TextFont {
+                    font: font.0.clone(),
+                    font_size: 16.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(1.0, 1.0, 0.0)),
+            ));
+        });
 }
 
 fn finalize_mapgen(
@@ -593,7 +613,14 @@ fn finalize_mapgen(
     // Spawn monsters and items in rooms (skip first room - player spawn)
     let mut monster_id: usize = 0;
     for room in spawn_data.spawn_regions.iter().skip(1) {
-        spawner::spawn_room(&mut commands, &mut rng, &text_font, room, &mut monster_id, spawn_data.depth);
+        spawner::spawn_room(
+            &mut commands,
+            &mut rng,
+            &text_font,
+            room,
+            &mut monster_id,
+            spawn_data.depth,
+        );
     }
 
     spawn_data.pending = false;
@@ -735,7 +762,7 @@ fn mapgen_input(
                 let was_pending = spawn_data.pending;
                 let mut builder = match selected_builder.0 {
                     Some(idx) => map_builders::builder_by_index(idx, 1),
-                    None => map_builders::random_builder(1, &mut rng),
+                    None => map_builders::default_builder(1),
                 };
                 builder_name.0 = builder.get_name().to_string();
                 builder.build_map(&mut rng);
@@ -751,37 +778,39 @@ fn mapgen_input(
                 timer.0.reset();
 
                 // Respawn UI with new builder name
-                commands.spawn((
-                    Node {
-                        position_type: PositionType::Absolute,
-                        top: Val::Px(10.0),
-                        left: Val::Px(10.0),
-                        padding: UiRect::all(Val::Px(10.0)),
-                        ..default()
-                    },
-                    BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
-                    MapGenUI,
-                )).with_children(|parent| {
-                    parent.spawn((
-                        Text::new(format!("Builder: {}\n\nSpace: Regenerate\nEsc: Back", builder_name.0)),
-                        TextFont {
-                            font: font.0.clone(),
-                            font_size: 16.0,
+                commands
+                    .spawn((
+                        Node {
+                            position_type: PositionType::Absolute,
+                            top: Val::Px(10.0),
+                            left: Val::Px(10.0),
+                            padding: UiRect::all(Val::Px(10.0)),
                             ..default()
                         },
-                        TextColor(Color::srgb(1.0, 1.0, 0.0)),
-                    ));
-                });
+                        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
+                        MapGenUI,
+                    ))
+                    .with_children(|parent| {
+                        parent.spawn((
+                            Text::new(format!(
+                                "Builder: {}\n\nSpace: Regenerate\nEsc: Back",
+                                builder_name.0
+                            )),
+                            TextFont {
+                                font: font.0.clone(),
+                                font_size: 16.0,
+                                ..default()
+                            },
+                            TextColor(Color::srgb(1.0, 1.0, 0.0)),
+                        ));
+                    });
             }
             _ => {}
         }
     }
 }
 
-fn cleanup_mapgen_ui(
-    mut commands: Commands,
-    ui_query: Query<Entity, With<MapGenUI>>,
-) {
+fn cleanup_mapgen_ui(mut commands: Commands, ui_query: Query<Entity, With<MapGenUI>>) {
     for entity in &ui_query {
         commands.entity(entity).despawn_recursive();
     }
