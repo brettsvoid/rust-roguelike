@@ -14,15 +14,24 @@ use crate::resources::{MenuBackground, UiFont};
 use crate::rng::GameRng;
 use crate::saveload;
 use crate::spawner;
-use crate::{RunState, TargetingInfo};
+use crate::{MapGenHistory, MapGenSpawnData, RunState, TargetingInfo, SHOW_MAPGEN_VISUALIZER};
 
 pub struct GuiPlugin;
 
 impl Plugin for GuiPlugin {
     fn build(&self, app: &mut App) {
+        // GUI updates only during actual gameplay (not during map generation visualization)
+        let in_gameplay = not(in_state(RunState::MainMenu))
+            .and(not(in_state(RunState::GameOver)))
+            .and(not(in_state(RunState::MapGeneration)));
+
         app.init_resource::<MenuPage>()
             .add_systems(Startup, setup_gui)
-            .add_systems(Update, (update_health_bar, update_depth, update_hunger_display, update_game_log, update_tooltip))
+            .add_systems(
+                Update,
+                (update_health_bar, update_depth, update_hunger_display, update_game_log, update_tooltip)
+                    .run_if(in_gameplay),
+            )
             // Main menu
             .add_systems(OnEnter(RunState::MainMenu), (cleanup_game_entities, spawn_main_menu).chain())
             .add_systems(OnExit(RunState::MainMenu), despawn_main_menu)
@@ -1328,12 +1337,27 @@ fn spawn_new_game(
     map: &mut ResMut<Map>,
     rng: &mut ResMut<GameRng>,
     font: &Res<UiFont>,
+    mapgen_history: &mut ResMut<MapGenHistory>,
+    spawn_data: &mut ResMut<MapGenSpawnData>,
 ) {
     // Generate new map using builder
     let mut builder = map_builders::random_builder(1);
     builder.build_map(rng);
     *map.as_mut() = builder.get_map();
 
+    // Store snapshot history for visualization
+    mapgen_history.0 = builder.get_snapshot_history();
+
+    // If visualizer is enabled, store spawn data for later and return
+    if SHOW_MAPGEN_VISUALIZER && !mapgen_history.0.is_empty() {
+        spawn_data.starting_pos = builder.get_starting_position();
+        spawn_data.spawn_regions = builder.get_spawn_regions();
+        spawn_data.depth = 1;
+        spawn_data.pending = true;
+        return;
+    }
+
+    // Visualizer disabled - spawn everything now
     let text_font = TextFont {
         font: font.0.clone(),
         font_size: FONT_SIZE,
@@ -1460,6 +1484,8 @@ fn handle_main_menu_input(
     mut game_log: ResMut<GameLog>,
     mut rng: ResMut<crate::rng::GameRng>,
     font: Res<UiFont>,
+    mut mapgen_history: ResMut<MapGenHistory>,
+    mut spawn_data: ResMut<MapGenSpawnData>,
 ) {
     for ev in evr_kbd.read() {
         if ev.state != ButtonState::Pressed {
@@ -1469,8 +1495,12 @@ fn handle_main_menu_input(
         match ev.key_code {
             KeyCode::KeyN => {
                 // New Game - spawn fresh game
-                spawn_new_game(&mut commands, &mut map, &mut rng, &font);
-                next_state.set(RunState::PreRun);
+                spawn_new_game(&mut commands, &mut map, &mut rng, &font, &mut mapgen_history, &mut spawn_data);
+                if SHOW_MAPGEN_VISUALIZER && !mapgen_history.0.is_empty() {
+                    next_state.set(RunState::MapGeneration);
+                } else {
+                    next_state.set(RunState::PreRun);
+                }
             }
             KeyCode::KeyC => {
                 // Continue - load from save file

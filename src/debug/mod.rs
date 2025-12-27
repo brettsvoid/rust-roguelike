@@ -4,6 +4,7 @@ mod overlays;
 mod resources;
 
 use bevy::prelude::*;
+use crate::RunState;
 
 pub use resources::{DebugMode, DebugState, GodMode};
 
@@ -14,9 +15,12 @@ impl Plugin for DebugPlugin {
         app.init_resource::<DebugMode>()
             .init_resource::<DebugState>()
             .init_resource::<GodMode>()
-            // Master toggle always runs
-            .add_systems(Update, overlays::toggle_debug_mode)
-            // Debug systems only run when debug is enabled
+            // Master toggle always runs (except during map generation)
+            .add_systems(
+                Update,
+                overlays::toggle_debug_mode.run_if(not(in_state(RunState::MapGeneration))),
+            )
+            // Debug systems only run when debug is enabled and not in map generation
             .add_systems(
                 Update,
                 (
@@ -28,7 +32,7 @@ impl Plugin for DebugPlugin {
                     console::update_console,
                     console::handle_console_input,
                 )
-                    .run_if(debug_enabled),
+                    .run_if(debug_enabled.and(not(in_state(RunState::MapGeneration)))),
             );
     }
 }

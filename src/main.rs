@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use bevy::prelude::*;
+use bevy::time::{Timer, TimerMode};
 use map::{MapPlugin, GRID_PX, MAP_WIDTH};
 use monsters::MonstersPlugin;
 use player::PlayerPlugin;
@@ -36,10 +37,13 @@ const RESOLUTION: Vec2 = Vec2 {
     y: SCREEN_HEIGHT as f32 * GRID_PX.y,
 };
 
+pub const SHOW_MAPGEN_VISUALIZER: bool = true;
+
 #[derive(States, Clone, Copy, Default, Eq, PartialEq, Debug, Hash)]
 pub enum RunState {
     #[default]
     MainMenu,
+    MapGeneration,
     PreRun,
     AwaitingInput,
     PlayerTurn,
@@ -65,6 +69,30 @@ pub struct TargetingInfo {
     pub item: Option<Entity>,
 }
 
+// Map generation visualization resources
+#[derive(Resource, Default)]
+pub struct MapGenHistory(pub Vec<map::Map>);
+
+#[derive(Resource, Default)]
+pub struct MapGenIndex(pub usize);
+
+#[derive(Resource)]
+pub struct MapGenTimer(pub Timer);
+
+impl Default for MapGenTimer {
+    fn default() -> Self {
+        Self(Timer::from_seconds(0.5, TimerMode::Repeating))
+    }
+}
+
+#[derive(Resource, Default)]
+pub struct MapGenSpawnData {
+    pub starting_pos: (i32, i32),
+    pub spawn_regions: Vec<shapes::Rect>,
+    pub depth: i32,
+    pub pending: bool,
+}
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -82,6 +110,10 @@ fn main() {
         .init_resource::<MagicMapRevealRow>()
         .init_resource::<PendingMagicMap>()
         .init_resource::<particle::ParticleBuilder>()
+        .init_resource::<MapGenHistory>()
+        .init_resource::<MapGenIndex>()
+        .init_resource::<MapGenTimer>()
+        .init_resource::<MapGenSpawnData>()
         .add_event::<AppExit>()
         .add_plugins((
             ResourcesPlugin,
@@ -93,13 +125,24 @@ fn main() {
             debug::DebugPlugin,
         ))
         .add_systems(Startup, setup)
-        .add_systems(Update, (
-            map_indexing::map_indexing_system,
-            handle_exit,
-            particle::particle_spawn_system,
-            particle::particle_cull_system,
-            traps::reveal_hidden_system,
-        ))
+        .add_systems(Update, handle_exit)
+        .add_systems(
+            Update,
+            (
+                map_indexing::map_indexing_system,
+                particle::particle_spawn_system,
+                particle::particle_cull_system,
+                traps::reveal_hidden_system,
+            )
+                .run_if(not(in_state(RunState::MapGeneration))),
+        )
+        // MapGeneration: visualize map building
+        .add_systems(OnEnter(RunState::MapGeneration), setup_mapgen_visualization)
+        .add_systems(
+            Update,
+            mapgen_visualization.run_if(in_state(RunState::MapGeneration)),
+        )
+        .add_systems(OnExit(RunState::MapGeneration), finalize_mapgen)
         // PreRun: run systems then transition to AwaitingInput
         .add_systems(
             Update,
@@ -413,6 +456,193 @@ fn magic_map_reveal(
     }
 
     reveal_row.0 += 1;
+}
+
+fn setup_mapgen_visualization(
+    mut commands: Commands,
+    mut index: ResMut<MapGenIndex>,
+    mut timer: ResMut<MapGenTimer>,
+    // Despawn all text entities to ensure clean slate
+    text_query: Query<Entity, With<Text2d>>,
+) {
+    index.0 = 0;
+    timer.0.reset();
+
+    // Despawn any existing text entities before visualization starts
+    for entity in &text_query {
+        commands.entity(entity).despawn();
+    }
+}
+
+fn finalize_mapgen(
+    mut commands: Commands,
+    mut spawn_data: ResMut<MapGenSpawnData>,
+    mut rng: ResMut<rng::GameRng>,
+    font: Res<resources::UiFont>,
+    map: Res<map::Map>,
+    tile_query: Query<Entity, With<map::Tile>>,
+) {
+    if !spawn_data.pending {
+        return;
+    }
+
+    // Despawn visualization tiles
+    for entity in &tile_query {
+        commands.entity(entity).despawn();
+    }
+
+    // Spawn final map tiles with proper hidden state
+    let text_font = TextFont {
+        font: font.0.clone(),
+        font_size: map::FONT_SIZE,
+        ..default()
+    };
+
+    for y in 0..map::MAP_HEIGHT as i32 {
+        for x in 0..map::MAP_WIDTH as i32 {
+            let idx = map.xy_idx(x, y);
+            let tile = map.tiles[idx];
+
+            match tile {
+                map::TileType::Floor => {
+                    commands.spawn((
+                        map::Tile,
+                        map::Position { x, y },
+                        Text2d::new("."),
+                        text_font.clone(),
+                        TextColor(Color::srgb(0.5, 0.5, 0.5)),
+                        map::Revealed(map::RevealedState::Hidden),
+                    ));
+                }
+                map::TileType::Wall => {
+                    if map.is_adjacent_to_floor(x, y) {
+                        let glyph = map.wall_glyph_at(x, y);
+                        commands.spawn((
+                            map::Tile,
+                            map::Position { x, y },
+                            glyph,
+                            Text2d::new(glyph.to_char().to_string()),
+                            text_font.clone(),
+                            TextColor(Color::srgb(0.0, 1.0, 0.0)),
+                            map::Revealed(map::RevealedState::Hidden),
+                        ));
+                    }
+                }
+                map::TileType::DownStairs => {
+                    commands.spawn((
+                        map::Tile,
+                        map::Position { x, y },
+                        Text2d::new(">"),
+                        text_font.clone(),
+                        TextColor(Color::srgb(0.0, 1.0, 1.0)),
+                        map::Revealed(map::RevealedState::Hidden),
+                    ));
+                }
+            }
+        }
+    }
+
+    // Spawn player at starting position
+    let (player_x, player_y) = spawn_data.starting_pos;
+    spawner::spawn_player(&mut commands, &text_font, player_x, player_y);
+
+    // Spawn monsters and items in rooms (skip first room - player spawn)
+    let mut monster_id: usize = 0;
+    for room in spawn_data.spawn_regions.iter().skip(1) {
+        spawner::spawn_room(&mut commands, &mut rng, &text_font, room, &mut monster_id, spawn_data.depth);
+    }
+
+    spawn_data.pending = false;
+}
+
+fn mapgen_visualization(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut timer: ResMut<MapGenTimer>,
+    mut index: ResMut<MapGenIndex>,
+    history: Res<MapGenHistory>,
+    font: Res<resources::UiFont>,
+    tile_query: Query<Entity, With<map::Tile>>,
+) {
+    timer.0.tick(time.delta());
+
+    if !timer.0.just_finished() {
+        return;
+    }
+
+    if index.0 >= history.0.len() {
+        // Done - just stay on final frame (press Q to exit)
+        return;
+    }
+
+    // Get current snapshot
+    let snapshot = &history.0[index.0];
+
+    // Skip snapshots with no floors (nothing interesting to show)
+    let has_floors = snapshot.tiles.iter().any(|t| *t == map::TileType::Floor);
+    if !has_floors {
+        index.0 += 1;
+        return;
+    }
+
+    // Despawn existing tiles before spawning new ones
+    for entity in &tile_query {
+        commands.entity(entity).despawn();
+    }
+
+    // Spawn tiles for this snapshot
+    let text_font = TextFont {
+        font: font.0.clone(),
+        font_size: map::FONT_SIZE,
+        ..default()
+    };
+
+    // Show only floors and walls during visualization (no stairs - they're gameplay elements)
+    for y in 0..map::MAP_HEIGHT as i32 {
+        for x in 0..map::MAP_WIDTH as i32 {
+            let idx = snapshot.xy_idx(x, y);
+            match snapshot.tiles[idx] {
+                map::TileType::Floor => {
+                    commands.spawn((
+                        map::Tile,
+                        map::Position { x, y },
+                        Text2d::new("."),
+                        text_font.clone(),
+                        TextColor(Color::srgb(0.5, 0.5, 0.5)),
+                        map::Revealed(map::RevealedState::Visible),
+                    ));
+                }
+                map::TileType::Wall => {
+                    // Only show walls adjacent to floors
+                    if snapshot.is_adjacent_to_floor(x, y) {
+                        let glyph = snapshot.wall_glyph_at(x, y);
+                        commands.spawn((
+                            map::Tile,
+                            map::Position { x, y },
+                            glyph,
+                            Text2d::new(glyph.to_char().to_string()),
+                            text_font.clone(),
+                            TextColor(Color::srgb(0.0, 1.0, 0.0)),
+                            map::Revealed(map::RevealedState::Visible),
+                        ));
+                    }
+                }
+                map::TileType::DownStairs => {
+                    // Don't show stairs during visualization - treat as floor visually
+                    commands.spawn((
+                        map::Tile,
+                        map::Position { x, y },
+                        Text2d::new("."),
+                        text_font.clone(),
+                        TextColor(Color::srgb(0.5, 0.5, 0.5)),
+                        map::Revealed(map::RevealedState::Visible),
+                    ));
+                }
+            }
+        }
+    }
+
+    index.0 += 1;
 }
 
 fn run_loop(mut app: App) -> AppExit {

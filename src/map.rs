@@ -312,18 +312,22 @@ impl Default for Map {
 pub struct MapPlugin;
 impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
-        // Run condition: only when player exists (not in MainMenu or GameOver)
-        let has_player = not(in_state(RunState::MainMenu)).and(not(in_state(RunState::GameOver)));
+        // Run condition: only during actual gameplay (not menus, game over, or map generation)
+        let in_gameplay = not(in_state(RunState::MainMenu))
+            .and(not(in_state(RunState::GameOver)))
+            .and(not(in_state(RunState::MapGeneration)));
 
         app.init_resource::<Map>().add_systems(
             Update,
             (
+                // translate_positions always runs (needed for visualization too)
                 translate_positions,
-                update_revealed_state,
-                update_revealed_tiles.run_if(has_player.clone()),
-                update_visible_tiles.run_if(has_player.clone()),
-                update_renderable_visibility,
-                update_bloodstains,
+                // These only run during actual gameplay
+                update_revealed_state.run_if(in_gameplay.clone()),
+                update_revealed_tiles.run_if(in_gameplay.clone()),
+                update_visible_tiles.run_if(in_gameplay.clone()),
+                update_renderable_visibility.run_if(in_gameplay.clone()),
+                update_bloodstains.run_if(in_gameplay.clone()),
             ),
         );
     }
