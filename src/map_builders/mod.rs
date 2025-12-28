@@ -3,11 +3,16 @@ mod bsp_dungeon;
 mod bsp_interior;
 mod cellular_automata;
 mod common;
+mod corridors;
 mod dla;
 mod drunkard;
+mod erosion;
 mod maze;
 mod prefab;
 mod room_based;
+mod room_modifiers;
+mod room_sorter;
+mod rooms_only;
 mod simple_map;
 mod voronoi;
 mod wfc;
@@ -19,15 +24,22 @@ use crate::map::Map;
 use crate::rng::GameRng;
 use crate::shapes::Rect;
 
-pub use area_based::{AreaStartingPosition, CullUnreachable, DistantExit, VoronoiSpawning, XStart, YStart};
+pub use area_based::{
+    AreaStartingPosition, CullUnreachable, DistantExit, VoronoiSpawning, XStart, YStart,
+};
 pub use bsp_dungeon::BspDungeonBuilder;
 pub use bsp_interior::BspInteriorBuilder;
 pub use cellular_automata::CellularAutomataBuilder;
+pub use corridors::{BspCorridors, DoglegCorridors, NearestCorridors, StraightLineCorridors};
 pub use dla::DLABuilder;
 pub use drunkard::DrunkardsWalkBuilder;
+pub use erosion::{CellularAutomataEroder, DrunkardsWalkEroder};
 pub use maze::MazeBuilder;
 pub use prefab::{PrefabBuilder, PrefabMetaBuilder, CORNER_FORT};
 pub use room_based::{RoomBasedSpawner, RoomBasedStairs, RoomBasedStartingPosition};
+pub use room_modifiers::{RoomCornerRounder, RoomDrawer, RoomExploder};
+pub use room_sorter::{RoomSort, RoomSorter};
+pub use rooms_only::{BspRoomsBuilder, SimpleMapRoomsBuilder};
 pub use simple_map::SimpleMapBuilder;
 pub use voronoi::VoronoiCellBuilder;
 pub use wfc::WfcBuilder;
@@ -123,73 +135,72 @@ impl BuilderType {
             // Room-based builders - use room-based meta builders for starting position/stairs
             BuilderType::SimpleMap => Box::new(
                 BuilderChain::new(depth, "Simple Map")
-                    .start_with(Box::new(SimpleMapBuilder::new(depth)))
+                    .start_with(Box::new(SimpleMapBuilder::new(depth))),
             ),
             BuilderType::BspDungeon => Box::new(
                 BuilderChain::new(depth, "BSP Dungeon")
-                    .start_with(Box::new(BspDungeonBuilder::new(depth)))
+                    .start_with(Box::new(BspDungeonBuilder::new(depth))),
             ),
             BuilderType::BspInterior => Box::new(
                 BuilderChain::new(depth, "BSP Interior")
-                    .start_with(Box::new(BspInteriorBuilder::new(depth)))
+                    .start_with(Box::new(BspInteriorBuilder::new(depth))),
             ),
 
             // Area-based builders - use area-based meta builders
             BuilderType::CellularAutomata => Box::new(
                 BuilderChain::new(depth, "Cellular Automata")
-                    .start_with(Box::new(CellularAutomataBuilder::new(depth)))
+                    .start_with(Box::new(CellularAutomataBuilder::new(depth))),
             ),
             BuilderType::DrunkardOpenArea => Box::new(
                 BuilderChain::new(depth, "Drunkard (Open Area)")
-                    .start_with(Box::new(DrunkardsWalkBuilder::open_area(depth)))
+                    .start_with(Box::new(DrunkardsWalkBuilder::open_area(depth))),
             ),
             BuilderType::DrunkardOpenHalls => Box::new(
                 BuilderChain::new(depth, "Drunkard (Open Halls)")
-                    .start_with(Box::new(DrunkardsWalkBuilder::open_halls(depth)))
+                    .start_with(Box::new(DrunkardsWalkBuilder::open_halls(depth))),
             ),
             BuilderType::DrunkardWinding => Box::new(
                 BuilderChain::new(depth, "Drunkard (Winding)")
-                    .start_with(Box::new(DrunkardsWalkBuilder::winding_passages(depth)))
+                    .start_with(Box::new(DrunkardsWalkBuilder::winding_passages(depth))),
             ),
             BuilderType::DrunkardFatPassages => Box::new(
                 BuilderChain::new(depth, "Drunkard (Fat Passages)")
-                    .start_with(Box::new(DrunkardsWalkBuilder::fat_passages(depth)))
+                    .start_with(Box::new(DrunkardsWalkBuilder::fat_passages(depth))),
             ),
             BuilderType::DrunkardSymmetry => Box::new(
                 BuilderChain::new(depth, "Drunkard (Symmetry)")
-                    .start_with(Box::new(DrunkardsWalkBuilder::fearful_symmetry(depth)))
+                    .start_with(Box::new(DrunkardsWalkBuilder::fearful_symmetry(depth))),
             ),
             BuilderType::Maze => Box::new(
-                BuilderChain::new(depth, "Maze")
-                    .start_with(Box::new(MazeBuilder::new(depth)))
+                BuilderChain::new(depth, "Maze").start_with(Box::new(MazeBuilder::new(depth))),
             ),
             BuilderType::DlaWalkInwards => Box::new(
                 BuilderChain::new(depth, "DLA (Walk Inwards)")
-                    .start_with(Box::new(DLABuilder::walk_inwards(depth)))
+                    .start_with(Box::new(DLABuilder::walk_inwards(depth))),
             ),
             BuilderType::DlaWalkOutwards => Box::new(
                 BuilderChain::new(depth, "DLA (Walk Outwards)")
-                    .start_with(Box::new(DLABuilder::walk_outwards(depth)))
+                    .start_with(Box::new(DLABuilder::walk_outwards(depth))),
             ),
             BuilderType::DlaCentralAttractor => Box::new(
                 BuilderChain::new(depth, "DLA (Central Attractor)")
-                    .start_with(Box::new(DLABuilder::central_attractor(depth)))
+                    .start_with(Box::new(DLABuilder::central_attractor(depth))),
             ),
             BuilderType::DlaInsectoid => Box::new(
                 BuilderChain::new(depth, "DLA (Insectoid)")
-                    .start_with(Box::new(DLABuilder::insectoid(depth)))
+                    .start_with(Box::new(DLABuilder::insectoid(depth))),
             ),
             BuilderType::VoronoiEuclidean => Box::new(
                 BuilderChain::new(depth, "Voronoi (Euclidean)")
-                    .start_with(Box::new(VoronoiCellBuilder::euclidean(depth)))
+                    .start_with(Box::new(VoronoiCellBuilder::euclidean(depth))),
             ),
             BuilderType::VoronoiManhattan => Box::new(
                 BuilderChain::new(depth, "Voronoi (Manhattan)")
-                    .start_with(Box::new(VoronoiCellBuilder::manhattan(depth)))
+                    .start_with(Box::new(VoronoiCellBuilder::manhattan(depth))),
             ),
             BuilderType::VoronoiChebyshev => Box::new(
                 BuilderChain::new(depth, "Voronoi (Chebyshev)")
-                    .start_with(Box::new(VoronoiCellBuilder::chebyshev(depth)))
+                    .start_with(Box::new(VoronoiCellBuilder::chebyshev(depth))),
             ),
 
             // WFC builders - use source builder + WFC as meta builder
@@ -200,7 +211,7 @@ impl BuilderType {
                     .with(CullUnreachable::new())
                     .with(DistantExit::new())
                     .with(AreaStartingPosition::new(XStart::Center, YStart::Center))
-                    .with(VoronoiSpawning::new())
+                    .with(VoronoiSpawning::new()),
             ),
             BuilderType::WfcBspDungeon => Box::new(
                 BuilderChain::new(depth, "WFC (BSP Dungeon)")
@@ -209,7 +220,7 @@ impl BuilderType {
                     .with(CullUnreachable::new())
                     .with(DistantExit::new())
                     .with(AreaStartingPosition::new(XStart::Center, YStart::Center))
-                    .with(VoronoiSpawning::new())
+                    .with(VoronoiSpawning::new()),
             ),
             BuilderType::WfcBspInterior => Box::new(
                 BuilderChain::new(depth, "WFC (BSP Interior)")
@@ -218,7 +229,7 @@ impl BuilderType {
                     .with(CullUnreachable::new())
                     .with(DistantExit::new())
                     .with(AreaStartingPosition::new(XStart::Center, YStart::Center))
-                    .with(VoronoiSpawning::new())
+                    .with(VoronoiSpawning::new()),
             ),
             BuilderType::WfcDla => Box::new(
                 BuilderChain::new(depth, "WFC (DLA)")
@@ -227,19 +238,19 @@ impl BuilderType {
                     .with(CullUnreachable::new())
                     .with(DistantExit::new())
                     .with(AreaStartingPosition::new(XStart::Center, YStart::Center))
-                    .with(VoronoiSpawning::new())
+                    .with(VoronoiSpawning::new()),
             ),
 
             // Prefab builders - use base builder + prefab meta builder
             BuilderType::PrefabVaults => Box::new(
                 BuilderChain::new(depth, "Prefab (Vaults)")
                     .start_with(Box::new(CellularAutomataBuilder::new(depth)))
-                    .with(PrefabMetaBuilder::vaults())
+                    .with(PrefabMetaBuilder::vaults()),
             ),
             BuilderType::PrefabSectional => Box::new(
                 BuilderChain::new(depth, "Prefab (Sectional)")
                     .start_with(Box::new(CellularAutomataBuilder::new(depth)))
-                    .with(PrefabMetaBuilder::sectional(CORNER_FORT.clone()))
+                    .with(PrefabMetaBuilder::sectional(CORNER_FORT.clone())),
             ),
         }
     }
@@ -368,7 +379,14 @@ impl MapBuilder for BuilderChain {
         if let Some(ref rooms) = self.build_data.rooms {
             let mut monster_id: usize = 0;
             for room in rooms.iter().skip(1) {
-                crate::spawner::spawn_room(commands, rng, font, room, &mut monster_id, self.build_data.depth);
+                crate::spawner::spawn_room(
+                    commands,
+                    rng,
+                    font,
+                    room,
+                    &mut monster_id,
+                    self.build_data.depth,
+                );
             }
         }
 
@@ -385,7 +403,9 @@ impl MapBuilder for BuilderChain {
     }
 
     fn get_starting_position(&self) -> (i32, i32) {
-        self.build_data.starting_position.unwrap_or((MAP_WIDTH as i32 / 2, MAP_HEIGHT as i32 / 2))
+        self.build_data
+            .starting_position
+            .unwrap_or((MAP_WIDTH as i32 / 2, MAP_HEIGHT as i32 / 2))
     }
 
     fn get_snapshot_history(&self) -> Vec<Map> {
@@ -406,12 +426,161 @@ impl MapBuilder for BuilderChain {
 }
 
 pub fn random_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
-    let index = rng.0.gen_range(0..BuilderType::ALL.len());
-    BuilderType::ALL[index].create(depth)
+    let roll = rng.0.gen_range(0..100);
+
+    match roll {
+        // 20% - Traditional builders (existing BuilderType)
+        0..=19 => {
+            let index = rng.0.gen_range(0..BuilderType::ALL.len());
+            BuilderType::ALL[index].create(depth)
+        }
+        // 25% - Layered room builders with various corridor types
+        20..=44 => random_room_builder(depth, rng),
+        // 25% - Exploded/modified room builders
+        45..=69 => random_modified_room_builder(depth, rng),
+        // 20% - Erosion-enhanced builders
+        70..=89 => random_eroded_builder(depth, rng),
+        // 10% - Complex layered combinations
+        _ => random_complex_builder(depth, rng),
+    }
+}
+
+/// Generates a layered room builder with sorted rooms and corridors
+fn random_room_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
+    // Pick room generator
+    let room_builder: Box<dyn InitialMapBuilder> = if rng.0.gen_bool(0.5) {
+        Box::new(SimpleMapRoomsBuilder::new(depth))
+    } else {
+        Box::new(BspRoomsBuilder::new(depth))
+    };
+
+    // Pick sorting strategy
+    let sort_strategies = [
+        RoomSort::Leftmost,
+        RoomSort::Rightmost,
+        RoomSort::Topmost,
+        RoomSort::Bottommost,
+        RoomSort::Central,
+    ];
+    let sort = sort_strategies[rng.0.gen_range(0..sort_strategies.len())];
+
+    // Pick corridor type
+    let corridor_roll = rng.0.gen_range(0..4);
+
+    let mut chain = BuilderChain::new(depth, "Random Room Builder")
+        .start_with(room_builder)
+        .with(RoomSorter::new(sort));
+
+    chain = match corridor_roll {
+        0 => chain.with(DoglegCorridors::new()),
+        1 => chain.with(BspCorridors::new()),
+        2 => chain.with(StraightLineCorridors::new()),
+        _ => chain.with(NearestCorridors::new()),
+    };
+
+    chain = chain
+        .with(RoomBasedStartingPosition::new())
+        .with(RoomBasedStairs::new())
+        .with(RoomBasedSpawner::new());
+
+    Box::new(chain)
+}
+
+/// Generates a room builder with explosions or corner rounding
+fn random_modified_room_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
+    let room_builder: Box<dyn InitialMapBuilder> = if rng.0.gen_bool(0.5) {
+        Box::new(SimpleMapRoomsBuilder::new(depth))
+    } else {
+        Box::new(BspRoomsBuilder::new(depth))
+    };
+
+    let mut chain = BuilderChain::new(depth, "Modified Room Builder").start_with(room_builder);
+
+    // Apply modifiers
+    if rng.0.gen_bool(0.6) {
+        chain = chain.with(RoomExploder::new());
+    }
+    if rng.0.gen_bool(0.4) {
+        chain = chain.with(RoomCornerRounder::new());
+    }
+
+    // Sort and connect
+    chain = chain
+        .with(RoomSorter::new(RoomSort::Central))
+        .with(DoglegCorridors::new())
+        .with(RoomBasedStartingPosition::new())
+        .with(RoomBasedStairs::new())
+        .with(RoomBasedSpawner::new());
+
+    Box::new(chain)
+}
+
+/// Generates a builder with erosion post-processing
+fn random_eroded_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
+    let room_builder: Box<dyn InitialMapBuilder> = if rng.0.gen_bool(0.5) {
+        Box::new(SimpleMapRoomsBuilder::new(depth))
+    } else {
+        Box::new(BspRoomsBuilder::new(depth))
+    };
+
+    let mut chain = BuilderChain::new(depth, "Eroded Builder")
+        .start_with(room_builder)
+        .with(RoomSorter::new(RoomSort::Leftmost))
+        .with(BspCorridors::new());
+
+    // Apply erosion
+    if rng.0.gen_bool(0.5) {
+        chain = chain.with(CellularAutomataEroder::new());
+    } else {
+        chain = chain.with(DrunkardsWalkEroder::light());
+    }
+
+    // Use area-based finishing since erosion may disconnect rooms
+    chain = chain
+        .with(CullUnreachable::new())
+        .with(AreaStartingPosition::new(XStart::Center, YStart::Center))
+        .with(DistantExit::new())
+        .with(VoronoiSpawning::new());
+
+    Box::new(chain)
+}
+
+/// Generates complex layered combinations
+fn random_complex_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
+    let room_builder: Box<dyn InitialMapBuilder> = Box::new(BspRoomsBuilder::new(depth));
+
+    let mut chain = BuilderChain::new(depth, "Complex Builder")
+        .start_with(room_builder)
+        .with(RoomExploder::new())
+        .with(RoomCornerRounder::new())
+        .with(RoomSorter::new(RoomSort::Central))
+        .with(NearestCorridors::new())
+        .with(CellularAutomataEroder::with_iterations(2))
+        .with(CullUnreachable::new())
+        .with(AreaStartingPosition::new(XStart::Center, YStart::Center))
+        .with(DistantExit::new());
+
+    // Maybe add prefabs
+    if rng.0.gen_bool(0.3) {
+        chain = chain.with(PrefabMetaBuilder::vaults());
+    }
+
+    chain = chain.with(VoronoiSpawning::new());
+
+    Box::new(chain)
 }
 
 /// The default builder used for new games and level transitions.
 /// Change this one line to use a different map generator everywhere.
 pub fn default_builder(depth: i32) -> Box<dyn MapBuilder> {
-    BuilderType::BspDungeon.create(depth)
+    Box::new(
+        BuilderChain::new(depth, "Layered Dungeon")
+            .start_with(Box::new(SimpleMapBuilder::new(depth)))
+            .with(RoomExploder::new())
+            .with(RoomSorter::new(RoomSort::Central))
+            .with(DoglegCorridors::new())
+            .with(RoomBasedStartingPosition::new())
+            .with(RoomBasedStairs::new())
+            .with(RoomBasedSpawner::new()),
+    )
 }
