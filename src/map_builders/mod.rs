@@ -37,7 +37,7 @@ pub use erosion::{CellularAutomataEroder, DrunkardsWalkEroder};
 pub use maze::MazeBuilder;
 pub use prefab::{PrefabBuilder, PrefabMetaBuilder, CORNER_FORT};
 pub use room_based::{RoomBasedSpawner, RoomBasedStairs, RoomBasedStartingPosition};
-pub use room_modifiers::{RoomCornerRounder, RoomDrawer, RoomExploder};
+pub use room_modifiers::{RoomCornerRounder, RoomDrawer, RoomExploder, RoomShape};
 pub use room_sorter::{RoomSort, RoomSorter};
 pub use rooms_only::{BspRoomsBuilder, SimpleMapRoomsBuilder};
 pub use simple_map::SimpleMapBuilder;
