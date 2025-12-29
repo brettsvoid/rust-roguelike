@@ -103,6 +103,7 @@ pub struct Map {
     pub revealed_tiles: Vec<bool>,
     pub visible_tiles: Vec<bool>,
     pub blocked_tiles: Vec<bool>,
+    pub view_blocked: HashSet<usize>,
     pub tile_content: Vec<Vec<Entity>>,
     pub bloodstains: HashSet<usize>,
 }
@@ -118,6 +119,7 @@ impl Map {
             revealed_tiles: vec![false; size],
             visible_tiles: vec![false; size],
             blocked_tiles: vec![false; size],
+            view_blocked: HashSet::new(),
             tile_content: vec![Vec::new(); size],
             bloodstains: HashSet::new(),
         }

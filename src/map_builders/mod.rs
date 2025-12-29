@@ -5,6 +5,7 @@ mod cellular_automata;
 mod common;
 mod corridors;
 mod dla;
+mod doors;
 mod drunkard;
 mod erosion;
 mod maze;
@@ -32,6 +33,7 @@ pub use bsp_interior::BspInteriorBuilder;
 pub use cellular_automata::CellularAutomataBuilder;
 pub use corridors::{BspCorridors, CorridorSpawner, DoglegCorridors, NearestCorridors, StraightLineCorridors};
 pub use dla::DLABuilder;
+pub use doors::DoorPlacement;
 pub use drunkard::DrunkardsWalkBuilder;
 pub use erosion::{CellularAutomataEroder, DrunkardsWalkEroder};
 pub use maze::MazeBuilder;
@@ -577,10 +579,10 @@ fn random_complex_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> 
 pub fn default_builder(depth: i32) -> Box<dyn MapBuilder> {
     Box::new(
         BuilderChain::new(depth, "Layered Dungeon")
-            .start_with(Box::new(SimpleMapBuilder::new(depth)))
-            .with(RoomExploder::new())
+            .start_with(Box::new(SimpleMapRoomsBuilder::new(depth)))
             .with(RoomSorter::new(RoomSort::Central))
             .with(DoglegCorridors::new())
+            .with(DoorPlacement::new())
             .with(RoomBasedStartingPosition::new())
             .with(RoomBasedStairs::new())
             .with(RoomBasedSpawner::new()),

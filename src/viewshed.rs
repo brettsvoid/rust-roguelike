@@ -20,7 +20,8 @@ impl Plugin for ViewshedPlugin {
 fn update_viewshed(map: Res<Map>, mut query: Query<(&Position, &mut Viewshed)>) {
     let is_opaque = |x: i32, y: i32| {
         let idx = map.xy_idx(x, y);
-        matches!(map.tiles[idx], TileType::Wall)
+        // Block visibility for walls and entities with BlocksVisibility
+        matches!(map.tiles[idx], TileType::Wall) || map.view_blocked.contains(&idx)
     };
 
     for (pos, mut viewshed) in &mut query {

@@ -170,3 +170,12 @@ pub struct EntryTrigger;
 
 #[derive(Component, Debug)]
 pub struct SingleActivation;
+
+// Door system
+#[derive(Component, Debug)]
+pub struct Door {
+    pub open: bool,
+}
+
+#[derive(Component, Debug)]
+pub struct BlocksVisibility;

@@ -547,6 +547,8 @@ pub fn spawn_by_name(
         "Tower Shield" => spawner::spawn_tower_shield(commands, font, x, y),
         // Traps
         "Bear Trap" => spawner::spawn_bear_trap(commands, font, x, y),
+        // Doors
+        "Door" => spawner::spawn_door(commands, font, x, y),
         _ => {}
     }
 }

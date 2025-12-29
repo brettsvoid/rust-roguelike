@@ -4,10 +4,10 @@ use rand::Rng;
 use crate::{
     combat::CombatStats,
     components::{
-        AreaOfEffect, BlocksTile, CausesConfusion, Consumable, DefenseBonus, EntryTrigger,
-        EquipmentSlot, Equippable, Hidden, HungerClock, HungerState, InflictsDamage, Item,
-        MagicMapper, MeleePowerBonus, Name, ProvidesFood, ProvidesHealing, Ranged, RenderOrder,
-        RenderableBundle, SingleActivation, Targeting,
+        AreaOfEffect, BlocksTile, BlocksVisibility, CausesConfusion, Consumable, DefenseBonus,
+        Door, EntryTrigger, EquipmentSlot, Equippable, Hidden, HungerClock, HungerState,
+        InflictsDamage, Item, MagicMapper, MeleePowerBonus, Name, ProvidesFood, ProvidesHealing,
+        Ranged, RenderOrder, RenderableBundle, SingleActivation, Targeting,
     },
     map::{Position, MAP_WIDTH},
     monsters::Monster,
@@ -526,6 +526,25 @@ pub fn spawn_bear_trap(commands: &mut Commands, font: &TextFont, x: i32, y: i32)
         RenderableBundle::new(
             "^",
             palettes::basic::RED.into(),
+            palettes::basic::BLACK.into(),
+            RenderOrder::ITEM,
+            font,
+        ),
+    ));
+}
+
+pub fn spawn_door(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
+    commands.spawn((
+        Door { open: false },
+        Name {
+            name: "Door".to_string(),
+        },
+        Position { x, y },
+        BlocksTile,
+        BlocksVisibility,
+        RenderableBundle::new(
+            "+",
+            palettes::css::CHOCOLATE.into(),
             palettes::basic::BLACK.into(),
             RenderOrder::ITEM,
             font,

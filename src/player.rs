@@ -5,7 +5,7 @@ use bevy::{
 
 use crate::{
     combat::{CombatStats, WantsToMelee},
-    components::{HungerClock, HungerState, Item, WantsToPickupItem},
+    components::{BlocksTile, BlocksVisibility, Door, HungerClock, HungerState, Item, WantsToPickupItem},
     debug::DebugMode,
     gamelog::GameLog,
     map::{xy_idx, Map, Position, TileType},
@@ -27,12 +27,14 @@ impl Plugin for PlayerPlugin {
 
 fn try_move_player(
     commands: &mut Commands,
+    gamelog: &mut GameLog,
     map: &Map,
     player_entity: Entity,
     pos: &mut Position,
     delta_x: i32,
     delta_y: i32,
     combat_stats: &Query<&CombatStats, Without<Player>>,
+    doors: &mut Query<(Entity, &mut Door, &mut Text2d), Without<Player>>,
 ) {
     let destination_idx = xy_idx(pos.x + delta_x, pos.y + delta_y);
 
@@ -43,6 +45,21 @@ fn try_move_player(
                 target: *potential_target,
             });
             return; // So we don't move after attacking
+        }
+    }
+
+    // Check for doors
+    for potential_door in map.tile_content[destination_idx].iter() {
+        if let Ok((door_entity, mut door, mut door_glyph)) = doors.get_mut(*potential_door) {
+            if !door.open {
+                // Open the door
+                door.open = true;
+                door_glyph.0 = "/".to_string();
+                commands.entity(door_entity).remove::<BlocksTile>();
+                commands.entity(door_entity).remove::<BlocksVisibility>();
+                gamelog.entries.push("You open the door.".to_string());
+                return; // Opening a door takes a turn
+            }
         }
     }
 
@@ -83,6 +100,7 @@ fn handle_player_input(
     other_combat_stats: Query<&CombatStats, Without<Player>>,
     items: Query<(Entity, &Position), (With<Item>, Without<Player>)>,
     monsters: Query<&Position, (With<Monster>, Without<Player>)>,
+    mut doors: Query<(Entity, &mut Door, &mut Text2d), Without<Player>>,
 ) {
     // Don't process player input if debug console is open
     if debug_mode.show_console {
@@ -107,33 +125,37 @@ fn handle_player_input(
             KeyCode::ArrowLeft | KeyCode::KeyH | KeyCode::Numpad4 => {
                 try_move_player(
                     &mut commands,
+                    &mut gamelog,
                     &map,
                     player_entity,
                     pos,
                     -1,
                     0,
                     &other_combat_stats,
+                    &mut doors,
                 );
                 player_acted = true;
             }
             KeyCode::ArrowRight | KeyCode::KeyL | KeyCode::Numpad6 => {
-                try_move_player(&mut commands, &map, player_entity, pos, 1, 0, &other_combat_stats);
+                try_move_player(&mut commands, &mut gamelog, &map, player_entity, pos, 1, 0, &other_combat_stats, &mut doors);
                 player_acted = true;
             }
             KeyCode::ArrowUp | KeyCode::KeyK | KeyCode::Numpad8 => {
                 try_move_player(
                     &mut commands,
+                    &mut gamelog,
                     &map,
                     player_entity,
                     pos,
                     0,
                     -1,
                     &other_combat_stats,
+                    &mut doors,
                 );
                 player_acted = true;
             }
             KeyCode::ArrowDown | KeyCode::KeyJ | KeyCode::Numpad2 => {
-                try_move_player(&mut commands, &map, player_entity, pos, 0, 1, &other_combat_stats);
+                try_move_player(&mut commands, &mut gamelog, &map, player_entity, pos, 0, 1, &other_combat_stats, &mut doors);
                 player_acted = true;
             }
 
@@ -141,40 +163,46 @@ fn handle_player_input(
             KeyCode::KeyY | KeyCode::Numpad7 => {
                 try_move_player(
                     &mut commands,
+                    &mut gamelog,
                     &map,
                     player_entity,
                     pos,
                     -1,
                     -1,
                     &other_combat_stats,
+                    &mut doors,
                 );
                 player_acted = true;
             }
             KeyCode::KeyU | KeyCode::Numpad9 => {
                 try_move_player(
                     &mut commands,
+                    &mut gamelog,
                     &map,
                     player_entity,
                     pos,
                     1,
                     -1,
                     &other_combat_stats,
+                    &mut doors,
                 );
                 player_acted = true;
             }
             KeyCode::KeyM | KeyCode::Numpad3 => {
-                try_move_player(&mut commands, &map, player_entity, pos, 1, 1, &other_combat_stats);
+                try_move_player(&mut commands, &mut gamelog, &map, player_entity, pos, 1, 1, &other_combat_stats, &mut doors);
                 player_acted = true;
             }
             KeyCode::KeyN | KeyCode::Numpad1 => {
                 try_move_player(
                     &mut commands,
+                    &mut gamelog,
                     &map,
                     player_entity,
                     pos,
                     -1,
                     1,
                     &other_combat_stats,
+                    &mut doors,
                 );
                 player_acted = true;
             }
