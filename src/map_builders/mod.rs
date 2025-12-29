@@ -30,7 +30,7 @@ pub use area_based::{
 pub use bsp_dungeon::BspDungeonBuilder;
 pub use bsp_interior::BspInteriorBuilder;
 pub use cellular_automata::CellularAutomataBuilder;
-pub use corridors::{BspCorridors, DoglegCorridors, NearestCorridors, StraightLineCorridors};
+pub use corridors::{BspCorridors, CorridorSpawner, DoglegCorridors, NearestCorridors, StraightLineCorridors};
 pub use dla::DLABuilder;
 pub use drunkard::DrunkardsWalkBuilder;
 pub use erosion::{CellularAutomataEroder, DrunkardsWalkEroder};
@@ -295,6 +295,7 @@ pub struct BuilderMap {
     pub map: Map,
     pub starting_position: Option<(i32, i32)>,
     pub rooms: Option<Vec<Rect>>,
+    pub corridors: Option<Vec<Vec<usize>>>,
     pub spawn_list: Vec<(usize, String)>,
     pub history: Vec<Map>,
     pub depth: i32,
@@ -306,6 +307,7 @@ impl BuilderMap {
             map: Map::new(MAP_WIDTH, MAP_HEIGHT, depth),
             starting_position: None,
             rooms: None,
+            corridors: None,
             spawn_list: Vec::new(),
             history: Vec::new(),
             depth,
