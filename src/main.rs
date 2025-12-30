@@ -8,6 +8,7 @@ use player::PlayerPlugin;
 use resources::ResourcesPlugin;
 use viewshed::ViewshedPlugin;
 
+mod camera;
 mod combat;
 mod components;
 mod debug;
@@ -135,6 +136,7 @@ fn main() {
             ViewshedPlugin,
             MapPlugin,
             MonstersPlugin,
+            camera::CameraPlugin,
             gui::GuiPlugin,
             ui::HudPlugin,
             ui::TooltipPlugin,

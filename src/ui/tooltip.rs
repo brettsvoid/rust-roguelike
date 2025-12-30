@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::camera::Camera as GameCamera;
 use crate::components::Name;
 use crate::map::{Map, Position, GRID_PX, MAP_HEIGHT, MAP_WIDTH};
 use crate::resources::UiFont;
@@ -24,6 +25,7 @@ fn update_tooltip(
     mut commands: Commands,
     window: Query<&Window>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
+    game_camera: Res<GameCamera>,
     map: Res<Map>,
     font: Res<UiFont>,
     entities_query: Query<(&Position, &Name)>,
@@ -55,12 +57,15 @@ fn update_tooltip(
         return;
     };
 
-    // Convert world position to map coordinates
+    // Convert world position (pixels) to screen tile coordinates
     let half_width = window.width() / 2.0;
     let half_height = window.height() / 2.0;
 
-    let map_x = ((world_pos.x + half_width) / GRID_PX.x).floor() as i32;
-    let map_y = ((-world_pos.y + half_height) / GRID_PX.y).floor() as i32;
+    let screen_tile_x = ((world_pos.x + half_width) / GRID_PX.x).floor() as i32;
+    let screen_tile_y = ((-world_pos.y + half_height) / GRID_PX.y).floor() as i32;
+
+    // Convert screen tile coordinates to world map coordinates using game camera
+    let (map_x, map_y) = game_camera.screen_to_world(screen_tile_x, screen_tile_y);
 
     // Check bounds
     if map_x < 0 || map_x >= MAP_WIDTH as i32 || map_y < 0 || map_y >= MAP_HEIGHT as i32 {
@@ -68,6 +73,7 @@ fn update_tooltip(
     }
 
     // Spawn cursor highlight (magenta background on the tile)
+    // Use screen coordinates for rendering (translate_positions will handle it)
     commands.spawn((
         Sprite {
             color: Color::srgba(1.0, 0.0, 1.0, 0.3), // Magenta with transparency
@@ -75,8 +81,8 @@ fn update_tooltip(
             ..default()
         },
         Transform::from_xyz(
-            (map_x as f32) * GRID_PX.x + (GRID_PX.x / 2.0) - half_width,
-            (map_y as f32) * -GRID_PX.y - (GRID_PX.y / 2.0) + half_height,
+            (screen_tile_x as f32) * GRID_PX.x + (GRID_PX.x / 2.0) - half_width,
+            (screen_tile_y as f32) * -GRID_PX.y - (GRID_PX.y / 2.0) + half_height,
             0.5, // Between tiles and entities
         ),
         CursorHighlight,
@@ -88,7 +94,7 @@ fn update_tooltip(
         return;
     }
 
-    // Find entities at this position
+    // Find entities at this position (using world coordinates)
     let mut tooltip_names: Vec<String> = Vec::new();
     for (pos, name) in &entities_query {
         if pos.x == map_x && pos.y == map_y {

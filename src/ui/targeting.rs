@@ -2,6 +2,7 @@ use bevy::input::keyboard::KeyboardInput;
 use bevy::input::ButtonState;
 use bevy::prelude::*;
 
+use crate::camera::Camera as GameCamera;
 use crate::components::{AreaOfEffect, Targeting, WantsToUseItem};
 use crate::distance::DistanceAlg;
 use crate::map::{Map, Position, TileType, GRID_PX, MAP_HEIGHT, MAP_WIDTH};
@@ -85,6 +86,7 @@ fn despawn_targeting_ui(
 fn spawn_target_borders(
     mut commands: Commands,
     window: Query<&Window>,
+    game_camera: Res<GameCamera>,
     map: Res<Map>,
     targeting_info: Res<TargetingInfo>,
     player_query: Query<&Position, With<Player>>,
@@ -125,8 +127,10 @@ fn spawn_target_borders(
         );
 
         if distance <= targeting_info.range as f32 {
-            let center_x = (monster_pos.x as f32) * GRID_PX.x + (GRID_PX.x / 2.0) - half_width;
-            let center_y = (monster_pos.y as f32) * -GRID_PX.y - (GRID_PX.y / 2.0) + half_height;
+            // Convert world coords to screen coords for rendering
+            let (screen_x, screen_y) = game_camera.world_to_screen(monster_pos.x, monster_pos.y);
+            let center_x = (screen_x as f32) * GRID_PX.x + (GRID_PX.x / 2.0) - half_width;
+            let center_y = (screen_y as f32) * -GRID_PX.y - (GRID_PX.y / 2.0) + half_height;
 
             // Top border
             commands.spawn((
@@ -178,6 +182,7 @@ fn spawn_target_borders(
 fn spawn_range_indicator(
     mut commands: Commands,
     window: Query<&Window>,
+    game_camera: Res<GameCamera>,
     map: Res<Map>,
     targeting_info: Res<TargetingInfo>,
     player_query: Query<&Position, With<Player>>,
@@ -235,8 +240,10 @@ fn spawn_range_indicator(
                 continue;
             }
 
-            let center_x = (tile_x as f32) * GRID_PX.x + (GRID_PX.x / 2.0) - half_width;
-            let center_y = (tile_y as f32) * -GRID_PX.y - (GRID_PX.y / 2.0) + half_height;
+            // Convert world coords to screen coords for rendering
+            let (screen_x, screen_y) = game_camera.world_to_screen(tile_x, tile_y);
+            let center_x = (screen_x as f32) * GRID_PX.x + (GRID_PX.x / 2.0) - half_width;
+            let center_y = (screen_y as f32) * -GRID_PX.y - (GRID_PX.y / 2.0) + half_height;
 
             // Check neighbors - only draw border if neighbor is out of range AND is a floor tile
 
@@ -323,6 +330,7 @@ fn update_target_highlight(
     mut commands: Commands,
     window: Query<&Window>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
+    game_camera: Res<GameCamera>,
     map: Res<Map>,
     targeting_info: Res<TargetingInfo>,
     player_query: Query<&Position, With<Player>>,
@@ -356,12 +364,15 @@ fn update_target_highlight(
         return;
     };
 
-    // Convert world position to map coordinates
+    // Convert world position (pixels) to screen tile coordinates
     let half_width = window.width() / 2.0;
     let half_height = window.height() / 2.0;
 
-    let map_x = ((world_pos.x + half_width) / GRID_PX.x).floor() as i32;
-    let map_y = ((-world_pos.y + half_height) / GRID_PX.y).floor() as i32;
+    let screen_tile_x = ((world_pos.x + half_width) / GRID_PX.x).floor() as i32;
+    let screen_tile_y = ((-world_pos.y + half_height) / GRID_PX.y).floor() as i32;
+
+    // Convert screen tile coordinates to world map coordinates using game camera
+    let (map_x, map_y) = game_camera.screen_to_world(screen_tile_x, screen_tile_y);
 
     // Check bounds
     if map_x < 0 || map_x >= MAP_WIDTH as i32 || map_y < 0 || map_y >= MAP_HEIGHT as i32 {
@@ -396,6 +407,7 @@ fn update_target_highlight(
             let has_monster = monster_query.iter().any(|pos| pos.x == map_x && pos.y == map_y);
 
             if has_monster {
+                // Use screen coords for rendering
                 commands.spawn((
                     Sprite {
                         color: Color::srgba(0.0, 1.0, 1.0, 0.4), // Cyan with transparency
@@ -403,8 +415,8 @@ fn update_target_highlight(
                         ..default()
                     },
                     Transform::from_xyz(
-                        (map_x as f32) * GRID_PX.x + (GRID_PX.x / 2.0) - half_width,
-                        (map_y as f32) * -GRID_PX.y - (GRID_PX.y / 2.0) + half_height,
+                        (screen_tile_x as f32) * GRID_PX.x + (GRID_PX.x / 2.0) - half_width,
+                        (screen_tile_y as f32) * -GRID_PX.y - (GRID_PX.y / 2.0) + half_height,
                         0.5,
                     ),
                     TargetHighlight,
@@ -434,6 +446,8 @@ fn update_target_highlight(
                         );
 
                         if tile_distance <= radius as f32 {
+                            // Convert world coords to screen coords for rendering
+                            let (sx, sy) = game_camera.world_to_screen(tile_x, tile_y);
                             commands.spawn((
                                 Sprite {
                                     color: Color::srgba(1.0, 0.5, 0.0, 0.4), // Orange for AoE
@@ -441,8 +455,8 @@ fn update_target_highlight(
                                     ..default()
                                 },
                                 Transform::from_xyz(
-                                    (tile_x as f32) * GRID_PX.x + (GRID_PX.x / 2.0) - half_width,
-                                    (tile_y as f32) * -GRID_PX.y - (GRID_PX.y / 2.0) + half_height,
+                                    (sx as f32) * GRID_PX.x + (GRID_PX.x / 2.0) - half_width,
+                                    (sy as f32) * -GRID_PX.y - (GRID_PX.y / 2.0) + half_height,
                                     0.5,
                                 ),
                                 TargetHighlight,
@@ -461,6 +475,7 @@ fn handle_targeting(
     mouse_button: Res<ButtonInput<MouseButton>>,
     window: Query<&Window>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
+    game_camera: Res<GameCamera>,
     map: Res<Map>,
     targeting_info: Res<TargetingInfo>,
     mut next_state: ResMut<NextState<RunState>>,
@@ -497,12 +512,15 @@ fn handle_targeting(
         return;
     };
 
-    // Convert world position to map coordinates
+    // Convert world position (pixels) to screen tile coordinates
     let half_width = window.width() / 2.0;
     let half_height = window.height() / 2.0;
 
-    let map_x = ((world_pos.x + half_width) / GRID_PX.x).floor() as i32;
-    let map_y = ((-world_pos.y + half_height) / GRID_PX.y).floor() as i32;
+    let screen_tile_x = ((world_pos.x + half_width) / GRID_PX.x).floor() as i32;
+    let screen_tile_y = ((-world_pos.y + half_height) / GRID_PX.y).floor() as i32;
+
+    // Convert screen tile coordinates to world map coordinates using game camera
+    let (map_x, map_y) = game_camera.screen_to_world(screen_tile_x, screen_tile_y);
 
     // Check bounds
     if map_x < 0 || map_x >= MAP_WIDTH as i32 || map_y < 0 || map_y >= MAP_HEIGHT as i32 {

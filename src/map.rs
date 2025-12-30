@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use bevy::prelude::*;
 
+use crate::camera::Camera;
 use crate::components::{Hidden, RenderOrder};
 use crate::debug::DebugState;
 use crate::distance::DistanceAlg;
@@ -383,17 +384,23 @@ fn update_revealed_state(mut tiles_query: Query<(&mut TextColor, &Revealed), Wit
 fn translate_positions(
     mut commands: Commands,
     window: Single<&Window>,
+    camera: Res<Camera>,
     query: Query<(Entity, &Position, Option<&RenderOrder>)>,
 ) {
     let half_height = window.height() / 2.;
     let half_width = window.width() / 2.;
+
     for (entity, position, render_order) in &query {
         let z = render_order.map(|r| r.0 as f32 * 0.1).unwrap_or(0.0);
-        // Map position coords to pixel coords. Y runs in the opposite direction to the pixel
+
+        // Convert world position to screen position using camera
+        let (screen_x, screen_y) = camera.world_to_screen(position.x, position.y);
+
+        // Map screen coords to pixel coords. Y runs in the opposite direction to the pixel
         // coords. Use try_insert to handle entities that may be despawned during load.
         commands.entity(entity).try_insert(Transform::from_xyz(
-            (position.x as f32) * GRID_PX.x + (GRID_PX.x / 2.) - half_width,
-            (position.y as f32) * -GRID_PX.y - (GRID_PX.y / 2.) + half_height,
+            (screen_x as f32) * GRID_PX.x + (GRID_PX.x / 2.) - half_width,
+            (screen_y as f32) * -GRID_PX.y - (GRID_PX.y / 2.) + half_height,
             z,
         ));
     }
@@ -448,6 +455,7 @@ fn update_renderable_visibility(
 fn update_bloodstains(
     mut commands: Commands,
     map: Res<Map>,
+    camera: Res<Camera>,
     window: Query<&Window>,
     existing: Query<Entity, With<BloodstainMarker>>,
 ) {
@@ -466,11 +474,14 @@ fn update_bloodstains(
     // Spawn bloodstain sprites for visible bloody tiles
     for &idx in &map.bloodstains {
         if map.visible_tiles[idx] {
-            let x = (idx % MAP_WIDTH) as i32;
-            let y = (idx / MAP_WIDTH) as i32;
+            let world_x = (idx % MAP_WIDTH) as i32;
+            let world_y = (idx / MAP_WIDTH) as i32;
 
-            let screen_x = (x as f32) * GRID_PX.x + (GRID_PX.x / 2.0) - half_width;
-            let screen_y = (y as f32) * -GRID_PX.y - (GRID_PX.y / 2.0) + half_height;
+            // Convert world position to screen position using camera
+            let (screen_x, screen_y) = camera.world_to_screen(world_x, world_y);
+
+            let pixel_x = (screen_x as f32) * GRID_PX.x + (GRID_PX.x / 2.0) - half_width;
+            let pixel_y = (screen_y as f32) * -GRID_PX.y - (GRID_PX.y / 2.0) + half_height;
 
             commands.spawn((
                 BloodstainMarker,
@@ -479,7 +490,7 @@ fn update_bloodstains(
                     custom_size: Some(Vec2::new(GRID_PX.x, GRID_PX.y)),
                     ..default()
                 },
-                Transform::from_xyz(screen_x, screen_y, 0.5), // Just above floor
+                Transform::from_xyz(pixel_x, pixel_y, 0.5), // Just above floor
             ));
         }
     }
