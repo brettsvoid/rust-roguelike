@@ -1,0 +1,202 @@
+{
+  "items": [
+    {
+      "name": "Health Potion",
+      "renderable": {
+        "glyph": "!",
+        "fg": "#FF00FF",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": { "provides_healing": "8" }
+      }
+    },
+    {
+      "name": "Rations",
+      "renderable": {
+        "glyph": "%",
+        "fg": "#00FF00",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": { "provides_food": "" }
+      }
+    },
+    {
+      "name": "Magic Missile Scroll",
+      "renderable": {
+        "glyph": ")",
+        "fg": "#00FFFF",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": {
+          "ranged": "6",
+          "damage": "8",
+          "targeting": "single_entity"
+        }
+      }
+    },
+    {
+      "name": "Fireball Scroll",
+      "renderable": {
+        "glyph": ")",
+        "fg": "#FFA500",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": {
+          "ranged": "6",
+          "damage": "20",
+          "area_of_effect": "3"
+        }
+      }
+    },
+    {
+      "name": "Confusion Scroll",
+      "renderable": {
+        "glyph": ")",
+        "fg": "#FFC0CB",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": {
+          "ranged": "6",
+          "confusion": "4",
+          "targeting": "single_entity"
+        }
+      }
+    },
+    {
+      "name": "Scroll of Magic Mapping",
+      "renderable": {
+        "glyph": ")",
+        "fg": "#6495ED",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": { "magic_mapping": "" }
+      }
+    },
+    {
+      "name": "Dagger",
+      "renderable": {
+        "glyph": "/",
+        "fg": "#00FFFF",
+        "bg": "#000000",
+        "order": 0
+      },
+      "weapon": {
+        "slot": "melee",
+        "power_bonus": 2
+      }
+    },
+    {
+      "name": "Longsword",
+      "renderable": {
+        "glyph": "/",
+        "fg": "#FFFF00",
+        "bg": "#000000",
+        "order": 0
+      },
+      "weapon": {
+        "slot": "melee",
+        "power_bonus": 4
+      }
+    },
+    {
+      "name": "Shield",
+      "renderable": {
+        "glyph": "(",
+        "fg": "#00FFFF",
+        "bg": "#000000",
+        "order": 0
+      },
+      "shield": {
+        "defense_bonus": 1
+      }
+    },
+    {
+      "name": "Tower Shield",
+      "renderable": {
+        "glyph": "(",
+        "fg": "#FFFF00",
+        "bg": "#000000",
+        "order": 0
+      },
+      "shield": {
+        "defense_bonus": 3
+      }
+    }
+  ],
+  "mobs": [
+    {
+      "name": "Goblin",
+      "renderable": {
+        "glyph": "g",
+        "fg": "#FF0000",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 16,
+        "hp": 16,
+        "defense": 1,
+        "power": 4
+      },
+      "vision_range": 8
+    },
+    {
+      "name": "Orc",
+      "renderable": {
+        "glyph": "o",
+        "fg": "#FF0000",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 16,
+        "hp": 16,
+        "defense": 1,
+        "power": 4
+      },
+      "vision_range": 8
+    }
+  ],
+  "props": [
+    {
+      "name": "Door",
+      "renderable": {
+        "glyph": "+",
+        "fg": "#D2691E",
+        "bg": "#000000",
+        "order": 0
+      },
+      "blocks_tile": true,
+      "blocks_visibility": true,
+      "door_open": false
+    },
+    {
+      "name": "Bear Trap",
+      "renderable": {
+        "glyph": "^",
+        "fg": "#FF0000",
+        "bg": "#000000",
+        "order": 0
+      },
+      "hidden": true,
+      "entry_trigger": {
+        "effects": { "damage": "6" }
+      },
+      "single_activation": true
+    }
+  ]
+}

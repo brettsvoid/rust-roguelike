@@ -3,15 +3,10 @@ use rand::Rng;
 
 use crate::{
     combat::CombatStats,
-    components::{
-        AreaOfEffect, BlocksTile, BlocksVisibility, CausesConfusion, Consumable, DefenseBonus,
-        Door, EntryTrigger, EquipmentSlot, Equippable, Hidden, HungerClock, HungerState,
-        InflictsDamage, Item, MagicMapper, MeleePowerBonus, Name, ProvidesFood, ProvidesHealing,
-        Ranged, RenderOrder, RenderableBundle, SingleActivation, Targeting,
-    },
+    components::{HungerClock, HungerState, Name, RenderOrder, RenderableBundle},
     map::{Position, MAP_WIDTH},
-    monsters::Monster,
     player::Player,
+    raws::{spawn_named_entity, RAWS},
     rng::{GameRng, RandomTable},
     shapes::Rect,
     viewshed::Viewshed,
@@ -108,15 +103,14 @@ pub fn spawn_room(
     }
 
     // Spawn monsters using weighted table
+    let raws = RAWS.lock().unwrap();
     for (x, y) in spawn_points.iter() {
         if let Some(monster_name) = monster_table.roll(rng) {
-            match monster_name.as_str() {
-                "Orc" => spawn_orc(commands, font, *x, *y, *monster_id),
-                _ => spawn_goblin(commands, font, *x, *y, *monster_id),
-            }
+            spawn_named_entity(&raws, commands, font, &monster_name, *x, *y, Some(*monster_id));
             *monster_id += 1;
         }
     }
+    drop(raws);
 
     // Generate item spawn points
     let mut item_spawn_points: Vec<(i32, i32)> = Vec::new();
@@ -133,22 +127,10 @@ pub fn spawn_room(
     }
 
     // Spawn items using weighted table
+    let raws = RAWS.lock().unwrap();
     for (x, y) in item_spawn_points.iter() {
         if let Some(item_name) = item_table.roll(rng) {
-            match item_name.as_str() {
-                "Health Potion" => spawn_health_potion(commands, font, *x, *y),
-                "Rations" => spawn_rations(commands, font, *x, *y),
-                "Magic Missile Scroll" => spawn_magic_missile_scroll(commands, font, *x, *y),
-                "Fireball Scroll" => spawn_fireball_scroll(commands, font, *x, *y),
-                "Confusion Scroll" => spawn_confusion_scroll(commands, font, *x, *y),
-                "Magic Mapping Scroll" => spawn_magic_mapping_scroll(commands, font, *x, *y),
-                "Dagger" => spawn_dagger(commands, font, *x, *y),
-                "Shield" => spawn_shield(commands, font, *x, *y),
-                "Longsword" => spawn_longsword(commands, font, *x, *y),
-                "Tower Shield" => spawn_tower_shield(commands, font, *x, *y),
-                "Bear Trap" => spawn_bear_trap(commands, font, *x, *y),
-                _ => {}
-            }
+            spawn_named_entity(&raws, commands, font, &item_name, *x, *y, None);
         }
     }
 }
@@ -216,17 +198,16 @@ pub fn spawn_region(
     }
 
     // Spawn monsters using weighted table
+    let raws = RAWS.lock().unwrap();
     for idx in spawn_points.iter() {
         let x = (*idx % MAP_WIDTH) as i32;
         let y = (*idx / MAP_WIDTH) as i32;
         if let Some(monster_name) = monster_table.roll(rng) {
-            match monster_name.as_str() {
-                "Orc" => spawn_orc(commands, font, x, y, *monster_id),
-                _ => spawn_goblin(commands, font, x, y, *monster_id),
-            }
+            spawn_named_entity(&raws, commands, font, &monster_name, x, y, Some(*monster_id));
             *monster_id += 1;
         }
     }
+    drop(raws);
 
     // Generate item spawn points
     let mut item_spawn_points: Vec<usize> = Vec::new();
@@ -243,311 +224,12 @@ pub fn spawn_region(
     }
 
     // Spawn items using weighted table
+    let raws = RAWS.lock().unwrap();
     for idx in item_spawn_points.iter() {
         let x = (*idx % MAP_WIDTH) as i32;
         let y = (*idx / MAP_WIDTH) as i32;
         if let Some(item_name) = item_table.roll(rng) {
-            match item_name.as_str() {
-                "Health Potion" => spawn_health_potion(commands, font, x, y),
-                "Rations" => spawn_rations(commands, font, x, y),
-                "Magic Missile Scroll" => spawn_magic_missile_scroll(commands, font, x, y),
-                "Fireball Scroll" => spawn_fireball_scroll(commands, font, x, y),
-                "Confusion Scroll" => spawn_confusion_scroll(commands, font, x, y),
-                "Magic Mapping Scroll" => spawn_magic_mapping_scroll(commands, font, x, y),
-                "Dagger" => spawn_dagger(commands, font, x, y),
-                "Shield" => spawn_shield(commands, font, x, y),
-                "Longsword" => spawn_longsword(commands, font, x, y),
-                "Tower Shield" => spawn_tower_shield(commands, font, x, y),
-                "Bear Trap" => spawn_bear_trap(commands, font, x, y),
-                _ => {}
-            }
+            spawn_named_entity(&raws, commands, font, &item_name, x, y, None);
         }
     }
-}
-
-fn spawn_orc(commands: &mut Commands, font: &TextFont, x: i32, y: i32, id: usize) {
-    spawn_monster(commands, font, x, y, "o", &format!("Orc #{}", id));
-}
-
-fn spawn_goblin(commands: &mut Commands, font: &TextFont, x: i32, y: i32, id: usize) {
-    spawn_monster(commands, font, x, y, "g", &format!("Goblin #{}", id));
-}
-
-fn spawn_monster(
-    commands: &mut Commands,
-    font: &TextFont,
-    x: i32,
-    y: i32,
-    glyph: &str,
-    name: &str,
-) {
-    commands.spawn((
-        Monster,
-        Name {
-            name: name.to_string(),
-        },
-        Position { x, y },
-        BlocksTile,
-        CombatStats {
-            max_hp: 16,
-            hp: 16,
-            defense: 1,
-            power: 4,
-        },
-        Viewshed {
-            range: 8,
-            ..default()
-        },
-        RenderableBundle::new(
-            glyph,
-            palettes::basic::RED.into(),
-            palettes::basic::BLACK.into(),
-            RenderOrder::MONSTER,
-            font,
-        ),
-    ));
-}
-
-pub fn spawn_health_potion(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
-    commands.spawn((
-        Item,
-        Consumable,
-        ProvidesHealing { heal_amount: 8 },
-        Name {
-            name: "Health Potion".to_string(),
-        },
-        Position { x, y },
-        RenderableBundle::new(
-            "¡",
-            palettes::basic::FUCHSIA.into(),
-            palettes::basic::BLACK.into(),
-            RenderOrder::ITEM,
-            font,
-        ),
-    ));
-}
-
-pub fn spawn_magic_missile_scroll(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
-    commands.spawn((
-        Item,
-        Consumable,
-        Ranged { range: 6 },
-        InflictsDamage { damage: 8 },
-        Targeting::SingleEntity,
-        Name {
-            name: "Magic Missile Scroll".to_string(),
-        },
-        Position { x, y },
-        RenderableBundle::new(
-            ")",
-            palettes::basic::AQUA.into(),
-            palettes::basic::BLACK.into(),
-            RenderOrder::ITEM,
-            font,
-        ),
-    ));
-}
-
-pub fn spawn_fireball_scroll(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
-    commands.spawn((
-        Item,
-        Consumable,
-        Ranged { range: 6 },
-        InflictsDamage { damage: 20 },
-        AreaOfEffect { radius: 3 },
-        Name {
-            name: "Fireball Scroll".to_string(),
-        },
-        Position { x, y },
-        RenderableBundle::new(
-            ")",
-            palettes::css::ORANGE.into(),
-            palettes::basic::BLACK.into(),
-            RenderOrder::ITEM,
-            font,
-        ),
-    ));
-}
-
-pub fn spawn_confusion_scroll(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
-    commands.spawn((
-        Item,
-        Consumable,
-        Ranged { range: 6 },
-        CausesConfusion { turns: 4 },
-        Targeting::SingleEntity,
-        Name {
-            name: "Confusion Scroll".to_string(),
-        },
-        Position { x, y },
-        RenderableBundle::new(
-            ")",
-            palettes::css::PINK.into(),
-            palettes::basic::BLACK.into(),
-            RenderOrder::ITEM,
-            font,
-        ),
-    ));
-}
-
-// Equipment spawners
-pub fn spawn_dagger(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
-    commands.spawn((
-        Item,
-        Equippable {
-            slot: EquipmentSlot::Melee,
-        },
-        MeleePowerBonus { power: 2 },
-        Name {
-            name: "Dagger".to_string(),
-        },
-        Position { x, y },
-        RenderableBundle::new(
-            "/",
-            palettes::basic::AQUA.into(),
-            palettes::basic::BLACK.into(),
-            RenderOrder::ITEM,
-            font,
-        ),
-    ));
-}
-
-pub fn spawn_shield(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
-    commands.spawn((
-        Item,
-        Equippable {
-            slot: EquipmentSlot::Shield,
-        },
-        DefenseBonus { defense: 1 },
-        Name {
-            name: "Shield".to_string(),
-        },
-        Position { x, y },
-        RenderableBundle::new(
-            "(",
-            palettes::basic::AQUA.into(),
-            palettes::basic::BLACK.into(),
-            RenderOrder::ITEM,
-            font,
-        ),
-    ));
-}
-
-pub fn spawn_longsword(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
-    commands.spawn((
-        Item,
-        Equippable {
-            slot: EquipmentSlot::Melee,
-        },
-        MeleePowerBonus { power: 4 },
-        Name {
-            name: "Longsword".to_string(),
-        },
-        Position { x, y },
-        RenderableBundle::new(
-            "/",
-            palettes::basic::YELLOW.into(),
-            palettes::basic::BLACK.into(),
-            RenderOrder::ITEM,
-            font,
-        ),
-    ));
-}
-
-pub fn spawn_tower_shield(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
-    commands.spawn((
-        Item,
-        Equippable {
-            slot: EquipmentSlot::Shield,
-        },
-        DefenseBonus { defense: 3 },
-        Name {
-            name: "Tower Shield".to_string(),
-        },
-        Position { x, y },
-        RenderableBundle::new(
-            "(",
-            palettes::basic::YELLOW.into(),
-            palettes::basic::BLACK.into(),
-            RenderOrder::ITEM,
-            font,
-        ),
-    ));
-}
-
-pub fn spawn_rations(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
-    commands.spawn((
-        Item,
-        Consumable,
-        ProvidesFood,
-        Name {
-            name: "Rations".to_string(),
-        },
-        Position { x, y },
-        RenderableBundle::new(
-            "%",
-            palettes::basic::GREEN.into(),
-            palettes::basic::BLACK.into(),
-            RenderOrder::ITEM,
-            font,
-        ),
-    ));
-}
-
-pub fn spawn_magic_mapping_scroll(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
-    commands.spawn((
-        Item,
-        Consumable,
-        MagicMapper,
-        Name {
-            name: "Scroll of Magic Mapping".to_string(),
-        },
-        Position { x, y },
-        RenderableBundle::new(
-            ")",
-            palettes::css::CORNFLOWER_BLUE.into(),
-            palettes::basic::BLACK.into(),
-            RenderOrder::ITEM,
-            font,
-        ),
-    ));
-}
-
-pub fn spawn_bear_trap(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
-    commands.spawn((
-        Name {
-            name: "Bear Trap".to_string(),
-        },
-        Position { x, y },
-        Hidden,
-        EntryTrigger,
-        SingleActivation,
-        InflictsDamage { damage: 6 },
-        RenderableBundle::new(
-            "^",
-            palettes::basic::RED.into(),
-            palettes::basic::BLACK.into(),
-            RenderOrder::ITEM,
-            font,
-        ),
-    ));
-}
-
-pub fn spawn_door(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
-    commands.spawn((
-        Door { open: false },
-        Name {
-            name: "Door".to_string(),
-        },
-        Position { x, y },
-        BlocksTile,
-        BlocksVisibility,
-        RenderableBundle::new(
-            "+",
-            palettes::css::CHOCOLATE.into(),
-            palettes::basic::BLACK.into(),
-            RenderOrder::ITEM,
-            font,
-        ),
-    ));
 }

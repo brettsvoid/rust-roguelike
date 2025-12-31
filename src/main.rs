@@ -24,6 +24,7 @@ mod monsters;
 mod particle;
 mod pathfinding;
 mod player;
+mod raws;
 mod resources;
 mod rng;
 mod saveload;
@@ -216,6 +217,7 @@ fn main() {
 }
 
 fn setup(mut commands: Commands) {
+    raws::load_raws();
     commands.spawn(Camera2d);
 }
 

@@ -125,47 +125,30 @@ fn cmd_spawn(
         ..default()
     };
 
-    match item_name.as_str() {
-        "health_potion" | "potion" => {
-            crate::spawner::spawn_health_potion(commands, &text_font, x, y);
-            format!("Spawned Health Potion at ({}, {})", x, y)
+    // Map aliases to actual item names in spawns.json
+    let actual_name = match item_name.as_str() {
+        "health_potion" | "potion" => Some("Health Potion"),
+        "magic_missile" | "missile" => Some("Magic Missile Scroll"),
+        "fireball" => Some("Fireball Scroll"),
+        "confusion" => Some("Confusion Scroll"),
+        "dagger" => Some("Dagger"),
+        "shield" => Some("Shield"),
+        "longsword" | "sword" => Some("Longsword"),
+        "tower_shield" => Some("Tower Shield"),
+        "rations" | "food" => Some("Rations"),
+        "magic_map" | "map" => Some("Scroll of Magic Mapping"),
+        _ => None,
+    };
+
+    match actual_name {
+        Some(name) => {
+            let raws = crate::raws::RAWS.lock().unwrap();
+            if crate::raws::spawn_named_entity(&raws, commands, &text_font, name, x, y, None) {
+                format!("Spawned {} at ({}, {})", name, x, y)
+            } else {
+                format!("Failed to spawn: {}", name)
+            }
         }
-        "magic_missile" | "missile" => {
-            crate::spawner::spawn_magic_missile_scroll(commands, &text_font, x, y);
-            format!("Spawned Magic Missile Scroll at ({}, {})", x, y)
-        }
-        "fireball" => {
-            crate::spawner::spawn_fireball_scroll(commands, &text_font, x, y);
-            format!("Spawned Fireball Scroll at ({}, {})", x, y)
-        }
-        "confusion" => {
-            crate::spawner::spawn_confusion_scroll(commands, &text_font, x, y);
-            format!("Spawned Confusion Scroll at ({}, {})", x, y)
-        }
-        "dagger" => {
-            crate::spawner::spawn_dagger(commands, &text_font, x, y);
-            format!("Spawned Dagger at ({}, {})", x, y)
-        }
-        "shield" => {
-            crate::spawner::spawn_shield(commands, &text_font, x, y);
-            format!("Spawned Shield at ({}, {})", x, y)
-        }
-        "longsword" | "sword" => {
-            crate::spawner::spawn_longsword(commands, &text_font, x, y);
-            format!("Spawned Longsword at ({}, {})", x, y)
-        }
-        "tower_shield" => {
-            crate::spawner::spawn_tower_shield(commands, &text_font, x, y);
-            format!("Spawned Tower Shield at ({}, {})", x, y)
-        }
-        "rations" | "food" => {
-            crate::spawner::spawn_rations(commands, &text_font, x, y);
-            format!("Spawned Rations at ({}, {})", x, y)
-        }
-        "magic_map" | "map" => {
-            crate::spawner::spawn_magic_mapping_scroll(commands, &text_font, x, y);
-            format!("Spawned Magic Mapping Scroll at ({}, {})", x, y)
-        }
-        _ => format!("Unknown item: {}", item_name),
+        None => format!("Unknown item: {}", item_name),
     }
 }

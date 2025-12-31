@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use rand::Rng;
 
 use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
+use crate::raws::{spawn_named_entity, RAWS};
 use crate::rng::GameRng;
 use crate::shapes::Rect;
 use crate::spawner;
@@ -523,70 +524,17 @@ pub fn spawn_by_name(
     name: &str,
     monster_id: &mut usize,
 ) {
-    match name {
-        // Monsters
-        "Goblin" => {
-            spawn_monster(commands, font, x, y, "g", &format!("Goblin #{}", monster_id));
-            *monster_id += 1;
-        }
-        "Orc" => {
-            spawn_monster(commands, font, x, y, "o", &format!("Orc #{}", monster_id));
-            *monster_id += 1;
-        }
-        // Items
-        "Health Potion" => spawner::spawn_health_potion(commands, font, x, y),
-        "Rations" => spawner::spawn_rations(commands, font, x, y),
-        "Magic Missile Scroll" => spawner::spawn_magic_missile_scroll(commands, font, x, y),
-        "Fireball Scroll" => spawner::spawn_fireball_scroll(commands, font, x, y),
-        "Confusion Scroll" => spawner::spawn_confusion_scroll(commands, font, x, y),
-        "Magic Mapping Scroll" => spawner::spawn_magic_mapping_scroll(commands, font, x, y),
-        // Equipment
-        "Dagger" => spawner::spawn_dagger(commands, font, x, y),
-        "Shield" => spawner::spawn_shield(commands, font, x, y),
-        "Longsword" => spawner::spawn_longsword(commands, font, x, y),
-        "Tower Shield" => spawner::spawn_tower_shield(commands, font, x, y),
-        // Traps
-        "Bear Trap" => spawner::spawn_bear_trap(commands, font, x, y),
-        // Doors
-        "Door" => spawner::spawn_door(commands, font, x, y),
-        _ => {}
+    let raws = RAWS.lock().unwrap();
+
+    // Check if it's a monster (needs monster_id)
+    let is_monster = raws.mob_index.contains_key(name);
+
+    if is_monster {
+        spawn_named_entity(&raws, commands, font, name, x, y, Some(*monster_id));
+        *monster_id += 1;
+    } else {
+        spawn_named_entity(&raws, commands, font, name, x, y, None);
     }
-}
-
-/// Spawn a basic monster (duplicated from spawner to avoid circular dep)
-fn spawn_monster(commands: &mut Commands, font: &TextFont, x: i32, y: i32, glyph: &str, name: &str) {
-    use bevy::color::palettes;
-    use crate::combat::CombatStats;
-    use crate::components::{BlocksTile, Name, RenderOrder, RenderableBundle};
-    use crate::map::Position;
-    use crate::monsters::Monster;
-    use crate::viewshed::Viewshed;
-
-    commands.spawn((
-        Monster,
-        Name {
-            name: name.to_string(),
-        },
-        Position { x, y },
-        BlocksTile,
-        CombatStats {
-            max_hp: 16,
-            hp: 16,
-            defense: 1,
-            power: 4,
-        },
-        Viewshed {
-            range: 8,
-            ..default()
-        },
-        RenderableBundle::new(
-            glyph,
-            palettes::basic::RED.into(),
-            palettes::basic::BLACK.into(),
-            RenderOrder::MONSTER,
-            font,
-        ),
-    ));
 }
 
 // ============================================================================
