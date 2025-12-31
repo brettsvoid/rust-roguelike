@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 
@@ -11,6 +11,7 @@ use crate::components::{
 };
 use crate::map::Position;
 use crate::monsters::Monster;
+use crate::rng::RandomTable;
 use crate::viewshed::Viewshed;
 
 use super::Raws;
@@ -29,6 +30,7 @@ impl RawMaster {
                 items: Vec::new(),
                 mobs: Vec::new(),
                 props: Vec::new(),
+                spawn_table: Vec::new(),
             },
             item_index: HashMap::new(),
             mob_index: HashMap::new(),
@@ -42,14 +44,38 @@ impl RawMaster {
         self.mob_index.clear();
         self.prop_index.clear();
 
+        let mut used_names: HashSet<String> = HashSet::new();
+
         for (i, item) in self.raws.items.iter().enumerate() {
+            if used_names.contains(&item.name) {
+                warn!("Duplicate item definition: {}", item.name);
+            }
+            used_names.insert(item.name.clone());
             self.item_index.insert(item.name.clone(), i);
         }
         for (i, mob) in self.raws.mobs.iter().enumerate() {
+            if used_names.contains(&mob.name) {
+                warn!("Duplicate mob definition: {}", mob.name);
+            }
+            used_names.insert(mob.name.clone());
             self.mob_index.insert(mob.name.clone(), i);
         }
         for (i, prop) in self.raws.props.iter().enumerate() {
+            if used_names.contains(&prop.name) {
+                warn!("Duplicate prop definition: {}", prop.name);
+            }
+            used_names.insert(prop.name.clone());
             self.prop_index.insert(prop.name.clone(), i);
+        }
+
+        // Validate spawn table entries reference defined entities
+        for entry in &self.raws.spawn_table {
+            if !used_names.contains(&entry.name) {
+                warn!(
+                    "Spawn table references undefined entity: {}",
+                    entry.name
+                );
+            }
         }
     }
 }
@@ -327,4 +353,23 @@ pub fn spawn_named_prop(
     }
 
     true
+}
+
+/// Build a RandomTable for a specific depth from JSON spawn data
+pub fn get_spawn_table_for_depth(raws: &RawMaster, depth: i32) -> RandomTable {
+    let mut table = RandomTable::new();
+
+    for entry in &raws.raws.spawn_table {
+        if depth >= entry.min_depth && depth <= entry.max_depth {
+            let mut weight = entry.weight;
+            if entry.add_map_depth_to_weight {
+                weight += depth - 1;
+            }
+            if weight > 0 {
+                table = table.add(&entry.name, weight);
+            }
+        }
+    }
+
+    table
 }

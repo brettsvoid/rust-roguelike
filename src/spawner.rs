@@ -6,8 +6,8 @@ use crate::{
     components::{HungerClock, HungerState, Name, RenderOrder, RenderableBundle},
     map::{Position, MAP_WIDTH},
     player::Player,
-    raws::{spawn_named_entity, RAWS},
-    rng::{GameRng, RandomTable},
+    raws::{get_spawn_table_for_depth, spawn_named_entity, RAWS},
+    rng::GameRng,
     shapes::Rect,
     viewshed::Viewshed,
 };
@@ -69,68 +69,39 @@ pub fn spawn_room(
         0
     };
 
-    // Build weighted spawn tables based on depth
-    let monster_table = RandomTable::new()
-        .add("Goblin", 10)
-        .add("Orc", 1 + map_depth);
+    // Get spawn table from JSON data
+    let raws = RAWS.lock().unwrap();
+    let spawn_table = get_spawn_table_for_depth(&raws, map_depth);
 
-    let item_table = RandomTable::new()
-        .add("Health Potion", 7)
-        .add("Rations", 10)
-        .add("Magic Missile Scroll", 2)
-        .add("Fireball Scroll", map_depth - 1)
-        .add("Confusion Scroll", map_depth - 1)
-        .add("Magic Mapping Scroll", 2)
-        .add("Dagger", 3)
-        .add("Shield", 3)
-        .add("Longsword", map_depth - 1)
-        .add("Tower Shield", map_depth - 1)
-        .add("Bear Trap", 2);
-
+    // Generate all spawn points
+    let total_spawns = num_monsters + num_items;
     let mut spawn_points: Vec<(i32, i32)> = Vec::new();
 
-    // Generate monster spawn points
-    for _ in 0..num_monsters {
+    for _ in 0..total_spawns {
         let mut added = false;
-        while !added {
+        let mut attempts = 0;
+        while !added && attempts < 20 {
             let x = rng.0.gen_range(room.x1 + 1..=room.x2);
             let y = rng.0.gen_range(room.y1 + 1..=room.y2);
             if !spawn_points.contains(&(x, y)) {
                 spawn_points.push((x, y));
                 added = true;
             }
+            attempts += 1;
         }
     }
 
-    // Spawn monsters using weighted table
-    let raws = RAWS.lock().unwrap();
+    // Spawn entities using weighted table
     for (x, y) in spawn_points.iter() {
-        if let Some(monster_name) = monster_table.roll(rng) {
-            spawn_named_entity(&raws, commands, font, &monster_name, *x, *y, Some(*monster_id));
-            *monster_id += 1;
-        }
-    }
-    drop(raws);
-
-    // Generate item spawn points
-    let mut item_spawn_points: Vec<(i32, i32)> = Vec::new();
-    for _ in 0..num_items {
-        let mut added = false;
-        while !added {
-            let x = rng.0.gen_range(room.x1 + 1..=room.x2);
-            let y = rng.0.gen_range(room.y1 + 1..=room.y2);
-            if !spawn_points.contains(&(x, y)) && !item_spawn_points.contains(&(x, y)) {
-                item_spawn_points.push((x, y));
-                added = true;
+        if let Some(entity_name) = spawn_table.roll(rng) {
+            // Check if it's a monster (needs monster_id)
+            let is_monster = raws.mob_index.contains_key(&entity_name);
+            if is_monster {
+                spawn_named_entity(&raws, commands, font, &entity_name, *x, *y, Some(*monster_id));
+                *monster_id += 1;
+            } else {
+                spawn_named_entity(&raws, commands, font, &entity_name, *x, *y, None);
             }
-        }
-    }
-
-    // Spawn items using weighted table
-    let raws = RAWS.lock().unwrap();
-    for (x, y) in item_spawn_points.iter() {
-        if let Some(item_name) = item_table.roll(rng) {
-            spawn_named_entity(&raws, commands, font, &item_name, *x, *y, None);
         }
     }
 }
@@ -164,28 +135,15 @@ pub fn spawn_region(
         0
     };
 
-    // Build weighted spawn tables based on depth
-    let monster_table = RandomTable::new()
-        .add("Goblin", 10)
-        .add("Orc", 1 + map_depth);
+    // Get spawn table from JSON data
+    let raws = RAWS.lock().unwrap();
+    let spawn_table = get_spawn_table_for_depth(&raws, map_depth);
 
-    let item_table = RandomTable::new()
-        .add("Health Potion", 7)
-        .add("Rations", 10)
-        .add("Magic Missile Scroll", 2)
-        .add("Fireball Scroll", map_depth - 1)
-        .add("Confusion Scroll", map_depth - 1)
-        .add("Magic Mapping Scroll", 2)
-        .add("Dagger", 3)
-        .add("Shield", 3)
-        .add("Longsword", map_depth - 1)
-        .add("Tower Shield", map_depth - 1)
-        .add("Bear Trap", 2);
-
+    // Generate all spawn points
+    let total_spawns = num_monsters + num_items;
     let mut spawn_points: Vec<usize> = Vec::new();
 
-    // Generate monster spawn points
-    for _ in 0..num_monsters {
+    for _ in 0..total_spawns {
         let mut attempts = 0;
         while attempts < 20 {
             let idx = tiles[rng.0.gen_range(0..tiles.len())];
@@ -197,39 +155,19 @@ pub fn spawn_region(
         }
     }
 
-    // Spawn monsters using weighted table
-    let raws = RAWS.lock().unwrap();
+    // Spawn entities using weighted table
     for idx in spawn_points.iter() {
         let x = (*idx % MAP_WIDTH) as i32;
         let y = (*idx / MAP_WIDTH) as i32;
-        if let Some(monster_name) = monster_table.roll(rng) {
-            spawn_named_entity(&raws, commands, font, &monster_name, x, y, Some(*monster_id));
-            *monster_id += 1;
-        }
-    }
-    drop(raws);
-
-    // Generate item spawn points
-    let mut item_spawn_points: Vec<usize> = Vec::new();
-    for _ in 0..num_items {
-        let mut attempts = 0;
-        while attempts < 20 {
-            let idx = tiles[rng.0.gen_range(0..tiles.len())];
-            if !spawn_points.contains(&idx) && !item_spawn_points.contains(&idx) {
-                item_spawn_points.push(idx);
-                break;
+        if let Some(entity_name) = spawn_table.roll(rng) {
+            // Check if it's a monster (needs monster_id)
+            let is_monster = raws.mob_index.contains_key(&entity_name);
+            if is_monster {
+                spawn_named_entity(&raws, commands, font, &entity_name, x, y, Some(*monster_id));
+                *monster_id += 1;
+            } else {
+                spawn_named_entity(&raws, commands, font, &entity_name, x, y, None);
             }
-            attempts += 1;
-        }
-    }
-
-    // Spawn items using weighted table
-    let raws = RAWS.lock().unwrap();
-    for idx in item_spawn_points.iter() {
-        let x = (*idx % MAP_WIDTH) as i32;
-        let y = (*idx / MAP_WIDTH) as i32;
-        if let Some(item_name) = item_table.roll(rng) {
-            spawn_named_entity(&raws, commands, font, &item_name, x, y, None);
         }
     }
 }
