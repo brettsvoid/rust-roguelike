@@ -372,9 +372,9 @@ fn go_next_level(
         }
     }
 
-    // Generate new map with increased depth using default builder
+    // Generate new map with increased depth using level-appropriate builder
     let new_depth = map.depth + 1;
-    let mut builder = map_builders::default_builder(new_depth);
+    let mut builder = map_builders::level_builder(new_depth, &mut rng);
     builder.build_map(&mut rng);
     *map = builder.get_map();
 
@@ -388,43 +388,45 @@ fn go_next_level(
     let mut y = 0;
     let mut x = 0;
     for tile in map.tiles.iter() {
-        match tile {
-            map::TileType::Floor => {
-                commands.spawn((
-                    map::Tile,
-                    map::Position { x, y },
-                    Text2d::new("."),
-                    text_font.clone(),
-                    TextColor(Color::srgb(0.5, 0.5, 0.5)),
-                    map::Revealed(map::RevealedState::Hidden),
-                ));
-            }
+        let (glyph, color) = match tile {
+            map::TileType::Floor | map::TileType::WoodFloor => (".", Color::srgb(0.5, 0.5, 0.5)),
             map::TileType::Wall => {
                 // Only spawn walls adjacent to floors (boundary walls)
                 if map.is_adjacent_to_floor(x, y) {
-                    let glyph = map.wall_glyph_at(x, y);
+                    let wall_glyph = map.wall_glyph_at(x, y);
                     commands.spawn((
                         map::Tile,
                         map::Position { x, y },
-                        glyph,
-                        Text2d::new(glyph.to_char().to_string()),
+                        wall_glyph,
+                        Text2d::new(wall_glyph.to_char().to_string()),
                         text_font.clone(),
                         TextColor(Color::srgb(0.0, 1.0, 0.0)),
                         map::Revealed(map::RevealedState::Hidden),
                     ));
                 }
+                x += 1;
+                if x > map::MAP_WIDTH as i32 - 1 {
+                    x = 0;
+                    y += 1;
+                }
+                continue;
             }
-            map::TileType::DownStairs => {
-                commands.spawn((
-                    map::Tile,
-                    map::Position { x, y },
-                    Text2d::new(">"),
-                    text_font.clone(),
-                    TextColor(Color::srgb(0.0, 1.0, 1.0)),
-                    map::Revealed(map::RevealedState::Hidden),
-                ));
-            }
-        }
+            map::TileType::DownStairs => (">", Color::srgb(0.0, 1.0, 1.0)),
+            map::TileType::Road => ("≡", Color::srgb(0.5, 0.5, 0.5)),
+            map::TileType::Grass => ("\"", Color::srgb(0.0, 0.8, 0.0)),
+            map::TileType::ShallowWater => ("~", Color::srgb(0.0, 0.8, 0.8)),
+            map::TileType::DeepWater => ("~", Color::srgb(0.0, 0.3, 0.8)),
+            map::TileType::Bridge => (".", Color::srgb(0.6, 0.4, 0.2)),
+        };
+
+        commands.spawn((
+            map::Tile,
+            map::Position { x, y },
+            Text2d::new(glyph),
+            text_font.clone(),
+            TextColor(color),
+            map::Revealed(map::RevealedState::Hidden),
+        ));
 
         x += 1;
         if x > map::MAP_WIDTH as i32 - 1 {
@@ -571,42 +573,39 @@ fn finalize_mapgen(
             let idx = map.xy_idx(x, y);
             let tile = map.tiles[idx];
 
-            match tile {
-                map::TileType::Floor => {
-                    commands.spawn((
-                        map::Tile,
-                        map::Position { x, y },
-                        Text2d::new("."),
-                        text_font.clone(),
-                        TextColor(Color::srgb(0.5, 0.5, 0.5)),
-                        map::Revealed(map::RevealedState::Hidden),
-                    ));
-                }
+            let (glyph, color) = match tile {
+                map::TileType::Floor | map::TileType::WoodFloor => (".", Color::srgb(0.5, 0.5, 0.5)),
                 map::TileType::Wall => {
                     if map.is_adjacent_to_floor(x, y) {
-                        let glyph = map.wall_glyph_at(x, y);
+                        let wall_glyph = map.wall_glyph_at(x, y);
                         commands.spawn((
                             map::Tile,
                             map::Position { x, y },
-                            glyph,
-                            Text2d::new(glyph.to_char().to_string()),
+                            wall_glyph,
+                            Text2d::new(wall_glyph.to_char().to_string()),
                             text_font.clone(),
                             TextColor(Color::srgb(0.0, 1.0, 0.0)),
                             map::Revealed(map::RevealedState::Hidden),
                         ));
                     }
+                    continue;
                 }
-                map::TileType::DownStairs => {
-                    commands.spawn((
-                        map::Tile,
-                        map::Position { x, y },
-                        Text2d::new(">"),
-                        text_font.clone(),
-                        TextColor(Color::srgb(0.0, 1.0, 1.0)),
-                        map::Revealed(map::RevealedState::Hidden),
-                    ));
-                }
-            }
+                map::TileType::DownStairs => (">", Color::srgb(0.0, 1.0, 1.0)),
+                map::TileType::Road => ("≡", Color::srgb(0.5, 0.5, 0.5)),
+                map::TileType::Grass => ("\"", Color::srgb(0.0, 0.8, 0.0)),
+                map::TileType::ShallowWater => ("~", Color::srgb(0.0, 0.8, 0.8)),
+                map::TileType::DeepWater => ("~", Color::srgb(0.0, 0.3, 0.8)),
+                map::TileType::Bridge => (".", Color::srgb(0.6, 0.4, 0.2)),
+            };
+
+            commands.spawn((
+                map::Tile,
+                map::Position { x, y },
+                Text2d::new(glyph),
+                text_font.clone(),
+                TextColor(color),
+                map::Revealed(map::RevealedState::Hidden),
+            ));
         }
     }
 
@@ -672,48 +671,45 @@ fn mapgen_visualization(
         ..default()
     };
 
-    // Show only floors and walls during visualization (no stairs - they're gameplay elements)
+    // Show tiles during visualization
     for y in 0..map::MAP_HEIGHT as i32 {
         for x in 0..map::MAP_WIDTH as i32 {
             let idx = snapshot.xy_idx(x, y);
-            match snapshot.tiles[idx] {
-                map::TileType::Floor => {
-                    commands.spawn((
-                        map::Tile,
-                        map::Position { x, y },
-                        Text2d::new("."),
-                        text_font.clone(),
-                        TextColor(Color::srgb(0.5, 0.5, 0.5)),
-                        map::Revealed(map::RevealedState::Visible),
-                    ));
-                }
+            let (glyph, color) = match snapshot.tiles[idx] {
+                map::TileType::Floor | map::TileType::WoodFloor => (".", Color::srgb(0.5, 0.5, 0.5)),
                 map::TileType::Wall => {
                     // Only show walls adjacent to floors
                     if snapshot.is_adjacent_to_floor(x, y) {
-                        let glyph = snapshot.wall_glyph_at(x, y);
+                        let wall_glyph = snapshot.wall_glyph_at(x, y);
                         commands.spawn((
                             map::Tile,
                             map::Position { x, y },
-                            glyph,
-                            Text2d::new(glyph.to_char().to_string()),
+                            wall_glyph,
+                            Text2d::new(wall_glyph.to_char().to_string()),
                             text_font.clone(),
                             TextColor(Color::srgb(0.0, 1.0, 0.0)),
                             map::Revealed(map::RevealedState::Visible),
                         ));
                     }
+                    continue;
                 }
-                map::TileType::DownStairs => {
-                    // Don't show stairs during visualization - treat as floor visually
-                    commands.spawn((
-                        map::Tile,
-                        map::Position { x, y },
-                        Text2d::new("."),
-                        text_font.clone(),
-                        TextColor(Color::srgb(0.5, 0.5, 0.5)),
-                        map::Revealed(map::RevealedState::Visible),
-                    ));
-                }
-            }
+                // Treat stairs as floor visually during map generation
+                map::TileType::DownStairs => (".", Color::srgb(0.5, 0.5, 0.5)),
+                map::TileType::Road => ("≡", Color::srgb(0.5, 0.5, 0.5)),
+                map::TileType::Grass => ("\"", Color::srgb(0.0, 0.8, 0.0)),
+                map::TileType::ShallowWater => ("~", Color::srgb(0.0, 0.8, 0.8)),
+                map::TileType::DeepWater => ("~", Color::srgb(0.0, 0.3, 0.8)),
+                map::TileType::Bridge => (".", Color::srgb(0.6, 0.4, 0.2)),
+            };
+
+            commands.spawn((
+                map::Tile,
+                map::Position { x, y },
+                Text2d::new(glyph),
+                text_font.clone(),
+                TextColor(color),
+                map::Revealed(map::RevealedState::Visible),
+            ));
         }
     }
 
@@ -761,12 +757,12 @@ fn mapgen_input(
                     commands.entity(entity).despawn_recursive();
                 }
 
-                // Generate new map using selected builder or random
+                // Generate new map using selected builder or level-appropriate builder
                 // Preserve pending state (true for new game, false for visualizer)
                 let was_pending = spawn_data.pending;
                 let mut builder = match selected_builder.0 {
                     Some(idx) => map_builders::builder_by_index(idx, 1),
-                    None => map_builders::default_builder(1),
+                    None => map_builders::level_builder(1, &mut rng),
                 };
                 builder_name.0 = builder.get_name().to_string();
                 builder.build_map(&mut rng);

@@ -155,6 +155,12 @@ pub fn update_tile_info_overlay(
         TileType::Floor => "Floor",
         TileType::Wall => "Wall",
         TileType::DownStairs => "Stairs",
+        TileType::Road => "Road",
+        TileType::Grass => "Grass",
+        TileType::ShallowWater => "ShallowWater",
+        TileType::DeepWater => "DeepWater",
+        TileType::WoodFloor => "WoodFloor",
+        TileType::Bridge => "Bridge",
     };
     let blocked = map.blocked_tiles[idx];
 

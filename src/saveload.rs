@@ -14,7 +14,7 @@ use crate::components::{
     ProvidesHealing, Ranged, RenderOrder, RenderableBundle, SingleActivation, Targeting,
 };
 use crate::gamelog::GameLog;
-use crate::map::{Map, Position, Revealed, RevealedState, Tile, TileType, MAP_WIDTH};
+use crate::map::{tile_walkable, Map, Position, Revealed, RevealedState, Tile, TileType, MAP_WIDTH};
 use crate::monsters::Monster;
 use crate::player::Player;
 use crate::resources::UiFont;
@@ -393,7 +393,7 @@ pub fn load_game(
     map.height = save_data.map.height;
     map.depth = save_data.map.depth;
     // Recalculate blocked tiles
-    map.blocked_tiles = map.tiles.iter().map(|t| *t == TileType::Wall).collect();
+    map.blocked_tiles = map.tiles.iter().map(|t| !tile_walkable(*t)).collect();
     map.visible_tiles = vec![false; map.tiles.len()];
     map.tile_content = vec![Vec::new(); map.tiles.len()];
     map.bloodstains = save_data.map.bloodstains.into_iter().collect();
@@ -417,43 +417,45 @@ pub fn load_game(
             RevealedState::Hidden
         };
 
-        match tile {
-            TileType::Floor => {
-                commands.spawn((
-                    Tile,
-                    Position { x, y },
-                    Text2d::new("."),
-                    text_font.clone(),
-                    TextColor(Color::srgb(0.5, 0.5, 0.5)),
-                    Revealed(revealed_state),
-                ));
-            }
+        let (glyph, color) = match tile {
+            TileType::Floor | TileType::WoodFloor => (".", Color::srgb(0.5, 0.5, 0.5)),
             TileType::Wall => {
                 // Only spawn walls adjacent to floors (boundary walls)
                 if map.is_adjacent_to_floor(x, y) {
-                    let glyph = map.wall_glyph_at(x, y);
+                    let wall_glyph = map.wall_glyph_at(x, y);
                     commands.spawn((
                         Tile,
                         Position { x, y },
-                        glyph,
-                        Text2d::new(glyph.to_char().to_string()),
+                        wall_glyph,
+                        Text2d::new(wall_glyph.to_char().to_string()),
                         text_font.clone(),
                         TextColor(Color::srgb(0.0, 1.0, 0.0)),
                         Revealed(revealed_state),
                     ));
                 }
+                x += 1;
+                if x > MAP_WIDTH as i32 - 1 {
+                    x = 0;
+                    y += 1;
+                }
+                continue;
             }
-            TileType::DownStairs => {
-                commands.spawn((
-                    Tile,
-                    Position { x, y },
-                    Text2d::new(">"),
-                    text_font.clone(),
-                    TextColor(Color::srgb(0.0, 1.0, 1.0)),
-                    Revealed(revealed_state),
-                ));
-            }
-        }
+            TileType::DownStairs => (">", Color::srgb(0.0, 1.0, 1.0)),
+            TileType::Road => ("≡", Color::srgb(0.5, 0.5, 0.5)),
+            TileType::Grass => ("\"", Color::srgb(0.0, 0.8, 0.0)),
+            TileType::ShallowWater => ("~", Color::srgb(0.0, 0.8, 0.8)),
+            TileType::DeepWater => ("~", Color::srgb(0.0, 0.3, 0.8)),
+            TileType::Bridge => (".", Color::srgb(0.6, 0.4, 0.2)),
+        };
+
+        commands.spawn((
+            Tile,
+            Position { x, y },
+            Text2d::new(glyph),
+            text_font.clone(),
+            TextColor(color),
+            Revealed(revealed_state),
+        ));
 
         x += 1;
         if x > MAP_WIDTH as i32 - 1 {

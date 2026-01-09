@@ -18,6 +18,14 @@ cargo build --release
 cargo run --features file_watcher
 ```
 
+## Game Design
+
+See [docs/design.md](docs/design.md) for the full game design document. Key points:
+- **Goal**: Descend 12 levels to retrieve the Heart of the Abyss, then escape back to the surface
+- **Genre**: Turn-based roguelike with permadeath and procedural generation
+- **Theme**: Classic fantasy dungeon crawler (orcs, goblins, undead, demons)
+- **Mechanics**: Combat, exploration, hunger/survival, items/equipment
+
 ## Architecture
 
 This is a Bevy-based roguelike game following the tutorial at https://bfnightly.bracketproductions.com/rustbook/.

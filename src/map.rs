@@ -77,9 +77,44 @@ impl WallGlyph {
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum TileType {
-    Floor,
     Wall,
+    Floor,
     DownStairs,
+    Road,
+    Grass,
+    ShallowWater,
+    DeepWater,
+    WoodFloor,
+    Bridge,
+}
+
+/// Check if a tile type is walkable
+pub fn tile_walkable(tt: TileType) -> bool {
+    matches!(
+        tt,
+        TileType::Floor
+            | TileType::DownStairs
+            | TileType::Road
+            | TileType::Grass
+            | TileType::ShallowWater
+            | TileType::WoodFloor
+            | TileType::Bridge
+    )
+}
+
+/// Check if a tile type blocks visibility
+pub fn tile_opaque(tt: TileType) -> bool {
+    matches!(tt, TileType::Wall)
+}
+
+/// Get the pathfinding cost for a tile type
+pub fn tile_cost(tt: TileType) -> f32 {
+    match tt {
+        TileType::Road => 0.8,
+        TileType::Grass => 1.1,
+        TileType::ShallowWater => 1.2,
+        _ => 1.0,
+    }
 }
 
 #[derive(Debug)]
@@ -130,13 +165,24 @@ impl Map {
         (y as usize * self.width as usize) + x as usize
     }
 
-    /// Check if a wall at (x, y) is adjacent to at least one floor tile (including diagonals)
+    /// Check if a wall at (x, y) is adjacent to at least one visible floor-like tile (including diagonals)
     pub fn is_adjacent_to_floor(&self, x: i32, y: i32) -> bool {
         let check = |tx: i32, ty: i32| -> bool {
             if tx < 0 || tx >= self.width || ty < 0 || ty >= self.height {
                 return false;
             }
-            self.tiles[self.xy_idx(tx, ty)] == TileType::Floor
+            let tile = self.tiles[self.xy_idx(tx, ty)];
+            // Check for any visible floor-like tile type
+            matches!(
+                tile,
+                TileType::Floor
+                    | TileType::WoodFloor
+                    | TileType::Road
+                    | TileType::Grass
+                    | TileType::Bridge
+                    | TileType::ShallowWater
+                    | TileType::DownStairs
+            )
         };
         // Cardinal directions
         check(x, y - 1) || check(x, y + 1) || check(x - 1, y) || check(x + 1, y) ||
@@ -153,14 +199,14 @@ impl Map {
         !self.blocked_tiles[idx]
     }
 
-    /// Check if a tile is walkable (ignores entities, only checks walls)
+    /// Check if a tile is walkable (ignores entities, only checks tile type)
     fn is_walkable(&self, x: i32, y: i32) -> bool {
         if x < 1 || x > self.width - 1 || y < 1 || y > self.height - 1 {
             return false;
         }
         let idx = self.xy_idx(x, y);
 
-        self.tiles[idx] != TileType::Wall
+        tile_walkable(self.tiles[idx])
     }
 
     /// Get available exits ignoring entity blocking (for pathfinding)
@@ -248,7 +294,7 @@ impl Map {
 
     pub fn populate_blocked(&mut self) {
         for (i, tile) in self.tiles.iter().enumerate() {
-            self.blocked_tiles[i] = *tile == TileType::Wall;
+            self.blocked_tiles[i] = !tile_walkable(*tile);
         }
     }
 

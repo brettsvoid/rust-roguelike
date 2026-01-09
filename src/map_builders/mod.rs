@@ -15,6 +15,7 @@ mod room_modifiers;
 mod room_sorter;
 mod rooms_only;
 mod simple_map;
+mod town;
 mod voronoi;
 mod wfc;
 
@@ -44,6 +45,7 @@ pub use room_sorter::{RoomSort, RoomSorter};
 pub use rooms_only::{BspRoomsBuilder, SimpleMapRoomsBuilder};
 pub use simple_map::SimpleMapBuilder;
 pub use voronoi::VoronoiCellBuilder;
+pub use town::TownBuilder;
 pub use wfc::WfcBuilder;
 
 /// All available map builder types
@@ -586,5 +588,21 @@ pub fn default_builder(depth: i32) -> Box<dyn MapBuilder> {
             .with(RoomBasedStartingPosition::new())
             .with(RoomBasedStairs::new())
             .with(RoomBasedSpawner::new()),
+    )
+}
+
+/// Selects the appropriate builder based on dungeon depth.
+/// Depth 1 is the starting town, other depths use random dungeon generation.
+pub fn level_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
+    match depth {
+        1 => town_builder(depth),
+        _ => random_builder(depth, rng),
+    }
+}
+
+fn town_builder(depth: i32) -> Box<dyn MapBuilder> {
+    Box::new(
+        BuilderChain::new(depth, "Town")
+            .start_with(Box::new(TownBuilder::new())),
     )
 }

@@ -36,7 +36,15 @@ fn try_move_player(
     combat_stats: &Query<&CombatStats, Without<Player>>,
     doors: &mut Query<(Entity, &mut Door, &mut Text2d), Without<Player>>,
 ) {
-    let destination_idx = xy_idx(pos.x + delta_x, pos.y + delta_y);
+    let dest_x = pos.x + delta_x;
+    let dest_y = pos.y + delta_y;
+
+    // Bounds check - can't move outside map
+    if dest_x < 0 || dest_x >= map.width || dest_y < 0 || dest_y >= map.height {
+        return;
+    }
+
+    let destination_idx = xy_idx(dest_x, dest_y);
 
     // Check for attackable targets
     for potential_target in map.tile_content[destination_idx].iter() {

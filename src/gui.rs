@@ -69,8 +69,8 @@ fn spawn_new_game_immediate(
     rng: &mut ResMut<GameRng>,
     font: &Res<UiFont>,
 ) {
-    // Generate new map using default builder
-    let mut builder = map_builders::default_builder(1);
+    // Generate new map using level-appropriate builder (town at depth 1)
+    let mut builder = map_builders::level_builder(1, rng);
     builder.build_map(rng);
     *map.as_mut() = builder.get_map();
 
@@ -84,42 +84,44 @@ fn spawn_new_game_immediate(
     let mut y = 0;
     let mut x = 0;
     for tile in map.tiles.iter() {
-        match tile {
-            TileType::Floor => {
-                commands.spawn((
-                    Tile,
-                    Position { x, y },
-                    Text2d::new("."),
-                    text_font.clone(),
-                    TextColor(Color::srgb(0.5, 0.5, 0.5)),
-                    Revealed(RevealedState::Hidden),
-                ));
-            }
+        let (glyph, color) = match tile {
+            TileType::Floor | TileType::WoodFloor => (".", Color::srgb(0.5, 0.5, 0.5)),
             TileType::Wall => {
                 if map.is_adjacent_to_floor(x, y) {
-                    let glyph = map.wall_glyph_at(x, y);
+                    let wall_glyph = map.wall_glyph_at(x, y);
                     commands.spawn((
                         Tile,
                         Position { x, y },
-                        glyph,
-                        Text2d::new(glyph.to_char().to_string()),
+                        wall_glyph,
+                        Text2d::new(wall_glyph.to_char().to_string()),
                         text_font.clone(),
                         TextColor(Color::srgb(0.0, 1.0, 0.0)),
                         Revealed(RevealedState::Hidden),
                     ));
                 }
+                x += 1;
+                if x > MAP_WIDTH as i32 - 1 {
+                    x = 0;
+                    y += 1;
+                }
+                continue;
             }
-            TileType::DownStairs => {
-                commands.spawn((
-                    Tile,
-                    Position { x, y },
-                    Text2d::new(">"),
-                    text_font.clone(),
-                    TextColor(Color::srgb(0.0, 1.0, 1.0)),
-                    Revealed(RevealedState::Hidden),
-                ));
-            }
-        }
+            TileType::DownStairs => (">", Color::srgb(0.0, 1.0, 1.0)),
+            TileType::Road => ("≡", Color::srgb(0.5, 0.5, 0.5)),
+            TileType::Grass => ("\"", Color::srgb(0.0, 0.8, 0.0)),
+            TileType::ShallowWater => ("~", Color::srgb(0.0, 0.8, 0.8)),
+            TileType::DeepWater => ("~", Color::srgb(0.0, 0.3, 0.8)),
+            TileType::Bridge => (".", Color::srgb(0.6, 0.4, 0.2)),
+        };
+
+        commands.spawn((
+            Tile,
+            Position { x, y },
+            Text2d::new(glyph),
+            text_font.clone(),
+            TextColor(color),
+            Revealed(RevealedState::Hidden),
+        ));
 
         x += 1;
         if x > MAP_WIDTH as i32 - 1 {
