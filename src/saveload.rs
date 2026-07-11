@@ -13,8 +13,10 @@ use crate::components::{
     HungerClock, HungerState, InBackpack, InflictsDamage, Item, MagicMapper, Name, ProvidesFood,
     ProvidesHealing, Ranged, RenderOrder, RenderableBundle, SingleActivation, Targeting,
 };
+use crate::game_flow::RunState;
 use crate::gamelog::GameLog;
-use crate::map::{tile_walkable, Map, Position, Revealed, RevealedState, Tile, TileType, MAP_WIDTH};
+use crate::map::{tile_walkable, Map, Position, Tile, TileType, FONT_SIZE};
+use crate::map_render::{spawn_map_tiles, TileReveal};
 use crate::monsters::Monster;
 use crate::player::Player;
 use crate::resources::UiFont;
@@ -22,6 +24,108 @@ use crate::viewshed::Viewshed;
 
 #[cfg(not(target_arch = "wasm32"))]
 const SAVE_FILE: &str = "savegame.json";
+
+// ============================================================================
+// Save Queries
+// ============================================================================
+// Everything the save file needs to capture, written down once. If you add a
+// component that should survive a save/load, extend the matching query here
+// and the (de)serialization code below.
+
+pub type PlayerSaveQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Position,
+        &'static Name,
+        &'static CombatStats,
+        &'static Viewshed,
+        &'static HungerClock,
+    ),
+    With<Player>,
+>;
+
+pub type MonsterSaveQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Position,
+        &'static Name,
+        &'static CombatStats,
+        &'static Viewshed,
+        &'static Text2d,
+        Option<&'static Confusion>,
+    ),
+    With<Monster>,
+>;
+
+pub type ItemSaveQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Name,
+        &'static Text2d,
+        &'static TextColor,
+        Option<&'static Position>,
+        Option<&'static InBackpack>,
+        Option<&'static Consumable>,
+        Option<&'static ProvidesHealing>,
+        Option<&'static ProvidesFood>,
+        Option<&'static Ranged>,
+        Option<&'static InflictsDamage>,
+        Option<&'static AreaOfEffect>,
+        Option<&'static Targeting>,
+        Option<&'static CausesConfusion>,
+        Option<&'static MagicMapper>,
+    ),
+    With<Item>,
+>;
+
+pub type TrapSaveQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Position,
+        &'static Name,
+        &'static Text2d,
+        &'static TextColor,
+        &'static InflictsDamage,
+        Option<&'static Hidden>,
+        Option<&'static SingleActivation>,
+    ),
+    With<EntryTrigger>,
+>;
+
+/// Q key: save the game (if a run is in progress and the player is alive)
+/// and exit. Registered as a system in main.rs.
+pub fn save_on_quit(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut exit: EventWriter<AppExit>,
+    state: Res<State<RunState>>,
+    map: Res<Map>,
+    game_log: Res<GameLog>,
+    player_query: PlayerSaveQuery,
+    monster_query: MonsterSaveQuery,
+    item_query: ItemSaveQuery,
+    trap_query: TrapSaveQuery,
+) {
+    if keyboard.just_released(KeyCode::KeyQ) {
+        // Only save if we're in-game (not in MainMenu) and player is alive
+        if *state.get() != RunState::MainMenu {
+            let player_alive = player_query
+                .get_single()
+                .map(|(_, _, _, stats, _, _)| stats.hp > 0)
+                .unwrap_or(false);
+
+            if player_alive {
+                save_game(map, game_log, player_query, monster_query, item_query, trap_query);
+            }
+        }
+        exit.send(AppExit::Success);
+    }
+}
 
 // ============================================================================
 // Serializable Data Structures
@@ -139,53 +243,10 @@ pub struct SerializedTrap {
 pub fn save_game(
     map: Res<Map>,
     game_log: Res<GameLog>,
-    player_query: Query<
-        (Entity, &Position, &Name, &CombatStats, &Viewshed, &HungerClock),
-        With<Player>,
-    >,
-    monster_query: Query<
-        (
-            &Position,
-            &Name,
-            &CombatStats,
-            &Viewshed,
-            &Text2d,
-            Option<&Confusion>,
-        ),
-        With<Monster>,
-    >,
-    item_query: Query<
-        (
-            Entity,
-            &Name,
-            &Text2d,
-            &TextColor,
-            Option<&Position>,
-            Option<&InBackpack>,
-            Option<&Consumable>,
-            Option<&ProvidesHealing>,
-            Option<&ProvidesFood>,
-            Option<&Ranged>,
-            Option<&InflictsDamage>,
-            Option<&AreaOfEffect>,
-            Option<&Targeting>,
-            Option<&CausesConfusion>,
-            Option<&MagicMapper>,
-        ),
-        With<Item>,
-    >,
-    trap_query: Query<
-        (
-            &Position,
-            &Name,
-            &Text2d,
-            &TextColor,
-            &InflictsDamage,
-            Option<&Hidden>,
-            Option<&SingleActivation>,
-        ),
-        With<EntryTrigger>,
-    >,
+    player_query: PlayerSaveQuery,
+    monster_query: MonsterSaveQuery,
+    item_query: ItemSaveQuery,
+    trap_query: TrapSaveQuery,
 ) {
     let Ok((player_entity, player_pos, player_name, player_stats, player_viewshed, player_hunger)) =
         player_query.get_single()
@@ -403,66 +464,12 @@ pub fn load_game(
 
     let text_font = TextFont {
         font: font.0.clone(),
-        font_size: 16.0,
+        font_size: FONT_SIZE,
         ..default()
     };
 
-    // Spawn map tiles
-    let mut y = 0;
-    let mut x = 0;
-    for (idx, tile) in map.tiles.iter().enumerate() {
-        let revealed_state = if map.revealed_tiles[idx] {
-            RevealedState::Explored
-        } else {
-            RevealedState::Hidden
-        };
-
-        let (glyph, color) = match tile {
-            TileType::Floor | TileType::WoodFloor => (".", Color::srgb(0.5, 0.5, 0.5)),
-            TileType::Wall => {
-                // Only spawn walls adjacent to floors (boundary walls)
-                if map.is_adjacent_to_floor(x, y) {
-                    let wall_glyph = map.wall_glyph_at(x, y);
-                    commands.spawn((
-                        Tile,
-                        Position { x, y },
-                        wall_glyph,
-                        Text2d::new(wall_glyph.to_char().to_string()),
-                        text_font.clone(),
-                        TextColor(Color::srgb(0.0, 1.0, 0.0)),
-                        Revealed(revealed_state),
-                    ));
-                }
-                x += 1;
-                if x > MAP_WIDTH as i32 - 1 {
-                    x = 0;
-                    y += 1;
-                }
-                continue;
-            }
-            TileType::DownStairs => (">", Color::srgb(0.0, 1.0, 1.0)),
-            TileType::Road => ("≡", Color::srgb(0.5, 0.5, 0.5)),
-            TileType::Grass => ("\"", Color::srgb(0.0, 0.8, 0.0)),
-            TileType::ShallowWater => ("~", Color::srgb(0.0, 0.8, 0.8)),
-            TileType::DeepWater => ("~", Color::srgb(0.0, 0.3, 0.8)),
-            TileType::Bridge => (".", Color::srgb(0.6, 0.4, 0.2)),
-        };
-
-        commands.spawn((
-            Tile,
-            Position { x, y },
-            Text2d::new(glyph),
-            text_font.clone(),
-            TextColor(color),
-            Revealed(revealed_state),
-        ));
-
-        x += 1;
-        if x > MAP_WIDTH as i32 - 1 {
-            x = 0;
-            y += 1;
-        }
-    }
+    // Spawn map tiles, keeping explored areas dimly visible
+    spawn_map_tiles(commands, map, &text_font, TileReveal::FromSave);
 
     // Spawn player
     let player_entity = commands
@@ -637,53 +644,10 @@ pub fn load_game(
 pub fn save_game(
     _map: Res<Map>,
     _game_log: Res<GameLog>,
-    _player_query: Query<
-        (Entity, &Position, &Name, &CombatStats, &Viewshed, &HungerClock),
-        With<Player>,
-    >,
-    _monster_query: Query<
-        (
-            &Position,
-            &Name,
-            &CombatStats,
-            &Viewshed,
-            &Text2d,
-            Option<&Confusion>,
-        ),
-        With<Monster>,
-    >,
-    _item_query: Query<
-        (
-            Entity,
-            &Name,
-            &Text2d,
-            &TextColor,
-            Option<&Position>,
-            Option<&InBackpack>,
-            Option<&Consumable>,
-            Option<&ProvidesHealing>,
-            Option<&ProvidesFood>,
-            Option<&Ranged>,
-            Option<&InflictsDamage>,
-            Option<&AreaOfEffect>,
-            Option<&Targeting>,
-            Option<&CausesConfusion>,
-            Option<&MagicMapper>,
-        ),
-        With<Item>,
-    >,
-    _trap_query: Query<
-        (
-            &Position,
-            &Name,
-            &Text2d,
-            &TextColor,
-            &InflictsDamage,
-            Option<&Hidden>,
-            Option<&SingleActivation>,
-        ),
-        With<EntryTrigger>,
-    >,
+    _player_query: PlayerSaveQuery,
+    _monster_query: MonsterSaveQuery,
+    _item_query: ItemSaveQuery,
+    _trap_query: TrapSaveQuery,
 ) {
     // No-op on WASM
 }

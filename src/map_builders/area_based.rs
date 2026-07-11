@@ -1,3 +1,14 @@
+//! Meta builders for maps without rooms (caves and other open "areas").
+//!
+//! - `AreaStartingPosition`: drop the player on the floor tile nearest a
+//!   chosen spot (center, an edge, a corner)
+//! - `CullUnreachable`: wall off any floor the player could never reach
+//! - `DistantExit`: put the stairs on the farthest walkable tile
+//! - `VoronoiSpawning`: sprinkle monsters and items region by region
+//!
+//! Chain these after any initial builder that doesn't handle start/stairs/
+//! spawns itself.
+
 use crate::map::{TileType, MAP_HEIGHT, MAP_WIDTH};
 use crate::pathfinding::dijkstra_map;
 use crate::rng::GameRng;
@@ -8,12 +19,15 @@ use super::{BuilderMap, MetaMapBuilder};
 // Area-Based Starting Position
 // ============================================================================
 
+// Toolbox: only Center is used today, the rest are options for new chains.
+#[allow(dead_code)]
 pub enum XStart {
     Left,
     Center,
     Right,
 }
 
+#[allow(dead_code)]
 pub enum YStart {
     Top,
     Center,
@@ -58,7 +72,6 @@ impl MetaMapBuilder for AreaStartingPosition {
         }
 
         // Find closest floor tile to seed
-        let seed_idx = build_data.map.xy_idx(seed_x, seed_y);
         let mut closest_idx = available[0];
         let mut closest_dist = i32::MAX;
 

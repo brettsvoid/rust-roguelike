@@ -1,3 +1,12 @@
+//! Erosion meta builders - rough up a map that looks too clean.
+//!
+//! - `CellularAutomataEroder`: a few smoothing passes melt straight walls
+//!   into organic edges (rooms start looking cave-worn)
+//! - `DrunkardsWalkEroder`: set a drunk digger loose on the finished map to
+//!   open it up further
+//!
+//! Erosion can disconnect areas, so follow with `CullUnreachable`.
+
 use rand::Rng;
 
 use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
@@ -15,6 +24,8 @@ pub struct CellularAutomataEroder {
 }
 
 impl CellularAutomataEroder {
+    // Toolbox: single-pass erosion preset.
+    #[allow(dead_code)]
     pub fn new() -> Box<Self> {
         Box::new(Self { iterations: 1 })
     }
@@ -84,6 +95,8 @@ pub struct DrunkardsWalkEroder {
 }
 
 impl DrunkardsWalkEroder {
+    // Toolbox: only `light` is used by the random builders today.
+    #[allow(dead_code)]
     pub fn new() -> Box<Self> {
         Box::new(Self {
             floor_percent: 0.4,
@@ -100,6 +113,7 @@ impl DrunkardsWalkEroder {
         })
     }
 
+    #[allow(dead_code)]
     pub fn heavy() -> Box<Self> {
         Box::new(Self {
             floor_percent: 0.5,
@@ -108,6 +122,7 @@ impl DrunkardsWalkEroder {
         })
     }
 
+    #[allow(dead_code)]
     pub fn symmetric() -> Box<Self> {
         Box::new(Self {
             floor_percent: 0.4,

@@ -1,14 +1,26 @@
-use bevy::prelude::*;
+//! Wave Function Collapse (WFC) map builder.
+//!
+//! A meta builder: it takes the map some other builder already made, chops
+//! it into small chunks, and learns which chunks are allowed to sit next to
+//! each other (their touching edges must match). Then it re-tiles the whole
+//! map by repeatedly picking the most-constrained cell and collapsing it to
+//! one of its remaining options, until every cell is decided.
+//!
+//! The result remixes the source map's style into a brand new layout: feed
+//! it caves and you get cave-flavored output, feed it rooms and you get
+//! something roomy but stranger. Falls back to the untouched source map if
+//! it can't find a solution.
+//!
+//! Good for: variety - one extra chain step turns any generator into a
+//! whole family of layouts.
+
 use rand::Rng;
 use std::collections::{HashMap, HashSet};
 
 use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
-use crate::pathfinding::dijkstra_map;
 use crate::rng::GameRng;
-use crate::shapes::Rect;
-use crate::spawner;
 
-use super::{BuilderMap, MapBuilder, MetaMapBuilder};
+use super::{BuilderMap, MetaMapBuilder};
 
 /// Default chunk size for pattern extraction (in tiles)
 /// Smaller = faster but less variety, larger = slower but more detail
@@ -435,253 +447,34 @@ impl WfcSolver {
 }
 
 // ============================================================================
-// WfcSourceType - Which generator to use for source patterns
-// ============================================================================
-
-#[derive(Clone, Copy, Debug)]
-pub enum WfcSourceType {
-    CellularAutomata,
-    BspDungeon,
-    BspInterior,
-    Dla,
-}
-
-// ============================================================================
-// WfcBuilder - The main map builder
+// WfcBuilder - the meta builder that runs the solver
 // ============================================================================
 
 pub struct WfcBuilder {
-    map: Map,
-    starting_position: (i32, i32),
-    depth: i32,
-    history: Vec<Map>,
-    spawn_regions: Vec<Vec<usize>>,
     chunk_size: i32,
-    source_type: WfcSourceType,
 }
 
 impl WfcBuilder {
-    pub fn new(depth: i32) -> Self {
-        Self::with_options(depth, DEFAULT_CHUNK_SIZE, WfcSourceType::CellularAutomata)
-    }
-
-    pub fn with_options(depth: i32, chunk_size: i32, source_type: WfcSourceType) -> Self {
+    /// WFC with the default 4-tile chunk size.
+    pub fn new() -> Self {
         Self {
-            map: Map::new(MAP_WIDTH, MAP_HEIGHT, depth),
-            starting_position: (MAP_WIDTH as i32 / 2, MAP_HEIGHT as i32 / 2),
-            depth,
-            history: Vec::new(),
-            spawn_regions: Vec::new(),
-            chunk_size,
-            source_type,
+            chunk_size: DEFAULT_CHUNK_SIZE,
         }
     }
 
-    pub fn cellular_automata(depth: i32) -> Self {
-        Self::with_options(depth, DEFAULT_CHUNK_SIZE, WfcSourceType::CellularAutomata)
-    }
-
-    pub fn bsp_dungeon(depth: i32) -> Self {
-        Self::with_options(depth, DEFAULT_CHUNK_SIZE, WfcSourceType::BspDungeon)
-    }
-
-    pub fn bsp_interior(depth: i32) -> Self {
-        Self::with_options(depth, DEFAULT_CHUNK_SIZE, WfcSourceType::BspInterior)
-    }
-
-    pub fn dla(depth: i32) -> Self {
-        Self::with_options(depth, DEFAULT_CHUNK_SIZE, WfcSourceType::Dla)
-    }
-
-    /// Generate source map using another builder
-    fn generate_source_map(&self, rng: &mut GameRng) -> Map {
-        let mut source_builder: Box<dyn MapBuilder> = match self.source_type {
-            WfcSourceType::CellularAutomata => {
-                Box::new(super::CellularAutomataBuilder::new(self.depth))
-            }
-            WfcSourceType::BspDungeon => Box::new(super::BspDungeonBuilder::new(self.depth)),
-            WfcSourceType::BspInterior => Box::new(super::BspInteriorBuilder::new(self.depth)),
-            WfcSourceType::Dla => Box::new(super::DLABuilder::walk_inwards(self.depth)),
-        };
-
-        source_builder.build_map(rng);
-        source_builder.get_map()
-    }
-
-    /// Attempt WFC generation with retries
-    fn attempt_wfc(&mut self, rng: &mut GameRng) -> bool {
-        let source = self.generate_source_map(rng);
-
-        // Snapshot the source map
-        self.map = source.clone();
-        self.take_snapshot();
-
-        for _attempt in 0..MAX_RETRIES {
-            // Reset map to walls
-            self.map = Map::new(MAP_WIDTH, MAP_HEIGHT, self.depth);
-
-            let mut solver = WfcSolver::new(&source, self.chunk_size);
-
-            if solver.solve(rng, &mut self.map, &mut self.history) {
-                solver.render_to_map(&mut self.map);
-                self.take_snapshot();
-                return true;
-            }
-        }
-
-        false
-    }
-
-    /// Ensure map has solid border walls
-    fn apply_border_walls(&mut self) {
-        for x in 0..MAP_WIDTH as i32 {
-            let idx_top = self.map.xy_idx(x, 0);
-            let idx_bottom = self.map.xy_idx(x, MAP_HEIGHT as i32 - 1);
-            self.map.tiles[idx_top] = TileType::Wall;
-            self.map.tiles[idx_bottom] = TileType::Wall;
-        }
-        for y in 0..MAP_HEIGHT as i32 {
-            let idx_left = self.map.xy_idx(0, y);
-            let idx_right = self.map.xy_idx(MAP_WIDTH as i32 - 1, y);
-            self.map.tiles[idx_left] = TileType::Wall;
-            self.map.tiles[idx_right] = TileType::Wall;
-        }
-    }
-
-    /// Find a valid starting position
-    fn find_starting_position(&mut self) {
-        let mut start_x = MAP_WIDTH as i32 / 2;
-        let start_y = MAP_HEIGHT as i32 / 2;
-
-        // Search left from center until we find a floor
-        while start_x > 1 {
-            let idx = self.map.xy_idx(start_x, start_y);
-            if self.map.tiles[idx] == TileType::Floor {
-                break;
-            }
-            start_x -= 1;
-        }
-
-        // If still no floor, search the whole map
-        if self.map.tiles[self.map.xy_idx(start_x, start_y)] != TileType::Floor {
-            for y in 1..MAP_HEIGHT as i32 - 1 {
-                for x in 1..MAP_WIDTH as i32 - 1 {
-                    if self.map.tiles[self.map.xy_idx(x, y)] == TileType::Floor {
-                        self.starting_position = (x, y);
-                        return;
-                    }
-                }
-            }
-        }
-
-        self.starting_position = (start_x, start_y);
-    }
-
-    /// Cull unreachable areas and place stairs
-    fn finalize_map(&mut self) {
-        let start_idx = self.map.xy_idx(self.starting_position.0, self.starting_position.1);
-        let dijkstra = dijkstra_map(&self.map, &[start_idx]);
-
-        let mut exit_idx = start_idx;
-        let mut max_distance = 0.0f32;
-
-        for (idx, &dist) in dijkstra.iter().enumerate() {
-            if dist < f32::MAX {
-                if dist > max_distance {
-                    max_distance = dist;
-                    exit_idx = idx;
-                }
-            } else if self.map.tiles[idx] == TileType::Floor {
-                // Unreachable floor - convert to wall
-                self.map.tiles[idx] = TileType::Wall;
-            }
-        }
-
-        self.map.tiles[exit_idx] = TileType::DownStairs;
-
-        // Create spawn regions (4x4 grid sections)
-        let section_width = MAP_WIDTH / 4;
-        let section_height = MAP_HEIGHT / 4;
-
-        for sy in 0..4 {
-            for sx in 0..4 {
-                let mut region_tiles = Vec::new();
-                for y in (sy * section_height)..((sy + 1) * section_height) {
-                    for x in (sx * section_width)..((sx + 1) * section_width) {
-                        let idx = self.map.xy_idx(x as i32, y as i32);
-                        if self.map.tiles[idx] == TileType::Floor
-                            && dijkstra[idx] < f32::MAX
-                            && idx != start_idx
-                        {
-                            region_tiles.push(idx);
-                        }
-                    }
-                }
-                if !region_tiles.is_empty() {
-                    self.spawn_regions.push(region_tiles);
-                }
-            }
-        }
+    // Toolbox: bigger chunks copy more structure from the source map,
+    // smaller chunks get more chaotic.
+    #[allow(dead_code)]
+    pub fn with_chunk_size(chunk_size: i32) -> Self {
+        Self { chunk_size }
     }
 }
 
-impl MapBuilder for WfcBuilder {
-    fn build_map(&mut self, rng: &mut GameRng) {
-        self.take_snapshot();
-
-        if !self.attempt_wfc(rng) {
-            // Fallback: use source map directly
-            self.map = self.generate_source_map(rng);
-        }
-
-        self.apply_border_walls();
-        self.take_snapshot();
-
-        self.find_starting_position();
-        self.finalize_map();
-        self.take_snapshot();
-    }
-
-    fn spawn_entities(&self, commands: &mut Commands, rng: &mut GameRng, font: &TextFont) {
-        let mut monster_id: usize = 0;
-        for region in &self.spawn_regions {
-            spawner::spawn_region(commands, rng, font, region, &mut monster_id, self.depth);
-        }
-    }
-
-    fn get_map(&self) -> Map {
-        self.map.clone()
-    }
-
-    fn get_starting_position(&self) -> (i32, i32) {
-        self.starting_position
-    }
-
-    fn get_snapshot_history(&self) -> Vec<Map> {
-        self.history.clone()
-    }
-
-    fn take_snapshot(&mut self) {
-        self.history.push(self.map.clone());
-    }
-
-    fn get_spawn_regions(&self) -> Vec<Rect> {
-        Vec::new()
-    }
-
-    fn get_name(&self) -> &'static str {
-        match self.source_type {
-            WfcSourceType::CellularAutomata => "WFC (Cellular Automata)",
-            WfcSourceType::BspDungeon => "WFC (BSP Dungeon)",
-            WfcSourceType::BspInterior => "WFC (BSP Interior)",
-            WfcSourceType::Dla => "WFC (DLA)",
-        }
+impl Default for WfcBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }
-
-// ============================================================================
-// MetaMapBuilder Implementation
-// ============================================================================
 
 impl MetaMapBuilder for WfcBuilder {
     fn build_map(&mut self, rng: &mut GameRng, build_data: &mut BuilderMap) {

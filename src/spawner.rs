@@ -107,6 +107,9 @@ pub fn spawn_room(
 }
 
 /// Spawn entities in a region defined by tile indices (for non-rectangular areas like caves)
+// Toolbox: not called since spawning moved into the builder chain; useful if
+// region-based spawning comes back.
+#[allow(dead_code)]
 pub fn spawn_region(
     commands: &mut Commands,
     rng: &mut GameRng,

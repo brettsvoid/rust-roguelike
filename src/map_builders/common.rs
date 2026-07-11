@@ -1,6 +1,12 @@
+//! Shared carving helpers used by several builders: painting floor with a
+//! brush (optionally mirrored), stamping rooms, and drawing corridors.
+
 use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
 use crate::shapes::Rect;
 
+/// Mirror painted tiles across the map's center lines.
+// Toolbox: Vertical isn't used by any preset yet.
+#[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq)]
 pub enum Symmetry {
     None,

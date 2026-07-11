@@ -1,3 +1,10 @@
+//! Modifiers that reshape already-placed rooms.
+//!
+//! - `RoomExploder`: blast short drunkard walks out of each room so neat
+//!   rectangles collapse into cave-like blobs
+//! - `RoomCornerRounder`: knock the sharp corners off rectangular rooms
+//! - `RoomDrawer`: redraw rooms as a chosen shape (rectangles or circles)
+
 use rand::Rng;
 
 use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
@@ -112,16 +119,21 @@ impl MetaMapBuilder for RoomCornerRounder {
 // RoomDrawer - Redraws rooms with configurable shapes
 // ============================================================================
 
+// Toolbox: RoomDrawer isn't in any chain yet - drop it in after a room
+// builder for circular rooms.
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RoomShape {
     Rectangle,
     Circle,
 }
 
+#[allow(dead_code)]
 pub struct RoomDrawer {
     shape: RoomShape,
 }
 
+#[allow(dead_code)]
 impl RoomDrawer {
     pub fn new() -> Box<Self> {
         Box::new(Self {

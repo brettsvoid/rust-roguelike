@@ -1,3 +1,8 @@
+//! Sorts the room list before corridors are drawn. Since corridors connect
+//! rooms in list order, the sort changes the dungeon's overall flow:
+//! Leftmost gives a left-to-right crawl, Central spirals out from the
+//! middle, and so on.
+
 use crate::map::{MAP_HEIGHT, MAP_WIDTH};
 use crate::rng::GameRng;
 

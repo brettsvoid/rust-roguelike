@@ -139,7 +139,7 @@ pub fn item_use_system(
                 // Check if this is an AoE item
                 if let Ok(aoe) = aoe_query.get(wants_use.item) {
                     // Spawn AOE particles for the blast zone
-                    let radius = aoe.radius as i32;
+                    let radius = aoe.radius;
                     for dx in -radius..=radius {
                         for dy in -radius..=radius {
                             let distance = DistanceAlg::Euclidean

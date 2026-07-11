@@ -18,7 +18,7 @@ pub fn execute_command(
     player_query: &mut Query<(Entity, &mut Position, &mut CombatStats), With<Player>>,
     monster_query: &Query<Entity, With<Monster>>,
 ) -> String {
-    let parts: Vec<&str> = input.trim().split_whitespace().collect();
+    let parts: Vec<&str> = input.split_whitespace().collect();
     let cmd = parts.first().map(|s| s.to_lowercase());
 
     match cmd.as_deref() {

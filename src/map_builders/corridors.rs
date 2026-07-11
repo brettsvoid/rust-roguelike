@@ -1,3 +1,12 @@
+//! Corridor styles - chain one of these after a room builder.
+//!
+//! - `DoglegCorridors`: classic L-shaped tunnels between room centers
+//! - `BspCorridors`: random point in one room to random point in the next
+//! - `StraightLineCorridors`: straight Bresenham lines, can cut diagonally
+//! - `NearestCorridors`: each room connects to its nearest neighbor, which
+//!   feels more organic than chaining rooms in order
+//! - `CorridorSpawner`: optionally sprinkle monsters/items into corridors
+
 use rand::Rng;
 
 use crate::rng::GameRng;
@@ -175,8 +184,11 @@ impl MetaMapBuilder for NearestCorridors {
 // CorridorSpawner - Spawn entities in corridors
 // ============================================================================
 
+// Toolbox: not part of any chain yet - add to a room chain for corridor ambushes.
+#[allow(dead_code)]
 pub struct CorridorSpawner;
 
+#[allow(dead_code)]
 impl CorridorSpawner {
     pub fn new() -> Box<Self> {
         Box::new(Self)

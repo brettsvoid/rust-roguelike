@@ -34,6 +34,8 @@ pub struct WallGlyph(pub u8);
 
 impl WallGlyph {
     /// Calculate wall glyph based on neighboring walls
+    // Toolbox: wall_glyph_at covers the game's needs; kept for direct use.
+    #[allow(dead_code)]
     pub fn from_neighbors(north: bool, south: bool, west: bool, east: bool) -> Self {
         let mut mask = 0u8;
         if north {
@@ -52,7 +54,7 @@ impl WallGlyph {
     }
 
     /// Get the box-drawing character for this wall configuration (CP437-style)
-    pub fn to_char(&self) -> char {
+    pub fn to_char(self) -> char {
         match self.0 {
             0 => '○',  // Pillar (no neighbors)
             1 => '│',  // N only
@@ -108,6 +110,9 @@ pub fn tile_opaque(tt: TileType) -> bool {
 }
 
 /// Get the pathfinding cost for a tile type
+// Toolbox: for weighted pathfinding (roads faster, water slower) when the
+// AI starts caring about terrain.
+#[allow(dead_code)]
 pub fn tile_cost(tt: TileType) -> f32 {
     match tt {
         TileType::Road => 0.8,
@@ -190,6 +195,8 @@ impl Map {
         check(x - 1, y - 1) || check(x + 1, y - 1) || check(x - 1, y + 1) || check(x + 1, y + 1)
     }
 
+    // Toolbox: used by the entity-blocking a_star variant.
+    #[allow(dead_code)]
     pub fn is_exit_valid(&self, x: i32, y: i32) -> bool {
         if x < 1 || x > self.width - 1 || y < 1 || y > self.height - 1 {
             return false;
@@ -247,6 +254,8 @@ impl Map {
         exits
     }
 
+    // Toolbox: used by the entity-blocking a_star variant.
+    #[allow(dead_code)]
     pub fn get_available_exits(&self, idx: usize) -> Vec<(usize, f32)> {
         let mut exits = Vec::new();
         let x = idx as i32 % self.width;

@@ -11,6 +11,8 @@ impl Default for GameRng {
 }
 
 impl GameRng {
+    /// Toolbox: fixed-seed rng for reproducing bugs or daily-run modes.
+    #[allow(dead_code)]
     pub fn seeded(seed: u64) -> Self {
         GameRng(StdRng::seed_from_u64(seed))
     }

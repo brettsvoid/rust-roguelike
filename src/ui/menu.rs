@@ -1,3 +1,8 @@
+//! A reusable modal-menu toolkit (builder, pagination, input handling).
+//! The inventory/drop/remove menus use parts of it; the rest is toolbox for
+//! future menus, so dead-code warnings are off for the whole module.
+#![allow(dead_code)]
+
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input::ButtonState;
 use bevy::prelude::*;
@@ -232,13 +237,13 @@ pub fn build_menu_text(menu: &ModalMenu, menu_page: &MenuPage) -> String {
         }
     } else {
         let total_items = menu.items.len();
-        let total_pages = (total_items + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE;
+        let total_pages = total_items.div_ceil(ITEMS_PER_PAGE);
         let current_page = menu_page.0.min(total_pages.saturating_sub(1));
         let start_idx = current_page * ITEMS_PER_PAGE;
 
         // Add visible items
         for (display_idx, item) in menu.items.iter().enumerate().skip(start_idx).take(ITEMS_PER_PAGE) {
-            if let Some(key) = item.key {
+            if item.key.is_some() {
                 // Recalculate key based on position within page
                 let page_idx = display_idx - start_idx;
                 let display_key = (b'a' + page_idx as u8) as char;
@@ -368,7 +373,7 @@ pub fn handle_pagination_input(
     menu_page: &mut MenuPage,
     total_items: usize,
 ) -> bool {
-    let total_pages = if total_items == 0 { 1 } else { (total_items + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE };
+    let total_pages = if total_items == 0 { 1 } else { total_items.div_ceil(ITEMS_PER_PAGE) };
 
     match key_code {
         KeyCode::Comma => {

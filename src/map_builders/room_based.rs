@@ -1,3 +1,7 @@
+//! Meta builders for maps that have a room list: start the player in the
+//! first room, put the stairs in the last one, and spawn monsters/items in
+//! every room in between. Room order matters - run a `RoomSorter` first.
+
 use crate::map::TileType;
 use crate::rng::GameRng;
 
@@ -69,7 +73,7 @@ impl MetaMapBuilder for RoomBasedSpawner {
         // Clone rooms to avoid borrow checker issues
         if let Some(rooms) = build_data.rooms.clone() {
             for room in rooms.iter().skip(1) {
-                spawn_room_entities(build_data, &room, rng);
+                spawn_room_entities(build_data, room, rng);
             }
         }
     }

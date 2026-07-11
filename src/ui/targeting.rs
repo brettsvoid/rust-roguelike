@@ -9,15 +9,23 @@ use crate::map::{Map, Position, TileType, GRID_PX, MAP_HEIGHT, MAP_WIDTH};
 use crate::monsters::Monster;
 use crate::player::Player;
 use crate::resources::UiFont;
-use crate::{RunState, TargetingInfo};
+use crate::RunState;
 
 use super::components::{RangeIndicator, TargetBorder, TargetHighlight, TargetingMenu};
+
+/// What the player is currently aiming: set when a ranged item is selected
+/// from the inventory, read while the targeting overlay is up.
+#[derive(Resource, Default)]
+pub struct TargetingInfo {
+    pub range: i32,
+    pub item: Option<Entity>,
+}
 
 pub struct TargetingPlugin;
 
 impl Plugin for TargetingPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
+        app.init_resource::<TargetingInfo>().add_systems(
             OnEnter(RunState::ShowTargeting),
             (spawn_targeting_ui, spawn_target_borders, spawn_range_indicator),
         )

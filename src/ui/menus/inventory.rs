@@ -5,7 +5,8 @@ use bevy::prelude::*;
 use crate::components::{Equipped, InBackpack, Item, Name, Ranged, WantsToDropItem, WantsToRemoveItem, WantsToUseItem};
 use crate::player::Player;
 use crate::resources::UiFont;
-use crate::{RunState, TargetingInfo};
+use crate::ui::TargetingInfo;
+use crate::RunState;
 
 use crate::ui::menu::{
     build_menu_text, get_selected_index, handle_pagination_input, ModalMenu,

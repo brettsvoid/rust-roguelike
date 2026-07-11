@@ -1,34 +1,31 @@
-use bevy::prelude::*;
+//! The classic "rooms and corridors" builder.
+//!
+//! Scatters random rectangular rooms across the map (throwing away any that
+//! overlap), then joins each new room to the previous one with an L-shaped
+//! tunnel.
+//!
+//! Good for: a reliable, traditional dungeon look. This is the safe default
+//! when other generators get too weird.
+
 use rand::Rng;
 
 use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
 use crate::rng::GameRng;
 use crate::shapes::Rect;
-use crate::spawner;
 
 use super::common::*;
-use super::{BuilderMap, InitialMapBuilder, MapBuilder};
+use super::{BuilderMap, InitialMapBuilder};
 
 const MAX_ROOMS: i32 = 30;
 const MIN_SIZE: i32 = 6;
 const MAX_SIZE: i32 = 10;
 
-pub struct SimpleMapBuilder {
-    // Legacy fields for MapBuilder trait compatibility
-    map: Map,
-    rooms: Vec<Rect>,
-    depth: i32,
-    history: Vec<Map>,
-}
+#[derive(Default)]
+pub struct SimpleMapBuilder;
 
 impl SimpleMapBuilder {
-    pub fn new(depth: i32) -> Self {
-        Self {
-            map: Map::new(MAP_WIDTH, MAP_HEIGHT, depth),
-            rooms: Vec::new(),
-            depth,
-            history: Vec::new(),
-        }
+    pub fn new() -> Self {
+        Self
     }
 
     /// Core room generation logic shared by both traits
@@ -65,10 +62,6 @@ impl SimpleMapBuilder {
     }
 }
 
-// ============================================================================
-// New InitialMapBuilder trait implementation
-// ============================================================================
-
 impl InitialMapBuilder for SimpleMapBuilder {
     fn build_map(&mut self, rng: &mut GameRng, build_data: &mut BuilderMap) {
         build_data.take_snapshot();
@@ -92,53 +85,3 @@ impl InitialMapBuilder for SimpleMapBuilder {
     }
 }
 
-// ============================================================================
-// Legacy MapBuilder trait implementation (for backwards compatibility)
-// ============================================================================
-
-impl MapBuilder for SimpleMapBuilder {
-    fn build_map(&mut self, rng: &mut GameRng) {
-        self.take_snapshot();
-
-        self.rooms = Self::generate_rooms(rng, &mut self.map);
-
-        // Place stairs in last room
-        if let Some(last_room) = self.rooms.last() {
-            let (stairs_x, stairs_y) = last_room.center();
-            let stairs_idx = self.map.xy_idx(stairs_x, stairs_y);
-            self.map.tiles[stairs_idx] = TileType::DownStairs;
-        }
-        self.take_snapshot();
-    }
-
-    fn spawn_entities(&self, commands: &mut Commands, rng: &mut GameRng, font: &TextFont) {
-        let mut monster_id: usize = 0;
-        for room in self.rooms.iter().skip(1) {
-            spawner::spawn_room(commands, rng, font, room, &mut monster_id, self.depth);
-        }
-    }
-
-    fn get_map(&self) -> Map {
-        self.map.clone()
-    }
-
-    fn get_starting_position(&self) -> (i32, i32) {
-        self.rooms.first().map(|r| r.center()).unwrap_or((MAP_WIDTH as i32 / 2, MAP_HEIGHT as i32 / 2))
-    }
-
-    fn get_snapshot_history(&self) -> Vec<Map> {
-        self.history.clone()
-    }
-
-    fn take_snapshot(&mut self) {
-        self.history.push(self.map.clone());
-    }
-
-    fn get_spawn_regions(&self) -> Vec<Rect> {
-        self.rooms.clone()
-    }
-
-    fn get_name(&self) -> &'static str {
-        "Simple Map"
-    }
-}

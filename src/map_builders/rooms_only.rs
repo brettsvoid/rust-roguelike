@@ -1,3 +1,10 @@
+//! Room placement without corridors.
+//!
+//! These are the "rooms half" of the simple and BSP builders: they only
+//! place the rooms and leave connecting them to a corridor builder chained
+//! afterwards. That split is what lets the random builders mix and match
+//! room styles with corridor styles.
+
 use rand::Rng;
 
 use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
@@ -15,13 +22,12 @@ const MAX_ROOMS: i32 = 30;
 const MIN_SIZE: i32 = 6;
 const MAX_SIZE: i32 = 10;
 
-pub struct SimpleMapRoomsBuilder {
-    depth: i32,
-}
+#[derive(Default)]
+pub struct SimpleMapRoomsBuilder;
 
 impl SimpleMapRoomsBuilder {
-    pub fn new(depth: i32) -> Self {
-        Self { depth }
+    pub fn new() -> Self {
+        Self
     }
 }
 
@@ -55,13 +61,12 @@ impl InitialMapBuilder for SimpleMapRoomsBuilder {
 // BspRoomsBuilder - BSP room subdivision WITHOUT corridors
 // ============================================================================
 
-pub struct BspRoomsBuilder {
-    depth: i32,
-}
+#[derive(Default)]
+pub struct BspRoomsBuilder;
 
 impl BspRoomsBuilder {
-    pub fn new(depth: i32) -> Self {
-        Self { depth }
+    pub fn new() -> Self {
+        Self
     }
 
     fn add_subrects(rects: &mut Vec<Rect>, rect: Rect) {

@@ -1,32 +1,27 @@
-use bevy::prelude::*;
+//! Binary space partition (BSP) dungeon builder.
+//!
+//! Keeps splitting the map into smaller and smaller rectangles, then tries
+//! to place a room inside a randomly picked slice (with a 2-tile buffer so
+//! rooms never touch). Rooms are connected left-to-right with corridors.
+//!
+//! Good for: dense, tidy dungeons that feel man-made - lots of rooms packed
+//! together without overlap.
+
 use rand::Rng;
 
 use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
 use crate::rng::GameRng;
 use crate::shapes::Rect;
-use crate::spawner;
 
 use super::common::*;
-use super::{BuilderMap, InitialMapBuilder, MapBuilder};
+use super::{BuilderMap, InitialMapBuilder};
 
-pub struct BspDungeonBuilder {
-    // Legacy fields for MapBuilder trait compatibility
-    map: Map,
-    rooms: Vec<Rect>,
-    rects: Vec<Rect>,
-    depth: i32,
-    history: Vec<Map>,
-}
+#[derive(Default)]
+pub struct BspDungeonBuilder;
 
 impl BspDungeonBuilder {
-    pub fn new(depth: i32) -> Self {
-        Self {
-            map: Map::new(MAP_WIDTH, MAP_HEIGHT, depth),
-            rooms: Vec::new(),
-            rects: Vec::new(),
-            depth,
-            history: Vec::new(),
-        }
+    pub fn new() -> Self {
+        Self
     }
 
     fn add_subrects(rects: &mut Vec<Rect>, rect: Rect) {
@@ -150,10 +145,6 @@ impl BspDungeonBuilder {
     }
 }
 
-// ============================================================================
-// New InitialMapBuilder trait implementation
-// ============================================================================
-
 impl InitialMapBuilder for BspDungeonBuilder {
     fn build_map(&mut self, rng: &mut GameRng, build_data: &mut BuilderMap) {
         build_data.take_snapshot();
@@ -177,53 +168,3 @@ impl InitialMapBuilder for BspDungeonBuilder {
     }
 }
 
-// ============================================================================
-// Legacy MapBuilder trait implementation (for backwards compatibility)
-// ============================================================================
-
-impl MapBuilder for BspDungeonBuilder {
-    fn build_map(&mut self, rng: &mut GameRng) {
-        self.take_snapshot();
-
-        self.rooms = Self::generate_bsp(rng, &mut self.map);
-
-        // Place stairs in last room
-        if let Some(last_room) = self.rooms.last() {
-            let (stairs_x, stairs_y) = last_room.center();
-            let stairs_idx = self.map.xy_idx(stairs_x, stairs_y);
-            self.map.tiles[stairs_idx] = TileType::DownStairs;
-        }
-        self.take_snapshot();
-    }
-
-    fn spawn_entities(&self, commands: &mut Commands, rng: &mut GameRng, font: &TextFont) {
-        let mut monster_id: usize = 0;
-        for room in self.rooms.iter().skip(1) {
-            spawner::spawn_room(commands, rng, font, room, &mut monster_id, self.depth);
-        }
-    }
-
-    fn get_map(&self) -> Map {
-        self.map.clone()
-    }
-
-    fn get_starting_position(&self) -> (i32, i32) {
-        self.rooms.first().map(|r| r.center()).unwrap_or((MAP_WIDTH as i32 / 2, MAP_HEIGHT as i32 / 2))
-    }
-
-    fn get_snapshot_history(&self) -> Vec<Map> {
-        self.history.clone()
-    }
-
-    fn take_snapshot(&mut self) {
-        self.history.push(self.map.clone());
-    }
-
-    fn get_spawn_regions(&self) -> Vec<Rect> {
-        self.rooms.clone()
-    }
-
-    fn get_name(&self) -> &'static str {
-        "BSP Dungeon"
-    }
-}

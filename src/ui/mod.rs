@@ -10,5 +10,5 @@ pub use components::*;
 pub use hud::HudPlugin;
 pub use menus::*;
 pub use resources::*;
-pub use targeting::TargetingPlugin;
+pub use targeting::{TargetingInfo, TargetingPlugin};
 pub use tooltip::TooltipPlugin;

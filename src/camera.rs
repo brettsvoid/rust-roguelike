@@ -37,6 +37,7 @@ impl Camera {
     }
 
     /// Check if world coordinates are within camera bounds
+    #[allow(dead_code)]
     pub fn in_bounds(&self, x: i32, y: i32) -> bool {
         let (min_x, max_x, min_y, max_y) = self.get_screen_bounds();
         x >= min_x && x < max_x && y >= min_y && y < max_y

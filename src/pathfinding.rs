@@ -23,6 +23,9 @@ impl PartialOrd for Node {
 }
 
 /// A* pathfinding algorithm. Returns path from start to end (inclusive), or None if no path exists.
+// Toolbox: monsters currently use a_star_ignoring_entities; this variant
+// respects entity blocking.
+#[allow(dead_code)]
 pub fn a_star(map: &Map, start: usize, end: usize) -> Option<Vec<usize>> {
     let mut open_set = BinaryHeap::new();
     let mut came_from: HashMap<usize, usize> = HashMap::new();

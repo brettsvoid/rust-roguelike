@@ -1,3 +1,9 @@
+//! Door placement meta builder.
+//!
+//! Scans for doorway-shaped spots (floor with walls on two opposite sides,
+//! floor on the other two) and adds a door entity there - at most one per
+//! corridor, so hallways don't turn into door mazes.
+
 use rand::Rng;
 
 use crate::map::{TileType, MAP_HEIGHT, MAP_WIDTH};
