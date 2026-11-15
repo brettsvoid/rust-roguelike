@@ -79,6 +79,8 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
 - **MapGenVizPlugin** (`mapgen_viz.rs`) - The map generation visualizer (main menu tool)
 - **MonstersPlugin** (`monsters.rs`) - Monster spawning and AI
 - **GuiPlugin** (`gui.rs`) - Main menu and builder-select menu (other UI lives in `ui/`)
+- **LightingPlugin** (`lighting.rs`) - `LightSource` point lights, flicker, the shadow caster cap,
+  and the per-depth ambient light, fog, bloom and town sun (see Lighting)
 
 Non-plugin modules worth knowing:
 
@@ -186,12 +188,32 @@ of the same logic. The build should stay at zero warnings.
 
 ### Fog of War
 
-- Tiles: `Revealed` is `Hidden` (not drawn), `Explored` (dim material) or `Visible` (bright
-  material); `update_tile_mesh_visibility` applies it
+- Tiles: `Revealed` is `Hidden` (not drawn), `Explored` (dim, desaturated, unlit material, so
+  remembered tiles stay readable in the dark) or `Visible` (lit material);
+  `update_tile_mesh_visibility` applies it
 - Entities other than the player are shown only on tiles in `Map::visible_tiles`
   (`update_renderable_visibility`); `Hidden` (unfound traps) always hides
 - Debug `reveal_map` marks every tile explored; `no_fog` (and the harness's `--reveal-map`)
   treats every revealed tile as visible, so entities show too
+
+### Lighting
+
+- The dungeon has near-black ambient light, set per camera (`AmbientLight` on the `Camera3d`).
+  Light comes from `LightSource` (colour, radius in tiles, flicker depth, flame height) entities.
+  Props get one from the raws `light` entry (Candle, Lamp Post, Wall Torch); the player gets
+  `PLAYER_TORCH` from an observer on `Player`
+- `attach_lights` gives each `LightSource` a child `PointLight` (always visible, so light spills
+  past the fog of war) and, except for the player, an emissive flame mesh that blooms. A light on
+  a wall tile hangs just off the wall face on the open side. Intensity scales with radius squared
+- Flicker runs on `Time`. The harness sets `TimeUpdateStrategy::ManualDuration` (1/60 s per frame),
+  so screenshots stay byte-identical. Don't drive visuals from wall-clock time any other way
+- Only the `MAX_SHADOW_LIGHTS` point lights nearest the player cast shadows (cube maps are six
+  passes each); the rest light through walls within their radius
+- `apply_environment` switches on `Map::depth`: depth 1 (the town) gets a low warm directional sun
+  with shadows and brighter ambient; dungeons get near-black ambient. Both get HDR, bloom,
+  the default TonyMcMapface tonemapping and linear distance fog that darkens the far side of view
+- `WallTorches` (`map_builders/wall_torches.rs`) is appended to every dungeon chain in
+  `level_builder`; it hangs torches on one-sided walls, spaced apart
 
 ### Key Resources
 

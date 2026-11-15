@@ -1289,7 +1289,8 @@
         "fg": "#FFD700",
         "bg": "#000000",
         "order": 0
-      }
+      },
+      "light": { "colour": "#FFB15C", "radius": 4.0, "flicker": 0.2, "height": 0.75 }
     },
     {
       "name": "Anvil",
@@ -1397,7 +1398,18 @@
         "fg": "#FFD700",
         "bg": "#000000",
         "order": 0
-      }
+      },
+      "light": { "colour": "#FFC27A", "radius": 7.0, "flicker": 0.05, "height": 2.4 }
+    },
+    {
+      "name": "Wall Torch",
+      "renderable": {
+        "glyph": "*",
+        "fg": "#FF8C00",
+        "bg": "#000000",
+        "order": 0
+      },
+      "light": { "colour": "#FF9940", "radius": 7.0, "flicker": 0.3, "height": 1.5 }
     }
   ],
   "spawn_table": [

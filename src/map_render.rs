@@ -77,14 +77,16 @@ struct TileMaterials {
     explored: Handle<StandardMaterial>,
 }
 
-/// How much light an explored but unseen tile keeps. F07 also desaturates.
+/// How much brightness and colour an explored but unseen tile keeps.
 const EXPLORED_BRIGHTNESS: f32 = 0.3;
+const EXPLORED_SATURATION: f32 = 0.3;
 
-/// The colour of an explored but unseen tile, for primitives and models alike.
+/// The dim, mostly grey colour of an explored but unseen tile, for primitives and models alike.
 pub fn dimmed(color: Color) -> Color {
     let c = color.to_srgba();
-    let k = EXPLORED_BRIGHTNESS;
-    Color::srgba(c.red * k, c.green * k, c.blue * k, c.alpha)
+    let grey = 0.3 * c.red + 0.59 * c.green + 0.11 * c.blue;
+    let fade = |v: f32| (grey + (v - grey) * EXPLORED_SATURATION) * EXPLORED_BRIGHTNESS;
+    Color::srgba(fade(c.red), fade(c.green), fade(c.blue), c.alpha)
 }
 
 impl TileAssets {
@@ -166,33 +168,23 @@ pub fn attach_tile_mesh(
         .materials
         .entry(*tile)
         .or_insert_with(|| {
-            let mut material = |base_color| {
+            let mut material = |base_color, unlit| {
                 materials.add(StandardMaterial {
                     base_color,
                     perceptual_roughness: 1.0,
+                    unlit,
                     ..default()
                 })
             };
             TileMaterials {
-                visible: material(color),
-                explored: material(dimmed(color)),
+                visible: material(color, false),
+                // Remembered tiles ignore the lights (the dungeon is near black).
+                explored: material(dimmed(color), true),
             }
         })
         .visible
         .clone();
     commands.entity(add.entity).insert((Mesh3d(mesh), MeshMaterial3d(material)));
-}
-
-/// Temporary light so the grey box is visible. F07 replaces it.
-pub fn spawn_grey_box_light(mut commands: Commands) {
-    commands.spawn((
-        DirectionalLight {
-            illuminance: 3_000.0,
-            ..default()
-        },
-        // Lights the two wall faces the camera sees (+x, +z) and the tops differently.
-        Transform::default().looking_to(Vec3::new(-1.0, -1.5, -0.4), Vec3::Y),
-    ));
 }
 
 /// How freshly spawned tiles start out visibility-wise.

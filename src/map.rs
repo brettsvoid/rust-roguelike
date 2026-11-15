@@ -7,7 +7,7 @@ use crate::components::Hidden;
 use crate::debug::DebugState;
 use crate::distance::DistanceAlg;
 use crate::entity_render::{attach_entity_mesh, entity_transform, EntityAssets, EntityShape, Renderable};
-use crate::map_render::{attach_tile_mesh, spawn_grey_box_light, TileAssets, TileMesh};
+use crate::map_render::{attach_tile_mesh, TileAssets, TileMesh};
 use crate::player::Player;
 use crate::viewshed::Viewshed;
 use crate::RunState;
@@ -389,7 +389,6 @@ impl Plugin for MapPlugin {
             .init_resource::<EntityAssets>()
             .add_observer(attach_tile_mesh)
             .add_observer(attach_entity_mesh)
-            .add_systems(Startup, spawn_grey_box_light)
             .add_systems(
                 Update,
                 (

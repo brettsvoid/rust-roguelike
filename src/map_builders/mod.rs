@@ -31,6 +31,7 @@ mod rooms_only;
 mod simple_map;
 mod town;
 mod voronoi;
+mod wall_torches;
 mod wfc;
 
 use bevy::prelude::*;
@@ -60,6 +61,7 @@ pub use room_sorter::{RoomSort, RoomSorter};
 pub use rooms_only::{BspRoomsBuilder, SimpleMapRoomsBuilder};
 pub use simple_map::SimpleMapBuilder;
 pub use voronoi::VoronoiCellBuilder;
+pub use wall_torches::WallTorches;
 pub use town::TownBuilder;
 pub use wfc::WfcBuilder;
 
@@ -317,6 +319,8 @@ pub trait MapBuilder {
     fn get_starting_position(&self) -> (i32, i32);
     fn get_snapshot_history(&self) -> Vec<Map>;
     fn get_name(&self) -> &'static str;
+    /// Appends a meta builder to the end of the chain.
+    fn then(&mut self, builder: Box<dyn MetaMapBuilder>);
 }
 
 // ============================================================================
@@ -450,6 +454,10 @@ impl MapBuilder for BuilderChain {
 
     fn get_name(&self) -> &'static str {
         self.name
+    }
+
+    fn then(&mut self, builder: Box<dyn MetaMapBuilder>) {
+        self.builders.push(builder);
     }
 }
 
@@ -620,6 +628,10 @@ pub fn default_builder(depth: i32) -> Box<dyn MapBuilder> {
 pub fn level_builder(depth: i32, rng: &mut GameRng, town: &TownState) -> Box<dyn MapBuilder> {
     match depth {
         1 => Box::new(BuilderChain::new(depth, "Town").start_with(Box::new(TownBuilder::new(town)))),
-        _ => random_builder(depth, rng),
+        _ => {
+            let mut builder = random_builder(depth, rng);
+            builder.then(WallTorches::new());
+            builder
+        }
     }
 }

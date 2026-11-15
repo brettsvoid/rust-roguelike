@@ -15,6 +15,7 @@
 //! is verified with it.
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use bevy::input::keyboard::{Key, KeyboardInput, NativeKey};
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
@@ -22,6 +23,7 @@ use bevy::input::touch::TouchPhase;
 use bevy::input::ButtonState;
 use bevy::prelude::*;
 use bevy::render::view::screenshot::{save_to_disk, Screenshot, ScreenshotCaptured};
+use bevy::time::TimeUpdateStrategy;
 use bevy::window::{CursorOptions, PrimaryWindow};
 
 use crate::combat::CombatStats;
@@ -54,6 +56,9 @@ impl Plugin for ScreenshotPlugin {
             app.insert_resource(FakeCursor(cursor));
         }
         app.insert_resource(GameRng::seeded(args.seed))
+            // Fixed steps make anything driven by `Time` (flickering lights)
+            // the same every run.
+            .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(1.0 / 60.0)))
             .insert_resource(args)
             .add_systems(Startup, ignore_mouse)
             .add_systems(

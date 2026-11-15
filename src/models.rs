@@ -140,6 +140,8 @@ fn model_ready(
             .or_insert_with(|| {
                 let mut dim = materials.get(&visible).cloned().unwrap_or_default();
                 dim.base_color = dimmed(dim.base_color);
+                // Remembered tiles ignore the lights, like the grey-box ones.
+                dim.unlit = true;
                 materials.add(dim)
             })
             .clone();

@@ -13,6 +13,7 @@ use crate::components::{
     MeleePowerBonus, Name, ProvidesFood, ProvidesHealing, Ranged, RenderableBundle,
     SingleActivation, Targeting,
 };
+use crate::lighting::LightSource;
 use crate::map::Position;
 use crate::monsters::Monster;
 use crate::rng::RandomTable;
@@ -363,6 +364,15 @@ pub fn spawn_named_prop(
     // Single activation
     if prop_template.single_activation.unwrap_or(false) {
         entity.insert(SingleActivation);
+    }
+
+    if let Some(ref light) = prop_template.light {
+        entity.insert(LightSource {
+            colour: parse_color(&light.colour),
+            radius: light.radius,
+            flicker: light.flicker,
+            height: light.height,
+        });
     }
 
     true

@@ -90,10 +90,6 @@ fn spawn_cameras(mut commands: Commands) {
             ..default()
         },
         Projection::from(iso_projection()),
-        AmbientLight {
-            brightness: 300.0,
-            ..default()
-        },
         iso_camera_transform(Vec3::ZERO),
         // GPU-driven drawing orders instances differently each run, so pixels
         // where neighbouring tiles tie on depth flicker between screenshots.

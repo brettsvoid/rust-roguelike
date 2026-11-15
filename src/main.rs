@@ -21,6 +21,7 @@ mod gui;
 mod hunger;
 mod inventory;
 mod levels;
+mod lighting;
 mod map;
 mod map_builders;
 mod map_indexing;
@@ -54,15 +55,32 @@ const RESOLUTION: Vec2 = Vec2 {
 };
 
 fn main() {
-    App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Rust Roguelike".into(),
-                resolution: RESOLUTION.as_uvec2().into(),
+    // The screenshot harness compiles shaders before drawing, so a frame
+    // count always means the same picture however slow the compiler is.
+    let screenshot = std::env::args().any(|a| a == "--screenshot");
+    // FRAME_TIME_LOG=1 logs frame times with vsync off, for performance checks.
+    let frame_time_log = std::env::var_os("FRAME_TIME_LOG").is_some();
+    let mut app = App::new();
+    app.add_plugins(
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "Rust Roguelike".into(),
+                    resolution: RESOLUTION.as_uvec2().into(),
+                    present_mode: if frame_time_log {
+                        bevy::window::PresentMode::AutoNoVsync
+                    } else {
+                        default()
+                    },
+                    ..default()
+                }),
+                ..default()
+            })
+            .set(bevy::render::RenderPlugin {
+                synchronous_pipeline_compilation: screenshot,
                 ..default()
             }),
-            ..default()
-        }))
+    )
         .init_resource::<gamelog::GameLog>()
         .init_resource::<economy::Purse>()
         .init_resource::<rng::GameRng>()
@@ -81,6 +99,7 @@ fn main() {
             camera::CameraPlugin,
             occlusion::OcclusionPlugin,
             economy::town::TownPlugin,
+            lighting::LightingPlugin,
         ))
         // UI plugins
         .add_plugins((
@@ -106,8 +125,14 @@ fn main() {
                 traps::reveal_hidden_system,
             )
                 .run_if(not(in_state(RunState::MapGeneration))),
-        )
-        .run();
+        );
+    if frame_time_log {
+        app.add_plugins((
+            bevy::diagnostic::FrameTimeDiagnosticsPlugin::default(),
+            bevy::diagnostic::LogDiagnosticsPlugin::default(),
+        ));
+    }
+    app.run();
 }
 
 fn setup() {

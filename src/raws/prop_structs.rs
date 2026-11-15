@@ -14,6 +14,16 @@ pub struct Prop {
     pub door_open: Option<bool>,
     pub entry_trigger: Option<EntryTrigger>,
     pub single_activation: Option<bool>,
+    pub light: Option<Light>,
+}
+
+/// Becomes a `LightSource` (see `lighting.rs`).
+#[derive(Deserialize, Debug, Clone)]
+pub struct Light {
+    pub colour: String,
+    pub radius: f32,
+    pub flicker: f32,
+    pub height: f32,
 }
 
 #[derive(Deserialize, Debug, Clone)]
