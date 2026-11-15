@@ -111,6 +111,8 @@ pub struct WantsToDropItem {
 pub enum EquipmentSlot {
     Melee,
     Shield,
+    Chest,
+    Cloak,
 }
 
 #[derive(Component, Debug)]

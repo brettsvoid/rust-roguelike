@@ -10,13 +10,12 @@ pub struct Item {
     /// Price in gold before vendor markup. Required, so every item has one.
     #[allow(dead_code)] // first read by vendors (E02)
     pub base_value: i32,
-    /// Quality band, starting at 1. Gates vendor stock and depth of loot.
-    #[allow(dead_code)] // first read by tiered stock (E05)
+    /// Quality band, 1 to 5. A vendor stocks it once its sector reaches this
+    /// level, and the spawn table keeps it to matching depths.
     pub tier: i32,
     /// The town sector whose stock this item joins when sold. Only gold has
     /// none.
     #[serde(default)]
-    #[allow(dead_code)] // first read by vendors (E02)
     pub sector: Option<Sector>,
     /// A gold pile: rolls an amount in this inclusive range when spawned.
     #[serde(default)]
@@ -25,6 +24,15 @@ pub struct Item {
     pub consumable: Option<Consumable>,
     pub weapon: Option<Weapon>,
     pub shield: Option<Shield>,
+    #[serde(default)]
+    pub armour: Option<Armour>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct Armour {
+    /// "chest" or "cloak".
+    pub slot: String,
+    pub defense_bonus: i32,
 }
 
 #[derive(Deserialize, Debug, Clone)]

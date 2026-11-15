@@ -220,6 +220,17 @@ pub fn spawn_named_item(
         });
     }
 
+    if let Some(ref armour) = item_template.armour {
+        let slot = match armour.slot.as_str() {
+            "cloak" => EquipmentSlot::Cloak,
+            _ => EquipmentSlot::Chest,
+        };
+        entity.insert(Equippable { slot });
+        entity.insert(DefenseBonus {
+            defense: armour.defense_bonus,
+        });
+    }
+
     if let Some(range) = item_template.gold {
         entity.insert(Gold { amount: roll_gold(range) });
     }

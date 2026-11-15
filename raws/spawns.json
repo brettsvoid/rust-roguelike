@@ -64,7 +64,7 @@
     {
       "name": "Fireball Scroll",
       "base_value": 75,
-      "tier": 1,
+      "tier": 2,
       "sector": "arcana",
       "renderable": {
         "glyph": ")",
@@ -102,7 +102,7 @@
     {
       "name": "Scroll of Magic Mapping",
       "base_value": 50,
-      "tier": 1,
+      "tier": 2,
       "sector": "arcana",
       "renderable": {
         "glyph": ")",
@@ -133,7 +133,7 @@
     {
       "name": "Longsword",
       "base_value": 60,
-      "tier": 1,
+      "tier": 2,
       "sector": "smithing",
       "renderable": {
         "glyph": "/",
@@ -149,7 +149,7 @@
     {
       "name": "Battleaxe",
       "base_value": 90,
-      "tier": 1,
+      "tier": 2,
       "sector": "smithing",
       "renderable": {
         "glyph": "¶",
@@ -173,14 +173,12 @@
         "bg": "#000000",
         "order": 0
       },
-      "shield": {
-        "defense_bonus": 1
-      }
+      "shield": { "defense_bonus": 1 }
     },
     {
       "name": "Tower Shield",
       "base_value": 70,
-      "tier": 1,
+      "tier": 2,
       "sector": "smithing",
       "renderable": {
         "glyph": "(",
@@ -188,8 +186,613 @@
         "bg": "#000000",
         "order": 0
       },
-      "shield": {
+      "shield": { "defense_bonus": 3 }
+    },
+    {
+      "name": "Chain Mail",
+      "base_value": 80,
+      "tier": 2,
+      "sector": "smithing",
+      "renderable": {
+        "glyph": "[",
+        "fg": "#C0C0C0",
+        "bg": "#000000",
+        "order": 0
+      },
+      "armour": {
+        "slot": "chest",
+        "defense_bonus": 2
+      }
+    },
+    {
+      "name": "Warhammer",
+      "base_value": 160,
+      "tier": 3,
+      "sector": "smithing",
+      "renderable": {
+        "glyph": "/",
+        "fg": "#B0C4DE",
+        "bg": "#000000",
+        "order": 0
+      },
+      "weapon": {
+        "slot": "melee",
+        "power_bonus": 6
+      }
+    },
+    {
+      "name": "Kite Shield",
+      "base_value": 150,
+      "tier": 3,
+      "sector": "smithing",
+      "renderable": {
+        "glyph": "(",
+        "fg": "#B0C4DE",
+        "bg": "#000000",
+        "order": 0
+      },
+      "shield": { "defense_bonus": 4 }
+    },
+    {
+      "name": "Scale Mail",
+      "base_value": 170,
+      "tier": 3,
+      "sector": "smithing",
+      "renderable": {
+        "glyph": "[",
+        "fg": "#B0C4DE",
+        "bg": "#000000",
+        "order": 0
+      },
+      "armour": {
+        "slot": "chest",
         "defense_bonus": 3
+      }
+    },
+    {
+      "name": "Dwarven Greataxe",
+      "base_value": 320,
+      "tier": 4,
+      "sector": "smithing",
+      "renderable": {
+        "glyph": "¶",
+        "fg": "#DAA520",
+        "bg": "#000000",
+        "order": 0
+      },
+      "weapon": {
+        "slot": "melee",
+        "power_bonus": 8
+      }
+    },
+    {
+      "name": "Plate Armour",
+      "base_value": 340,
+      "tier": 4,
+      "sector": "smithing",
+      "renderable": {
+        "glyph": "[",
+        "fg": "#DAA520",
+        "bg": "#000000",
+        "order": 0
+      },
+      "armour": {
+        "slot": "chest",
+        "defense_bonus": 4
+      }
+    },
+    {
+      "name": "Mithril Sword",
+      "base_value": 650,
+      "tier": 5,
+      "sector": "smithing",
+      "renderable": {
+        "glyph": "/",
+        "fg": "#E0FFFF",
+        "bg": "#000000",
+        "order": 0
+      },
+      "weapon": {
+        "slot": "melee",
+        "power_bonus": 10
+      }
+    },
+    {
+      "name": "Mithril Plate",
+      "base_value": 700,
+      "tier": 5,
+      "sector": "smithing",
+      "renderable": {
+        "glyph": "[",
+        "fg": "#E0FFFF",
+        "bg": "#000000",
+        "order": 0
+      },
+      "armour": {
+        "slot": "chest",
+        "defense_bonus": 5
+      }
+    },
+    {
+      "name": "Padded Tunic",
+      "base_value": 20,
+      "tier": 1,
+      "sector": "textiles",
+      "renderable": {
+        "glyph": "[",
+        "fg": "#D2B48C",
+        "bg": "#000000",
+        "order": 0
+      },
+      "armour": {
+        "slot": "chest",
+        "defense_bonus": 1
+      }
+    },
+    {
+      "name": "Wool Cloak",
+      "base_value": 25,
+      "tier": 1,
+      "sector": "textiles",
+      "renderable": {
+        "glyph": "[",
+        "fg": "#8B7355",
+        "bg": "#000000",
+        "order": 0
+      },
+      "armour": {
+        "slot": "cloak",
+        "defense_bonus": 1
+      }
+    },
+    {
+      "name": "Leather Armour",
+      "base_value": 60,
+      "tier": 2,
+      "sector": "textiles",
+      "renderable": {
+        "glyph": "[",
+        "fg": "#8B4513",
+        "bg": "#000000",
+        "order": 0
+      },
+      "armour": {
+        "slot": "chest",
+        "defense_bonus": 2
+      }
+    },
+    {
+      "name": "Studded Leather",
+      "base_value": 140,
+      "tier": 3,
+      "sector": "textiles",
+      "renderable": {
+        "glyph": "[",
+        "fg": "#A0522D",
+        "bg": "#000000",
+        "order": 0
+      },
+      "armour": {
+        "slot": "chest",
+        "defense_bonus": 3
+      }
+    },
+    {
+      "name": "Elven Cloak",
+      "base_value": 150,
+      "tier": 3,
+      "sector": "textiles",
+      "renderable": {
+        "glyph": "[",
+        "fg": "#228B22",
+        "bg": "#000000",
+        "order": 0
+      },
+      "armour": {
+        "slot": "cloak",
+        "defense_bonus": 2
+      }
+    },
+    {
+      "name": "Spidersilk Robe",
+      "base_value": 300,
+      "tier": 4,
+      "sector": "textiles",
+      "renderable": {
+        "glyph": "[",
+        "fg": "#E6E6FA",
+        "bg": "#000000",
+        "order": 0
+      },
+      "armour": {
+        "slot": "chest",
+        "defense_bonus": 4
+      }
+    },
+    {
+      "name": "Shadow Cloak",
+      "base_value": 600,
+      "tier": 5,
+      "sector": "textiles",
+      "renderable": {
+        "glyph": "[",
+        "fg": "#483D8B",
+        "bg": "#000000",
+        "order": 0
+      },
+      "armour": {
+        "slot": "cloak",
+        "defense_bonus": 3
+      }
+    },
+    {
+      "name": "Greater Health Potion",
+      "base_value": 60,
+      "tier": 2,
+      "sector": "alchemy",
+      "renderable": {
+        "glyph": "!",
+        "fg": "#FF1493",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": { "provides_healing": "15" }
+      }
+    },
+    {
+      "name": "Alchemist's Fire",
+      "base_value": 70,
+      "tier": 2,
+      "sector": "alchemy",
+      "renderable": {
+        "glyph": "!",
+        "fg": "#FF4500",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": {
+          "ranged": "6",
+          "damage": "12",
+          "area_of_effect": "2"
+        }
+      }
+    },
+    {
+      "name": "Superior Health Potion",
+      "base_value": 130,
+      "tier": 3,
+      "sector": "alchemy",
+      "renderable": {
+        "glyph": "!",
+        "fg": "#C71585",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": { "provides_healing": "25" }
+      }
+    },
+    {
+      "name": "Potion of Restoration",
+      "base_value": 260,
+      "tier": 4,
+      "sector": "alchemy",
+      "renderable": {
+        "glyph": "!",
+        "fg": "#DA70D6",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": { "provides_healing": "40" }
+      }
+    },
+    {
+      "name": "Elixir of Life",
+      "base_value": 550,
+      "tier": 5,
+      "sector": "alchemy",
+      "renderable": {
+        "glyph": "!",
+        "fg": "#FFFACD",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": { "provides_healing": "80" }
+      }
+    },
+    {
+      "name": "Hearty Stew",
+      "base_value": 15,
+      "tier": 2,
+      "sector": "provisions",
+      "renderable": {
+        "glyph": "%",
+        "fg": "#CD853F",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": {
+          "provides_food": "",
+          "provides_healing": "5"
+        }
+      }
+    },
+    {
+      "name": "Waybread",
+      "base_value": 40,
+      "tier": 3,
+      "sector": "provisions",
+      "renderable": {
+        "glyph": "%",
+        "fg": "#F5DEB3",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": {
+          "provides_food": "",
+          "provides_healing": "10"
+        }
+      }
+    },
+    {
+      "name": "Dwarven Feast",
+      "base_value": 90,
+      "tier": 4,
+      "sector": "provisions",
+      "renderable": {
+        "glyph": "%",
+        "fg": "#D2691E",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": {
+          "provides_food": "",
+          "provides_healing": "20"
+        }
+      }
+    },
+    {
+      "name": "Ambrosia",
+      "base_value": 200,
+      "tier": 5,
+      "sector": "provisions",
+      "renderable": {
+        "glyph": "%",
+        "fg": "#FFFFE0",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": {
+          "provides_food": "",
+          "provides_healing": "40"
+        }
+      }
+    },
+    {
+      "name": "Holy Water",
+      "base_value": 20,
+      "tier": 1,
+      "sector": "faith",
+      "renderable": {
+        "glyph": "!",
+        "fg": "#E0FFFF",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": {
+          "ranged": "6",
+          "damage": "6",
+          "targeting": "single_entity"
+        }
+      }
+    },
+    {
+      "name": "Prayer Scroll",
+      "base_value": 30,
+      "tier": 1,
+      "sector": "faith",
+      "renderable": {
+        "glyph": ")",
+        "fg": "#FFFFF0",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": { "provides_healing": "10" }
+      }
+    },
+    {
+      "name": "Blessed Mace",
+      "base_value": 70,
+      "tier": 2,
+      "sector": "faith",
+      "renderable": {
+        "glyph": "/",
+        "fg": "#F0E68C",
+        "bg": "#000000",
+        "order": 0
+      },
+      "weapon": {
+        "slot": "melee",
+        "power_bonus": 4
+      }
+    },
+    {
+      "name": "Ward of the Faithful",
+      "base_value": 150,
+      "tier": 3,
+      "sector": "faith",
+      "renderable": {
+        "glyph": "(",
+        "fg": "#FFFACD",
+        "bg": "#000000",
+        "order": 0
+      },
+      "shield": { "defense_bonus": 4 }
+    },
+    {
+      "name": "Greater Holy Water",
+      "base_value": 280,
+      "tier": 4,
+      "sector": "faith",
+      "renderable": {
+        "glyph": "!",
+        "fg": "#F0FFFF",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": {
+          "ranged": "6",
+          "damage": "25",
+          "area_of_effect": "2"
+        }
+      }
+    },
+    {
+      "name": "Saint's Hammer",
+      "base_value": 680,
+      "tier": 5,
+      "sector": "faith",
+      "renderable": {
+        "glyph": "/",
+        "fg": "#FFFFFF",
+        "bg": "#000000",
+        "order": 0
+      },
+      "weapon": {
+        "slot": "melee",
+        "power_bonus": 10
+      }
+    },
+    {
+      "name": "Scroll of Divine Light",
+      "base_value": 600,
+      "tier": 5,
+      "sector": "faith",
+      "renderable": {
+        "glyph": ")",
+        "fg": "#FFFFFF",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": {
+          "ranged": "8",
+          "damage": "40",
+          "area_of_effect": "3"
+        }
+      }
+    },
+    {
+      "name": "Runed Staff",
+      "base_value": 180,
+      "tier": 3,
+      "sector": "arcana",
+      "renderable": {
+        "glyph": "/",
+        "fg": "#9370DB",
+        "bg": "#000000",
+        "order": 0
+      },
+      "weapon": {
+        "slot": "melee",
+        "power_bonus": 6
+      }
+    },
+    {
+      "name": "Scroll of Lightning",
+      "base_value": 150,
+      "tier": 3,
+      "sector": "arcana",
+      "renderable": {
+        "glyph": ")",
+        "fg": "#87CEFA",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": {
+          "ranged": "8",
+          "damage": "30",
+          "targeting": "single_entity"
+        }
+      }
+    },
+    {
+      "name": "Spellguard Buckler",
+      "base_value": 340,
+      "tier": 4,
+      "sector": "arcana",
+      "renderable": {
+        "glyph": "(",
+        "fg": "#9370DB",
+        "bg": "#000000",
+        "order": 0
+      },
+      "shield": { "defense_bonus": 5 }
+    },
+    {
+      "name": "Scroll of Inferno",
+      "base_value": 320,
+      "tier": 4,
+      "sector": "arcana",
+      "renderable": {
+        "glyph": ")",
+        "fg": "#FF4500",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": {
+          "ranged": "6",
+          "damage": "35",
+          "area_of_effect": "3"
+        }
+      }
+    },
+    {
+      "name": "Staff of the Archmage",
+      "base_value": 700,
+      "tier": 5,
+      "sector": "arcana",
+      "renderable": {
+        "glyph": "/",
+        "fg": "#8A2BE2",
+        "bg": "#000000",
+        "order": 0
+      },
+      "weapon": {
+        "slot": "melee",
+        "power_bonus": 10
+      }
+    },
+    {
+      "name": "Scroll of Meteor Storm",
+      "base_value": 650,
+      "tier": 5,
+      "sector": "arcana",
+      "renderable": {
+        "glyph": ")",
+        "fg": "#FF6347",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": {
+          "ranged": "8",
+          "damage": "50",
+          "area_of_effect": "4"
+        }
       }
     }
   ],
@@ -408,6 +1011,203 @@
       },
       "vision_range": 6,
       "ai": "bystander"
+    },
+    {
+      "name": "Giant Bat",
+      "renderable": {
+        "glyph": "b",
+        "fg": "#8B6914",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 6,
+        "hp": 6,
+        "defense": 0,
+        "power": 3
+      },
+      "vision_range": 6
+    },
+    {
+      "name": "Giant Spider",
+      "gold": [1, 5],
+      "renderable": {
+        "glyph": "s",
+        "fg": "#556B2F",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 8,
+        "hp": 8,
+        "defense": 0,
+        "power": 4
+      },
+      "vision_range": 6
+    },
+    {
+      "name": "Hobgoblin",
+      "gold": [5, 12],
+      "renderable": {
+        "glyph": "g",
+        "fg": "#FF8C00",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 20,
+        "hp": 20,
+        "defense": 2,
+        "power": 5
+      },
+      "vision_range": 8
+    },
+    {
+      "name": "Orc Warrior",
+      "gold": [8, 20],
+      "renderable": {
+        "glyph": "o",
+        "fg": "#B22222",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 24,
+        "hp": 24,
+        "defense": 2,
+        "power": 6
+      },
+      "vision_range": 8
+    },
+    {
+      "name": "Orc Shaman",
+      "gold": [10, 25],
+      "renderable": {
+        "glyph": "o",
+        "fg": "#9370DB",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 18,
+        "hp": 18,
+        "defense": 1,
+        "power": 7
+      },
+      "vision_range": 9
+    },
+    {
+      "name": "Skeleton",
+      "gold": [5, 15],
+      "renderable": {
+        "glyph": "z",
+        "fg": "#F5F5DC",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 26,
+        "hp": 26,
+        "defense": 3,
+        "power": 7
+      },
+      "vision_range": 8
+    },
+    {
+      "name": "Wraith",
+      "gold": [15, 30],
+      "renderable": {
+        "glyph": "W",
+        "fg": "#708090",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 30,
+        "hp": 30,
+        "defense": 3,
+        "power": 9
+      },
+      "vision_range": 10
+    },
+    {
+      "name": "Lich",
+      "gold": [40, 80],
+      "renderable": {
+        "glyph": "L",
+        "fg": "#7FFFD4",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 45,
+        "hp": 45,
+        "defense": 4,
+        "power": 11
+      },
+      "vision_range": 10
+    },
+    {
+      "name": "Imp",
+      "gold": [10, 25],
+      "renderable": {
+        "glyph": "i",
+        "fg": "#FF4500",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 24,
+        "hp": 24,
+        "defense": 3,
+        "power": 9
+      },
+      "vision_range": 8
+    },
+    {
+      "name": "Hellhound",
+      "gold": [15, 35],
+      "renderable": {
+        "glyph": "d",
+        "fg": "#8B0000",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 40,
+        "hp": 40,
+        "defense": 4,
+        "power": 12
+      },
+      "vision_range": 10
+    },
+    {
+      "name": "Demon Lord",
+      "gold": [100, 200],
+      "renderable": {
+        "glyph": "&",
+        "fg": "#FF0000",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 70,
+        "hp": 70,
+        "defense": 6,
+        "power": 15
+      },
+      "vision_range": 10
     }
   ],
   "props": [
@@ -566,20 +1366,69 @@
   ],
   "spawn_table": [
     { "name": "Kobold", "weight": 15, "min_depth": 1, "max_depth": 3 },
-    { "name": "Goblin", "weight": 10, "min_depth": 1, "max_depth": 100 },
-    { "name": "Orc", "weight": 1, "min_depth": 1, "max_depth": 100, "add_map_depth_to_weight": true },
-    { "name": "Health Potion", "weight": 7, "min_depth": 1, "max_depth": 100 },
+    { "name": "Rat", "weight": 10, "min_depth": 2, "max_depth": 4 },
+    { "name": "Giant Bat", "weight": 8, "min_depth": 2, "max_depth": 4 },
+    { "name": "Giant Spider", "weight": 6, "min_depth": 3, "max_depth": 5 },
+    { "name": "Goblin", "weight": 10, "min_depth": 1, "max_depth": 6 },
+    { "name": "Hobgoblin", "weight": 6, "min_depth": 3, "max_depth": 6 },
+    { "name": "Orc", "weight": 1, "min_depth": 1, "max_depth": 8, "add_map_depth_to_weight": true },
+    { "name": "Orc Warrior", "weight": 6, "min_depth": 5, "max_depth": 8 },
+    { "name": "Orc Shaman", "weight": 4, "min_depth": 5, "max_depth": 8 },
+    { "name": "Skeleton", "weight": 8, "min_depth": 7, "max_depth": 10 },
+    { "name": "Wraith", "weight": 5, "min_depth": 8, "max_depth": 10 },
+    { "name": "Lich", "weight": 2, "min_depth": 9, "max_depth": 10 },
+    { "name": "Imp", "weight": 8, "min_depth": 9, "max_depth": 100 },
+    { "name": "Hellhound", "weight": 6, "min_depth": 10, "max_depth": 100 },
+    { "name": "Demon Lord", "weight": 2, "min_depth": 11, "max_depth": 100 },
     { "name": "Gold", "weight": 6, "min_depth": 1, "max_depth": 100 },
+    { "name": "Health Potion", "weight": 7, "min_depth": 1, "max_depth": 100 },
     { "name": "Rations", "weight": 10, "min_depth": 1, "max_depth": 100 },
-    { "name": "Magic Missile Scroll", "weight": 2, "min_depth": 1, "max_depth": 100 },
-    { "name": "Fireball Scroll", "weight": 1, "min_depth": 2, "max_depth": 100, "add_map_depth_to_weight": true },
-    { "name": "Confusion Scroll", "weight": 1, "min_depth": 2, "max_depth": 100, "add_map_depth_to_weight": true },
-    { "name": "Scroll of Magic Mapping", "weight": 2, "min_depth": 1, "max_depth": 100 },
-    { "name": "Dagger", "weight": 3, "min_depth": 1, "max_depth": 100 },
-    { "name": "Shield", "weight": 3, "min_depth": 1, "max_depth": 100 },
-    { "name": "Longsword", "weight": 1, "min_depth": 2, "max_depth": 100, "add_map_depth_to_weight": true },
-    { "name": "Tower Shield", "weight": 1, "min_depth": 2, "max_depth": 100, "add_map_depth_to_weight": true },
-    { "name": "Battleaxe", "weight": 1, "min_depth": 2, "max_depth": 100, "add_map_depth_to_weight": true },
+    { "name": "Magic Missile Scroll", "weight": 2, "min_depth": 1, "max_depth": 6 },
+    { "name": "Fireball Scroll", "weight": 2, "min_depth": 3, "max_depth": 8 },
+    { "name": "Confusion Scroll", "weight": 2, "min_depth": 1, "max_depth": 6 },
+    { "name": "Scroll of Magic Mapping", "weight": 2, "min_depth": 3, "max_depth": 8 },
+    { "name": "Dagger", "weight": 3, "min_depth": 1, "max_depth": 6 },
+    { "name": "Longsword", "weight": 1, "min_depth": 3, "max_depth": 8 },
+    { "name": "Battleaxe", "weight": 1, "min_depth": 3, "max_depth": 8 },
+    { "name": "Shield", "weight": 3, "min_depth": 1, "max_depth": 6 },
+    { "name": "Tower Shield", "weight": 1, "min_depth": 3, "max_depth": 8 },
+    { "name": "Chain Mail", "weight": 1, "min_depth": 3, "max_depth": 8 },
+    { "name": "Warhammer", "weight": 1, "min_depth": 5, "max_depth": 10 },
+    { "name": "Kite Shield", "weight": 1, "min_depth": 5, "max_depth": 10 },
+    { "name": "Scale Mail", "weight": 1, "min_depth": 5, "max_depth": 10 },
+    { "name": "Dwarven Greataxe", "weight": 1, "min_depth": 7, "max_depth": 12 },
+    { "name": "Plate Armour", "weight": 1, "min_depth": 7, "max_depth": 12 },
+    { "name": "Mithril Sword", "weight": 1, "min_depth": 9, "max_depth": 100 },
+    { "name": "Mithril Plate", "weight": 1, "min_depth": 9, "max_depth": 100 },
+    { "name": "Padded Tunic", "weight": 1, "min_depth": 1, "max_depth": 6 },
+    { "name": "Wool Cloak", "weight": 1, "min_depth": 1, "max_depth": 6 },
+    { "name": "Leather Armour", "weight": 1, "min_depth": 3, "max_depth": 8 },
+    { "name": "Studded Leather", "weight": 1, "min_depth": 5, "max_depth": 10 },
+    { "name": "Elven Cloak", "weight": 1, "min_depth": 5, "max_depth": 10 },
+    { "name": "Spidersilk Robe", "weight": 1, "min_depth": 7, "max_depth": 12 },
+    { "name": "Shadow Cloak", "weight": 1, "min_depth": 9, "max_depth": 100 },
+    { "name": "Greater Health Potion", "weight": 2, "min_depth": 3, "max_depth": 8 },
+    { "name": "Alchemist's Fire", "weight": 2, "min_depth": 3, "max_depth": 8 },
+    { "name": "Superior Health Potion", "weight": 2, "min_depth": 5, "max_depth": 10 },
+    { "name": "Potion of Restoration", "weight": 2, "min_depth": 7, "max_depth": 12 },
+    { "name": "Elixir of Life", "weight": 2, "min_depth": 9, "max_depth": 100 },
+    { "name": "Hearty Stew", "weight": 2, "min_depth": 3, "max_depth": 8 },
+    { "name": "Waybread", "weight": 2, "min_depth": 5, "max_depth": 10 },
+    { "name": "Dwarven Feast", "weight": 2, "min_depth": 7, "max_depth": 12 },
+    { "name": "Ambrosia", "weight": 2, "min_depth": 9, "max_depth": 100 },
+    { "name": "Holy Water", "weight": 2, "min_depth": 1, "max_depth": 6 },
+    { "name": "Prayer Scroll", "weight": 2, "min_depth": 1, "max_depth": 6 },
+    { "name": "Blessed Mace", "weight": 1, "min_depth": 3, "max_depth": 8 },
+    { "name": "Ward of the Faithful", "weight": 1, "min_depth": 5, "max_depth": 10 },
+    { "name": "Greater Holy Water", "weight": 2, "min_depth": 7, "max_depth": 12 },
+    { "name": "Saint's Hammer", "weight": 1, "min_depth": 9, "max_depth": 100 },
+    { "name": "Scroll of Divine Light", "weight": 2, "min_depth": 9, "max_depth": 100 },
+    { "name": "Runed Staff", "weight": 1, "min_depth": 5, "max_depth": 10 },
+    { "name": "Scroll of Lightning", "weight": 2, "min_depth": 5, "max_depth": 10 },
+    { "name": "Spellguard Buckler", "weight": 1, "min_depth": 7, "max_depth": 12 },
+    { "name": "Scroll of Inferno", "weight": 2, "min_depth": 7, "max_depth": 12 },
+    { "name": "Staff of the Archmage", "weight": 1, "min_depth": 9, "max_depth": 100 },
+    { "name": "Scroll of Meteor Storm", "weight": 2, "min_depth": 9, "max_depth": 100 },
     { "name": "Bear Trap", "weight": 2, "min_depth": 1, "max_depth": 100 }
   ]
 }
