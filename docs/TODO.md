@@ -213,7 +213,7 @@ angle. Each ticket saves the `.blend` in `art/`, exports with `art/export.py`
 and adds the `model` names to `raws/spawns.json`.
 
 ### A01 Dungeon kit
-- Status: todo
+- Status: in progress
 - Needs: F08
 - Stone floor (3 variants), wall pieces for every wall bitmask case, low wall
   stub for cutaway, door (open and closed), down stairs, up stairs, wall torch.
