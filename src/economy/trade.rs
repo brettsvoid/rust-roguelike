@@ -102,7 +102,6 @@ impl Sector {
 // ============================================================================
 
 /// The party sold `quantity` items of `base_value` each into `sector`.
-#[allow(dead_code)] // first called by vendors (E02)
 pub fn record_sale(town: &mut TownState, sector: Sector, base_value: i32, quantity: u32) {
     town.sectors.get_mut(&sector).unwrap().stock += base_value * quantity as i32;
 }
@@ -132,7 +131,6 @@ pub fn buy_price(town: &TownState, sector: Sector, base_value: i32) -> i32 {
 
 /// Advance the town by `days`. Returns the news written on the way, which is
 /// also appended to `town.news`.
-#[allow(dead_code)] // first called on return to town (E07)
 pub fn simulate(town: &mut TownState, days: u32) -> Vec<NewsEntry> {
     let mut news = Vec::new();
     for _ in 0..days {

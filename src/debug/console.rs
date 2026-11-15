@@ -3,6 +3,7 @@ use bevy::input::ButtonState;
 use bevy::prelude::*;
 
 use crate::combat::CombatStats;
+use crate::economy::town::TownState;
 use crate::map::Position;
 use crate::monsters::Monster;
 use crate::player::Player;
@@ -110,7 +111,7 @@ pub fn update_console(
 
             // Help hint
             parent.spawn((
-                Text::new("Commands: spawn, teleport, godmode, reveal, nofog, heal, kill_all, help"),
+                Text::new("Commands: spawn, teleport, godmode, reveal, nofog, heal, kill_all, town, help"),
                 TextFont {
                     font: font.0.clone().into(),
                     font_size: FontSize::Px(11.0),
@@ -131,6 +132,7 @@ pub fn handle_console_input(
     font: Res<UiFont>,
     mut player_query: Query<(Entity, &mut Position, &mut CombatStats), With<Player>>,
     monster_query: Query<Entity, With<Monster>>,
+    mut town: ResMut<TownState>,
 ) {
     if !debug.show_console {
         return;
@@ -204,6 +206,7 @@ pub fn handle_console_input(
                         &font,
                         &mut player_query,
                         &monster_query,
+                        &mut town,
                     );
                     debug_state.console_output.push(output);
 

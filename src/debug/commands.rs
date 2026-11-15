@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 
 use crate::combat::CombatStats;
+use crate::economy::town::{Sector, TownState};
+use crate::economy::trade;
 use crate::map::{Position, MAP_HEIGHT, MAP_WIDTH};
 use crate::monsters::Monster;
 use crate::player::Player;
@@ -17,6 +19,7 @@ pub fn execute_command(
     font: &UiFont,
     player_query: &mut Query<(Entity, &mut Position, &mut CombatStats), With<Player>>,
     monster_query: &Query<Entity, With<Monster>>,
+    town: &mut ResMut<TownState>,
 ) -> String {
     let parts: Vec<&str> = input.split_whitespace().collect();
     let cmd = parts.first().map(|s| s.to_lowercase());
@@ -30,13 +33,14 @@ pub fn execute_command(
         Some("kill_all") => cmd_kill_all(commands, monster_query),
         Some("teleport") => cmd_teleport(&parts, player_query),
         Some("spawn") => cmd_spawn(&parts, commands, font, player_query),
+        Some("town") => cmd_town(&parts, town),
         Some(cmd) => format!("Unknown command: {}", cmd),
         None => String::new(),
     }
 }
 
 fn cmd_help() -> String {
-    "Commands: spawn <item>, teleport <x> <y>, godmode, reveal, nofog, heal, kill_all".to_string()
+    "Commands: spawn <item>, teleport <x> <y>, godmode, reveal, nofog, heal, kill_all, town sell <sector> <value>, town days <n>".to_string()
 }
 
 fn cmd_godmode(god_mode: &mut GodMode) -> String {
@@ -55,6 +59,29 @@ fn cmd_nofog(debug_state: &mut DebugState) -> String {
         debug_state.reveal_map = true; // Also reveal the map
     }
     format!("No fog: {}", if debug_state.no_fog { "ON" } else { "OFF" })
+}
+
+/// Drive the town without vendors or time passing: record a sale or run days.
+fn cmd_town(parts: &[&str], town: &mut ResMut<TownState>) -> String {
+    match parts[1..] {
+        ["sell", sector, value] => {
+            let sector = Sector::ALL
+                .into_iter()
+                .find(|s| s.name().eq_ignore_ascii_case(sector));
+            match (sector, value.parse::<i32>()) {
+                (Some(sector), Ok(value)) if value > 0 => {
+                    trade::record_sale(town, sector, value, 1);
+                    format!("Sold {value} gold of {} to the town", sector.goods())
+                }
+                _ => "Usage: town sell <smithing|alchemy|textiles|provisions|faith|arcana> <value>".to_string(),
+            }
+        }
+        ["days", n] => match n.parse::<u32>() {
+            Ok(n) => format!("{n} days passed, {} news", trade::simulate(town, n).len()),
+            Err(_) => "Usage: town days <n>".to_string(),
+        },
+        _ => "Usage: town sell <sector> <value> | town days <n>".to_string(),
+    }
 }
 
 fn cmd_heal(
