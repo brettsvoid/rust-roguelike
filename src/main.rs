@@ -84,6 +84,7 @@ fn main() {
             ui::TargetingPlugin,
             ui::GameOverPlugin,
             ui::InventoryPlugin,
+            ui::LedgerPlugin,
             debug::DebugPlugin,
         ))
         .add_systems(Startup, setup)

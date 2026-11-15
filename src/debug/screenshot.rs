@@ -1,6 +1,8 @@
 //! Screenshot harness: `cargo run -- --screenshot out.png [--seed N] [--depth N]
-//! [--reveal-map] [--frames N]` starts a seeded new game, waits, saves a PNG
-//! of the window and exits. Every visual change is verified with it.
+//! [--reveal-map] [--frames N] [--console CMD]... [--ledger]` starts a seeded
+//! new game, waits, saves a PNG of the window and exits. `--console` runs a
+//! debug console command once play begins (repeatable, e.g. "town days 10");
+//! `--ledger` then opens the town ledger. Every visual change is verified with it.
 
 use std::path::PathBuf;
 
@@ -8,9 +10,13 @@ use bevy::prelude::*;
 use bevy::render::view::screenshot::{save_to_disk, Screenshot, ScreenshotCaptured};
 use bevy::window::{CursorOptions, PrimaryWindow};
 
-use crate::debug::DebugState;
+use crate::combat::CombatStats;
+use crate::debug::{DebugState, GodMode};
+use crate::economy::town::TownState;
 use crate::levels;
-use crate::map::Map;
+use crate::map::{Map, Position};
+use crate::monsters::Monster;
+use crate::player::Player;
 use crate::resources::UiFont;
 use crate::rng::GameRng;
 use crate::RunState;
@@ -34,6 +40,7 @@ impl Plugin for ScreenshotPlugin {
                 Update,
                 (
                     start_game.run_if(in_state(RunState::MainMenu)),
+                    prepare_capture.run_if(in_state(RunState::AwaitingInput)),
                     capture_after_frames.run_if(not(in_state(RunState::MainMenu))),
                 ),
             );
@@ -47,6 +54,8 @@ pub struct ScreenshotArgs {
     pub depth: i32,
     pub reveal_map: bool,
     pub frames: u32,
+    pub console: Vec<String>,
+    pub ledger: bool,
 }
 
 /// `Ok(None)` when `--screenshot` is absent, so the game starts normally.
@@ -56,11 +65,17 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
     let mut depth = 1;
     let mut reveal_map = false;
     let mut frames = 60;
+    let mut console = Vec::new();
+    let mut ledger = false;
 
     let mut args = args.into_iter();
     while let Some(flag) = args.next() {
         if flag == "--reveal-map" {
             reveal_map = true;
+            continue;
+        }
+        if flag == "--ledger" {
+            ledger = true;
             continue;
         }
         let value = args.next().ok_or(format!("{flag} needs a value"))?;
@@ -70,6 +85,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
             "--seed" => seed = value.parse().map_err(bad)?,
             "--depth" => depth = value.parse().map_err(bad)?,
             "--frames" => frames = value.parse().map_err(bad)?,
+            "--console" => console.push(value),
             _ => return Err(format!("unknown argument: {flag}")),
         }
     }
@@ -86,6 +102,8 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
         depth,
         reveal_map,
         frames,
+        console,
+        ledger,
     }))
 }
 
@@ -110,6 +128,41 @@ fn start_game(
         debug_state.no_fog = true;
     }
     next_state.set_if_different(RunState::PreRun);
+}
+
+/// Once play begins: run the `--console` commands, then open the ledger.
+#[allow(clippy::too_many_arguments)]
+fn prepare_capture(
+    mut commands: Commands,
+    args: Res<ScreenshotArgs>,
+    mut done: Local<bool>,
+    mut debug_state: ResMut<DebugState>,
+    mut god_mode: ResMut<GodMode>,
+    font: Res<UiFont>,
+    mut player_query: Query<(Entity, &mut Position, &mut CombatStats), With<Player>>,
+    monster_query: Query<Entity, With<Monster>>,
+    mut town: ResMut<TownState>,
+    mut next_state: ResMut<NextState<RunState>>,
+) {
+    if std::mem::replace(&mut *done, true) {
+        return;
+    }
+    for cmd in &args.console {
+        let out = super::commands::execute_command(
+            cmd,
+            &mut commands,
+            &mut debug_state,
+            &mut god_mode,
+            &font,
+            &mut player_query,
+            &monster_query,
+            &mut town,
+        );
+        info!("console> {cmd}: {out}");
+    }
+    if args.ledger {
+        next_state.set_if_different(RunState::ShowLedger);
+    }
 }
 
 /// Counts frames after the game starts, then captures the window once.
@@ -143,13 +196,15 @@ mod tests {
     #[test]
     fn all_flags() {
         assert_eq!(
-            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10"),
+            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10 --console heal --console godmode --ledger"),
             Ok(Some(ScreenshotArgs {
                 path: PathBuf::from("a.png"),
                 seed: 7,
                 depth: 3,
                 reveal_map: true,
                 frames: 10,
+                console: vec!["heal".into(), "godmode".into()],
+                ledger: true,
             }))
         );
     }
@@ -164,6 +219,8 @@ mod tests {
                 depth: 1,
                 reveal_map: false,
                 frames: 60,
+                console: vec![],
+                ledger: false,
             }))
         );
     }

@@ -121,6 +121,12 @@ impl TownState {
             news: Vec::new(),
         }
     }
+
+    /// 1 for a fresh town, plus one for every sector level gained, so each
+    /// level-up anywhere shows.
+    pub fn level(&self) -> u32 {
+        1 + self.sectors.values().map(|s| s.level - 1).sum::<u32>()
+    }
 }
 
 /// Parse `town.json`, rejecting any version other than `TOWN_VERSION`.

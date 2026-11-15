@@ -288,6 +288,15 @@ fn handle_player_input(
                 next_state.set_if_different(RunState::ShowRemoveItem);
             }
 
+            // Town ledger; depth 1 is the town
+            KeyCode::KeyT => {
+                if map.depth == 1 {
+                    next_state.set_if_different(RunState::ShowLedger);
+                } else {
+                    gamelog.entries.push("The town ledger is kept in town.".to_string());
+                }
+            }
+
             // Go down stairs
             KeyCode::Period => {
                 let idx = xy_idx(player_x, player_y);
