@@ -426,7 +426,7 @@ and adds the `model` names to `raws/spawns.json`.
   death of the party and a new game.
 
 ### E04 Trade simulation
-- Status: in progress
+- Status: done
 - Needs: E03
 - A pure function `simulate(town, days) -> (town, news)`. Goods the party
   sold enter the matching sector's stock. Each day, caravans carry surplus to
@@ -438,7 +438,7 @@ and adds the `model` names to `raws/spawns.json`.
   and the news log reports what happened while the party was away.
 
 ### E05 Tiered stock and new content
-- Status: todo
+- Status: in progress
 - Needs: E04
 - Sector level gates which item tiers each vendor stocks. Add tiered weapons,
   armour, potions, scrolls and magic items to the raws, and deeper monsters to
@@ -468,7 +468,7 @@ and adds the `model` names to `raws/spawns.json`.
   again works end to end.
 
 ### E08 Town ledger screen
-- Status: todo
+- Status: in progress
 - Needs: E04
 - A screen in town showing the town's level, each sector's progress to its
   next level, what it will unlock, trade routes and the recent news.
