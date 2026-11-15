@@ -87,7 +87,7 @@ Open questions for the owner (found while writing design.md):
   starts to the main menu.
 
 ### F01 Screenshot harness
-- Status: in progress
+- Status: done
 - Needs: F00
 - The lever every visual ticket verifies with. A debug entry point (CLI flag or
   env var) that starts a new game with a fixed seed (`GameRng::seeded`),
@@ -99,7 +99,7 @@ Open questions for the owner (found while writing design.md):
   command in `CLAUDE.md`.
 
 ### F02 Grey-box 3D map
-- Status: todo
+- Status: in progress
 - Needs: F01
 - Enable the Bevy 3D features (PBR, glTF, tonemapping). Add a `Camera3d` with
   an orthographic isometric rig (yaw 45 degrees, pitch about 35) that follows
