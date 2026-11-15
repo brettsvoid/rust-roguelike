@@ -63,7 +63,7 @@ impl Vendor {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct SectorState {
-    /// Units of this sector's goods held in town.
+    /// Gold value (at base value) of this sector's goods held in town.
     pub stock: i32,
     /// Starts at 1. Gates vendor tiers (E05) and the town's look (E06).
     pub level: u32,

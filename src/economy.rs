@@ -4,6 +4,7 @@
 use bevy::prelude::*;
 
 pub mod town;
+pub mod trade;
 
 /// The party's shared gold. A resource, not a player component, so it
 /// belongs to the whole party.
