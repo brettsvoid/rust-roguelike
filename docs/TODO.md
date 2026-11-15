@@ -160,7 +160,7 @@ Settled questions (owner, 15 November 2026):
   building interior all show the player and the floor unobstructed.
 
 ### F07 Dark, ominous lighting
-- Status: in progress
+- Status: done
 - Needs: F03
 - Near-black ambient light in the dungeon. A `LightSource` component (colour,
   radius, flicker) set from the raws. The party carries a torch. Candles and
