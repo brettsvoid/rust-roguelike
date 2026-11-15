@@ -289,5 +289,5 @@ fn handle_targeting(
         item,
         target: Some((map_x, map_y)),
     });
-    next_state.set_if_different(RunState::PlayerTurn);
+    next_state.set_if_different(RunState::PartyAction);
 }

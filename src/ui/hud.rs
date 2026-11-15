@@ -4,6 +4,7 @@ use crate::combat::CombatStats;
 use crate::components::{HungerClock, HungerState, Name};
 use crate::economy::Purse;
 use crate::entity_render::Renderable;
+use crate::game_flow::Mode;
 use crate::gamelog::GameLog;
 use crate::map::Map;
 use crate::party::{ActiveUnit, PartyMember, PARTY_SIZE};
@@ -11,7 +12,7 @@ use crate::picking::BlocksPicking;
 use crate::resources::UiFont;
 use crate::RunState;
 
-use super::components::{DepthText, GameLogText, GoldText, PartyRow};
+use super::components::{DepthText, GameLogText, GoldText, ModeText, PartyRow};
 
 pub struct HudPlugin;
 
@@ -29,6 +30,7 @@ impl Plugin for HudPlugin {
                 update_party_rows,
                 update_depth,
                 update_gold,
+                update_mode,
                 update_game_log,
             )
                 .run_if(in_gameplay),
@@ -76,30 +78,47 @@ fn setup_hud(mut commands: Commands, font: Res<UiFont>) {
                     }
                 });
 
-            // Depth display
-            parent.spawn((
-                Text::new("Depth: 1"),
-                TextFont {
-                    font: font.0.clone().into(),
-                    font_size: FontSize::Px(16.0),
+            // Depth, gold and the tactical mode, one per line
+            parent
+                .spawn(Node {
+                    flex_direction: FlexDirection::Column,
+                    flex_shrink: 0.0,
                     ..default()
-                },
-                TextColor(Color::srgb(1.0, 1.0, 0.0)), // Yellow
-                DepthText,
-                Node { flex_shrink: 0.0, ..default() },
-            ));
+                })
+                .with_children(|info| {
+                    info.spawn((
+                        Text::new("Depth: 1"),
+                        TextFont {
+                            font: font.0.clone().into(),
+                            font_size: FontSize::Px(16.0),
+                            ..default()
+                        },
+                        TextColor(Color::srgb(1.0, 1.0, 0.0)), // Yellow
+                        DepthText,
+                    ));
 
-            parent.spawn((
-                Text::new("Gold: 0"),
-                TextFont {
-                    font: font.0.clone().into(),
-                    font_size: FontSize::Px(16.0),
-                    ..default()
-                },
-                TextColor(Color::srgb(1.0, 0.84, 0.0)), // Gold
-                GoldText,
-                Node { flex_shrink: 0.0, ..default() },
-            ));
+                    info.spawn((
+                        Text::new("Gold: 0"),
+                        TextFont {
+                            font: font.0.clone().into(),
+                            font_size: FontSize::Px(16.0),
+                            ..default()
+                        },
+                        TextColor(Color::srgb(1.0, 0.84, 0.0)), // Gold
+                        GoldText,
+                    ));
+
+                    info.spawn((
+                        Text::new("Explore"),
+                        TextFont {
+                            font: font.0.clone().into(),
+                            font_size: FontSize::Px(16.0),
+                            ..default()
+                        },
+                        TextColor(Color::srgb(0.6, 0.9, 0.6)),
+                        ModeText,
+                    ));
+                });
 
             // Game log container
             parent
@@ -127,9 +146,11 @@ fn setup_hud(mut commands: Commands, font: Res<UiFont>) {
 }
 
 /// Each row shows its hero's hit points and hunger in the hero's colour; a
-/// `>` marks the active unit. A fallen hero's row is blank.
+/// `>` marks the active unit, and in combat "done" a hero who has acted this
+/// round. A fallen hero's row is blank.
 fn update_party_rows(
     active: Res<ActiveUnit>,
+    mode: Res<Mode>,
     party: Query<(Entity, &PartyMember, &Name, &CombatStats, &HungerClock, &Renderable)>,
     mut rows: Query<(&PartyRow, &mut Text, &mut TextColor)>,
 ) {
@@ -139,8 +160,9 @@ fn update_party_rows(
             continue;
         };
         let marker = if active.0 == Some(entity) { '>' } else { ' ' };
+        let done = if mode.can_act(entity) { "    " } else { "done" };
         **text = format!(
-            "{marker} {:<7} HP {:>2}/{:<2} {}",
+            "{marker} {:<7} HP {:>2}/{:<2} {done} {}",
             name.name,
             stats.hp,
             stats.max_hp,
@@ -162,6 +184,28 @@ fn hunger_label(state: HungerState) -> &'static str {
 fn update_depth(map: Res<Map>, mut depth_text_query: Query<&mut Text, With<DepthText>>) {
     if let Ok(mut text) = depth_text_query.single_mut() {
         **text = format!("Depth: {}", map.depth);
+    }
+}
+
+/// "Explore", or the combat phase and round in red.
+fn update_mode(
+    mode: Res<Mode>,
+    state: Res<State<RunState>>,
+    mut text_query: Query<(&mut Text, &mut TextColor), With<ModeText>>,
+) {
+    let Ok((mut text, mut colour)) = text_query.single_mut() else {
+        return;
+    };
+    let (label, rgb) = match &*mode {
+        Mode::Explore => ("Explore".to_string(), Color::srgb(0.6, 0.9, 0.6)),
+        Mode::Combat { round, .. } => {
+            let phase = if *state.get() == RunState::EnemyTurn { "enemy" } else { "party" };
+            (format!("Combat: {phase} phase, round {round}"), Color::srgb(1.0, 0.35, 0.3))
+        }
+    };
+    if **text != label {
+        **text = label;
+        colour.0 = rgb;
     }
 }
 

@@ -19,8 +19,8 @@ cargo run --features file_watcher
 
 # Screenshot harness: start a seeded new game, wait N frames, save a PNG, exit.
 # Depth 1 is the town. Same seed and flags give a byte-identical PNG.
-# Known exception: while a lit effect (missile, fireball) is mid-flight, one or two
-# pixels can differ between runs. Cause not found yet.
+# Known exception: runs with clicks or a lit effect (missile, fireball) can differ by a
+# few isolated pixels between runs, with identical game state. Cause not found yet.
 # Defaults: --seed 42 --depth 1 --frames 60, fog on unless --reveal-map.
 cargo run -- --screenshot out.png --seed 42 --depth 3 --reveal-map --frames 60
 # Fake the mouse at a window point (logical pixels) and enter targeting with an item:
@@ -29,7 +29,8 @@ cargo run -- --screenshot out.png --depth 3 --reveal-map --cursor 720,430 \
 # --click X,Y left-clicks grid cell X,Y (repeatable; the next input waits for the
 # walk to end; a click on another hero selects them). --keys presses keys through the
 # real input: g . (pick up, descend), i (inventory), n (Tab: select the next hero),
-# w a s d (pan), c (recentre), + and - (scroll to zoom). They run in the order given,
+# e (end the party phase in combat), w a s d (pan), c (recentre), + and - (scroll to
+# zoom). Input is fed only while the game waits for it. They run in the order given,
 # e.g. walk five tiles east so explored-but-unseen tiles show:
 cargo run -- --screenshot fog.png --seed 42 --depth 3 --click 45,20 --frames 120
 # Select the third hero (Tab twice) and walk them; at seed 42 depth 3 the party
@@ -38,6 +39,11 @@ cargo run -- --screenshot tab.png --seed 42 --depth 3 --keys nn --click 43,25 --
 # Play an effect on the active hero's tile (spark, fireball, missile, heal, confusion; blood
 # stains the active hero's tile and two east). It starts about frame 3, so frame 12 is ~0.15 s in:
 cargo run -- --screenshot fx.png --depth 3 --console "effect missile" --frames 12
+# Walk west into a rat: the fifth click drops into combat (round 1), the next two are
+# Aldric's and Brenna's actions. Then end two rounds, select Aldric and kill the rat:
+cargo run -- --screenshot combat.png --depth 3 --reveal-map --console godmode \
+  --click 19,21 --click 19,21 --click 19,21 --click 19,21 --click 19,21 --click 19,21 \
+  --click 19,21 --keys ee --click 22,21 --click 21,21 --frames 300
 ```
 
 Verify every visible change with a harness screenshot that you look at.
@@ -57,17 +63,18 @@ for that overhaul. Key points:
 - **Living town**: Loot sold in town is traded with neighbouring towns, sectors level up and stock better gear. The town persists across permadeath
 - **Controls**: Left click walks the active hero to an explored tile (one tile per turn, stopping
   when a hostile comes into view), attacks an adjacent hostile, walks to the down stairs and takes
-  them, and on the hero's own tile picks up an item. A click on another hero, or Tab, selects
-  them (no turn passes). WASD pans the camera, the scroll wheel zooms, C recentres. G picks up,
-  I inventory, X drops (D pans), R removes equipment, `.` descends, Space waits, T opens the
-  ledger in town, Q saves and quits
+  them, and on the hero's own tile picks up an item. Exploring, the other heroes follow. A click
+  on another hero, or Tab, selects them (no turn passes; in combat only heroes yet to act).
+  WASD pans the camera, the scroll wheel zooms, C recentres. G picks up, I inventory, X drops
+  (D pans), R removes equipment, `.` descends, Space waits, E ends the party phase in combat,
+  T opens the ledger in town, Q saves and quits
 - **Mechanics**: Hunger/survival, items/equipment
 
 The Architecture section below describes the code as it is now. The current
 build is mid-conversion: the map and entities are grey-box 3D primitives on
-an isometric camera, with a party of four heroes. Only the active hero moves
-and acts (one step per turn); the others stand still. No followers, explore
-mode or tactical combat yet.
+an isometric camera, with a party of four heroes. Exploring, the active hero
+leads and the others follow; on contact the game drops into combat rounds where
+each hero gets one action (action points, hit chances and cover come later).
 
 ## Architecture
 
@@ -77,11 +84,13 @@ This is a Bevy-based roguelike game following the tutorial at https://bfnightly.
 
 The game uses Bevy's plugin system. Each module defines a plugin that registers its systems:
 
-- **GameFlowPlugin** (`game_flow.rs`) - The `RunState` turn state machine and turn scheduling
+- **GameFlowPlugin** (`game_flow.rs`) - The `RunState` frame-loop state, the `Mode` resource
+  (explore or combat) and `advance`, the pure transition between them (see Game State)
 - **ResourcesPlugin** (`resources.rs`) - Loads shared resources like fonts
 - **PartyPlugin** (`party.rs`) - The party: `PartyMember { slot }` on every hero, the `ActiveUnit`
   resource (the hero the input drives), `HEROES` (names and colours), and the pure rules
-  `spawn_tiles`, `next_unit` (Tab, skipping the dead) and `party_wiped`
+  `spawn_tiles`, `next_unit` (Tab, skipping the dead and, in combat, those who have acted) and
+  `follow` (where followers step when the leader moves in explore)
 - **PlayerPlugin** (`player.rs`) - Input for the active hero: keys, Tab and a click on a hero to
   select, left click to walk/attack/pick up/descend, the
   `WalkPath` resource (the cells of a click walk still to take, and whether to take the stairs on
@@ -117,16 +126,33 @@ Non-plugin modules worth knowing:
 
 ### Game State
 
-The game uses a turn-based `RunState` enum (defined in `game_flow.rs`, re-exported as `crate::RunState`):
-- `MainMenu` - Default state, shows main menu (New Game / Continue / Quit)
-- `PreRun` - Initial setup before gameplay begins
-- `AwaitingInput` - Waiting for player input
-- `PlayerTurn` - Processing player actions (combat, items)
-- `MonsterTurn` - Processing monster AI
-- `ShowInventory` / `ShowDropItem` / `ShowTargeting` - UI overlay states
+Two pieces of state, both in `game_flow.rs`:
 
-Each step of the active hero (a click walk takes one per turn) triggers the `PlayerTurn` → `MonsterTurn` →
-`AwaitingInput` cycle.
+`RunState` (a Bevy state, re-exported as `crate::RunState`) is what the frame loop is doing:
+- `MainMenu` - Default state, shows main menu (New Game / Continue / Quit)
+- `PreRun` - Initial setup before gameplay begins; resets `Mode` to explore
+- `AwaitingInput` - Waiting for the party's input
+- `PartyAction` - Resolving the active hero's action (move, attack, item, wait, end turn)
+- `EnemyTurn` - The monsters act (hunger ticks here too)
+- `ShowInventory` / `ShowDropItem` / `ShowRemoveItem` / `ShowTargeting` / `ShowLedger` - UI
+  overlays; they return to `AwaitingInput` and leave `Mode` alone
+- `NextLevel`, `MagicMapReveal`, `GameOver`, and the visualiser's `MapBuilderSelect` / `MapGeneration`
+
+`Mode` (a resource) is the tactical mode: `Explore`, or `Combat { round, acted }`. Every change
+of mode or phase goes through `advance(mode, step, situation)`, a pure function over plain data
+(the living heroes, and per hostile whether it sees a hero and a hero sees it), unit tested in
+`game_flow.rs`. The `PartyAction` and `EnemyTurn` chains end in a system that calls it.
+- Explore: each hero action is followed by `EnemyTurn` (one turn per step); the leader walks a
+  click path and the others follow
+- Explore to combat: a hostile and a hero see each other. Combat starts at the party phase of
+  round 1
+- Combat party phase: each hero gets one action (`Mode::can_act` is the one place that knows;
+  C03 swaps it for action points). The active unit moves on to the next hero who can act. The
+  phase ends when every living hero has acted or on E, then `EnemyTurn` is the enemy phase
+- Combat to explore: no hostile sees a living hero (dead or out of sight)
+- Game over: no hero left alive
+- `Mode` is not saved: a loaded game starts in explore and drops back into combat at the next
+  step if a hostile still sees the party
 
 ### Models
 

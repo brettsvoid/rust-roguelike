@@ -11,10 +11,11 @@ use crate::{
     components::{BlocksTile, BlocksVisibility, Door, HungerClock, HungerState, Item, WantsToPickupItem},
     debug::DebugMode,
     entity_render::{EntityShape, Renderable},
+    game_flow::{Mode, TurnEnded},
     gamelog::GameLog,
     map::{tile_walkable, xy_idx, Map, Position, TileType},
     monsters::Monster,
-    party::{next_unit, ActiveUnit, PartyMember},
+    party::{follow, next_unit, ActiveUnit, PartyMember},
     pathfinding::a_star_explored,
     picking::{self, HoveredTile, TileMarks, FULL_TILE},
     viewshed::Viewshed,
@@ -109,7 +110,7 @@ fn show_path_preview(
     // Kept up through the turn states so a walk does not flicker.
     let in_turn = matches!(
         state.get(),
-        RunState::AwaitingInput | RunState::PlayerTurn | RunState::MonsterTurn
+        RunState::AwaitingInput | RunState::PartyAction | RunState::EnemyTurn
     );
     let wanted = active
         .0
@@ -232,7 +233,6 @@ pub(crate) fn handle_player_input(
     hovered: Res<HoveredTile>,
     mut walk: ResMut<WalkPath>,
     map: Res<Map>,
-    debug_mode: Res<DebugMode>,
     mut gamelog: ResMut<GameLog>,
     mut active: ResMut<ActiveUnit>,
     mut party: Query<(Entity, &PartyMember, &mut CombatStats, &HungerClock, &Viewshed)>,
@@ -242,6 +242,7 @@ pub(crate) fn handle_player_input(
     monsters: Query<&Position, (With<Monster>, Without<PartyMember>, Without<Bystander>)>,
     mut doors: Query<(Entity, &mut Door, &mut Renderable), Without<PartyMember>>,
     mut positions: Query<&mut Position, Or<(With<Bystander>, With<PartyMember>)>>,
+    (debug_mode, mode, mut turn_ended): (Res<DebugMode>, Res<Mode>, ResMut<TurnEnded>),
 ) {
     // Don't process player input if debug console is open
     if debug_mode.show_console {
@@ -254,8 +255,12 @@ pub(crate) fn handle_player_input(
     let Ok(&Position { x: player_x, y: player_y }) = positions.get(player_entity) else {
         return;
     };
-    let roster: Vec<(usize, Entity, bool)> =
-        party.iter().map(|(entity, member, stats, ..)| (member.slot, entity, stats.hp > 0)).collect();
+    // Who can be selected: the living, and in combat only those yet to act.
+    let mut roster: Vec<(usize, Entity, bool)> = party
+        .iter()
+        .map(|(entity, member, stats, ..)| (member.slot, entity, stats.hp > 0 && mode.can_act(entity)))
+        .collect();
+    roster.sort_by_key(|m| m.0);
     // Seen by any member: `Map::visible_tiles` would count every tile under no-fog.
     let hostile_in_view = monsters
         .iter()
@@ -326,9 +331,15 @@ pub(crate) fn handle_player_input(
                 }
             }
 
-            // Select the next living member
+            // Select the next member who can act
             KeyCode::Tab => {
                 select = next_unit(&roster, Some(player_entity));
+            }
+
+            // End the party phase; outside combat nothing happens
+            KeyCode::KeyE => {
+                turn_ended.0 = true;
+                player_acted = true;
             }
 
             // Go down stairs
@@ -349,13 +360,13 @@ pub(crate) fn handle_player_input(
     // turn while it has steps left.
     let clicked = hovered.tile.filter(|_| !player_acted && mouse.just_pressed(MouseButton::Left));
     let clicked_member = clicked.and_then(|target| {
-        roster.iter().find(|&&(_, entity, alive)| {
-            alive && entity != player_entity && positions.get(entity).is_ok_and(|p| (p.x, p.y) == target)
+        roster.iter().find(|&&(_, entity, _)| {
+            entity != player_entity && positions.get(entity).is_ok_and(|p| (p.x, p.y) == target)
         })
     });
     let mut step = None;
-    if let Some(&(_, member, _)) = clicked_member {
-        select = Some(member);
+    if let Some(&(_, member, selectable)) = clicked_member {
+        select = selectable.then_some(member);
     } else if !player_acted && mouse.just_pressed(MouseButton::Left) {
         if let Some(target) = hovered.tile {
             *walk = WalkPath::default();
@@ -417,6 +428,31 @@ pub(crate) fn handle_player_input(
         _ => {}
     }
 
+    // Exploring, the rest of the party follows the leader's step.
+    let stepped = matches!(move_result, Some(MoveResult::Moved { .. } | MoveResult::Swapped { .. }));
+    if *mode == Mode::Explore && stepped {
+        let leader_to = positions.get(player_entity).map(|p| (p.x, p.y)).unwrap_or((player_x, player_y));
+        let followers: Vec<(Entity, (i32, i32))> = roster
+            .iter()
+            .filter(|m| m.2 && m.1 != player_entity)
+            .filter_map(|m| positions.get(m.1).ok().map(|p| (m.1, (p.x, p.y))))
+            .collect();
+        let cells: Vec<_> = followers.iter().map(|f| f.1).collect();
+        let step_towards = |from: (i32, i32), to: (i32, i32)| {
+            let path = a_star_explored(&map, map.xy_idx(from.0, from.1), map.xy_idx(to.0, to.1))?;
+            let next = *path.get(1)?;
+            (!map.blocked_tiles[next]).then_some((next as i32 % map.width, next as i32 / map.width))
+        };
+        let moved = follow((player_x, player_y), leader_to, &cells, step_towards);
+        for ((follower, _), cell) in followers.iter().zip(moved) {
+            if let Ok(mut pos) = positions.get_mut(*follower) {
+                if (pos.x, pos.y) != cell {
+                    (pos.x, pos.y) = cell;
+                }
+            }
+        }
+    }
+
     // Selecting a unit is free: no turn passes, and its walk starts afresh.
     if let Some(unit) = select.filter(|&unit| unit != player_entity) {
         *walk = WalkPath::default();
@@ -424,7 +460,7 @@ pub(crate) fn handle_player_input(
     }
 
     if player_acted {
-        next_state.set_if_different(RunState::PlayerTurn);
+        next_state.set_if_different(RunState::PartyAction);
     }
 }
 

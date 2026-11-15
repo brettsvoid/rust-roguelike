@@ -20,7 +20,7 @@ impl Plugin for MonstersPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            update_blocked_tiles.run_if(in_state(RunState::MonsterTurn)),
+            update_blocked_tiles.run_if(in_state(RunState::EnemyTurn)),
         );
     }
 }

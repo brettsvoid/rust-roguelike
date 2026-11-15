@@ -167,7 +167,7 @@ fn handle_inventory_input(
                 } else {
                     // Non-ranged item, use immediately
                     commands.entity(player_entity).insert(WantsToUseItem { item, target: None });
-                    next_state.set_if_different(RunState::PlayerTurn);
+                    next_state.set_if_different(RunState::PartyAction);
                 }
             }
         }
@@ -276,7 +276,7 @@ fn handle_drop_input(
         if let Some(index) = get_selected_index(ev.key_code, &menu_page, total_items) {
             if let Some(&item) = items.get(index) {
                 commands.entity(player_entity).insert(WantsToDropItem { item });
-                next_state.set_if_different(RunState::PlayerTurn);
+                next_state.set_if_different(RunState::PartyAction);
             }
         }
     }
@@ -384,7 +384,7 @@ fn handle_remove_input(
         if let Some(index) = get_selected_index(ev.key_code, &menu_page, total_items) {
             if let Some(&item) = items.get(index) {
                 commands.entity(player_entity).insert(WantsToRemoveItem { item });
-                next_state.set_if_different(RunState::PlayerTurn);
+                next_state.set_if_different(RunState::PartyAction);
             }
         }
     }

@@ -1,7 +1,7 @@
 //! The party: the heroes the player commands, one of them the active unit.
 //!
 //! Every hero carries `PartyMember`. `ActiveUnit` names the one that moves and
-//! acts on the player's input; the others stand still. Vision is the union of
+//! acts on the player's input; exploring, the others follow it (`follow`). Vision is the union of
 //! every living member's viewshed. A dead member is despawned; the run ends
 //! when none is left.
 
@@ -73,9 +73,30 @@ pub fn next_unit<T: Copy + Eq>(members: &[(usize, T, bool)], current: Option<T>)
         .map(|m| m.1)
 }
 
-/// The run is over once no member has hit points left.
-pub fn party_wiped(hit_points: impl IntoIterator<Item = i32>) -> bool {
-    hit_points.into_iter().all(|hp| hp <= 0)
+/// Where the followers stand after the leader stepped from `leader_from` to
+/// `leader_to`, in the order given. The line forms nearest first (ties keep
+/// the given order); each takes one `step_towards` the cell the hero ahead of
+/// it stood on, so the party trails the leader in single file. A follower
+/// waits rather than step onto another hero.
+pub fn follow(
+    leader_from: (i32, i32),
+    leader_to: (i32, i32),
+    followers: &[(i32, i32)],
+    step_towards: impl Fn((i32, i32), (i32, i32)) -> Option<(i32, i32)>,
+) -> Vec<(i32, i32)> {
+    let mut cells = followers.to_vec();
+    let mut line: Vec<usize> = (0..cells.len()).collect();
+    line.sort_by_key(|&i| (cells[i].0 - leader_from.0).abs().max((cells[i].1 - leader_from.1).abs()));
+    let mut ahead = leader_from;
+    for i in line {
+        let from = cells[i];
+        let free = |cell: &(i32, i32)| *cell != leader_to && !cells.contains(cell);
+        if let Some(next) = step_towards(from, ahead).filter(free) {
+            cells[i] = next;
+        }
+        ahead = from;
+    }
+    cells
 }
 
 #[cfg(test)]
@@ -117,11 +138,28 @@ mod tests {
         assert_eq!(next_unit(&[(0, 'a', false)], Some('a')), None);
     }
 
+    /// One king's move from `from` towards `to` on an open floor.
+    fn straight_at(from: (i32, i32), to: (i32, i32)) -> Option<(i32, i32)> {
+        let next = (from.0 + (to.0 - from.0).signum(), from.1 + (to.1 - from.1).signum());
+        (next != from).then_some(next)
+    }
+
     #[test]
-    fn the_run_ends_only_when_the_last_member_dies() {
-        assert!(!party_wiped([30, 0, -2, 0]));
-        assert!(!party_wiped([0, 0, 0, 1]));
-        assert!(party_wiped([0, -3, 0, 0]));
-        assert!(party_wiped([]));
+    fn followers_trail_the_leader_in_single_file() {
+        // Leader steps (3,0) -> (4,0) with the line strung out behind.
+        let cells = follow((3, 0), (4, 0), &[(2, 0), (1, 0), (0, 0)], straight_at);
+        assert_eq!(cells, vec![(3, 0), (2, 0), (1, 0)]);
+    }
+
+    #[test]
+    fn a_follower_closes_in_from_afar_and_never_shares_a_cell() {
+        // The nearer follower leads the line whatever its slot.
+        let cells = follow((5, 5), (6, 5), &[(5, 7), (5, 6)], straight_at);
+        assert_eq!(cells, vec![(5, 6), (5, 5)]);
+        // A follower swapped onto the leader's old cell stays; one far off closes in.
+        let cells = follow((1, 1), (2, 1), &[(1, 1), (8, 1)], straight_at);
+        assert_eq!(cells, vec![(1, 1), (7, 1)]);
+        // Blocked by the map: it waits.
+        assert_eq!(follow((1, 1), (2, 1), &[(0, 1)], |_, _| None), vec![(0, 1)]);
     }
 }

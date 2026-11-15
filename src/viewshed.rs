@@ -17,7 +17,7 @@ impl Plugin for ViewshedPlugin {
     }
 }
 
-fn update_viewshed(map: Res<Map>, mut query: Query<(&Position, &mut Viewshed)>) {
+pub fn update_viewshed(map: Res<Map>, mut query: Query<(&Position, &mut Viewshed)>) {
     let is_opaque = |x: i32, y: i32| {
         // Bounds check - treat out-of-bounds as opaque
         if x < 0 || x >= map.width || y < 0 || y >= map.height {

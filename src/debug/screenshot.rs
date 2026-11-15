@@ -9,9 +9,9 @@
 //! "spawn fireball" --target "Fireball Scroll"`). `--keys` and `--click` queue
 //! input in the order given, fed through the real input systems one at a time
 //! while the game waits for input: `--keys` presses keys (`g`, `.`, `i` for the
-//! inventory, `n` for Tab to select the next hero, `w` `a` `s` `d` to pan, `c`
-//! to recentre, `+` and `-` scroll the wheel to zoom in and out); `--click X,Y`
-//! left-clicks grid cell X,Y as if the mouse hovered it (a click on another
+//! inventory, `n` for Tab to select the next hero, `e` to end the party phase
+//! in combat, `w` `a` `s` `d` to pan, `c` to recentre, `+` and `-` scroll the
+//! wheel to zoom in and out); `--click X,Y` left-clicks grid cell X,Y as if the mouse hovered it (a click on another
 //! hero selects them), and the next input waits until the walk it starts ends.
 //! Every visual change is verified with it.
 
@@ -116,6 +116,7 @@ fn key_input(c: char) -> Option<HarnessInput> {
         's' => KeyCode::KeyS,
         'd' => KeyCode::KeyD,
         'c' => KeyCode::KeyC,
+        'e' => KeyCode::KeyE,
         _ => return None,
     };
     Some(HarnessInput::Key(key))
@@ -367,7 +368,7 @@ mod tests {
     #[test]
     fn all_flags() {
         assert_eq!(
-            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger --keys g.in --click 3,-4 --keys wasdc+-"),
+            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger --keys g.in --click 3,-4 --keys wasdc+-e"),
             Ok(Some(ScreenshotArgs {
                 path: PathBuf::from("a.png"),
                 seed: 7,
@@ -391,6 +392,7 @@ mod tests {
                     HarnessInput::Key(KeyCode::KeyC),
                     HarnessInput::Scroll(1.0),
                     HarnessInput::Scroll(-1.0),
+                    HarnessInput::Key(KeyCode::KeyE),
                 ],
             }))
         );

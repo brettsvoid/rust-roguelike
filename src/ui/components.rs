@@ -14,6 +14,10 @@ pub struct DepthText;
 #[derive(Component)]
 pub struct GoldText;
 
+/// Shows the tactical mode: explore, or the combat phase and round.
+#[derive(Component)]
+pub struct ModeText;
+
 #[derive(Component)]
 pub struct GameLogText;
 
