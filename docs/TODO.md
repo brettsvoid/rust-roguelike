@@ -365,7 +365,7 @@ and adds the `model` names to `raws/spawns.json`.
   indicator agrees with them.
 
 ### C06 Overwatch and hunker down
-- Status: in progress
+- Status: done
 - Needs: C04
 - Overwatch spends the turn and fires at the first hostile that moves in view
   during the enemy phase, with an aim penalty. Hunker down doubles cover until
@@ -394,7 +394,7 @@ and adds the `model` names to `raws/spawns.json`.
   hotkey, shown in harness screenshots.
 
 ### C09 Combat presentation
-- Status: todo
+- Status: in progress
 - Needs: C03
 - Separate the instant rules result from how it plays out. Units slide along
   their path, lunge on melee, fire a visible projectile, show hit, miss and
