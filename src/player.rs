@@ -16,7 +16,7 @@ use crate::{
     entity_render::{EntityShape, Renderable},
     game_flow::{HeroAction, Mode, TurnEnded},
     gamelog::GameLog,
-    map::{is_stairs, tile_walkable, xy_idx, Map, Position, TileType},
+    map::{is_stairs, tile_walkable, xy_idx, Map, Position},
     map_indexing,
     monsters::Monster,
     party::{follow, next_unit, ActiveUnit, PartyMember},
