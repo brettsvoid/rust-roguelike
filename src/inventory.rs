@@ -8,6 +8,7 @@ use crate::{
         WantsToDropItem, WantsToPickupItem, WantsToRemoveItem, WantsToUseItem,
     },
     distance::DistanceAlg,
+    economy::{Gold, Purse},
     gamelog::GameLog,
     map::Position,
     particle::ParticleBuilder,
@@ -17,10 +18,23 @@ use crate::{
 pub fn item_collection_system(
     mut commands: Commands,
     mut gamelog: ResMut<GameLog>,
+    mut purse: ResMut<Purse>,
     pickup_query: Query<(Entity, &WantsToPickupItem)>,
     name_query: Query<&Name>,
+    gold_query: Query<&Gold>,
 ) {
     for (entity, wants_pickup) in &pickup_query {
+        commands.entity(entity).remove::<WantsToPickupItem>();
+
+        if let Ok(gold) = gold_query.get(wants_pickup.item) {
+            purse.gold += gold.amount;
+            commands.entity(wants_pickup.item).despawn();
+            gamelog
+                .entries
+                .push(format!("You pick up {} gold.", gold.amount));
+            continue;
+        }
+
         // Remove position and hide item so it's no longer on the map
         commands
             .entity(wants_pickup.item)
@@ -31,9 +45,6 @@ pub fn item_collection_system(
         commands.entity(wants_pickup.item).insert(InBackpack {
             owner: wants_pickup.collected_by,
         });
-
-        // Remove the intent component
-        commands.entity(entity).remove::<WantsToPickupItem>();
 
         // Log the pickup
         if let Ok(name) = name_query.get(wants_pickup.item) {
@@ -289,5 +300,56 @@ pub fn item_remove_system(
 
         // Remove intent component
         commands.entity(entity).remove::<WantsToRemoveItem>();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use bevy::ecs::system::RunSystemOnce;
+
+    use super::*;
+    use crate::components::Item;
+
+    fn pickup(world: &mut World, item: Entity) {
+        let player = world.spawn_empty().id();
+        world.entity_mut(player).insert(WantsToPickupItem {
+            collected_by: player,
+            item,
+        });
+        world.run_system_once(item_collection_system).unwrap();
+    }
+
+    fn world_with_purse(gold: i32) -> World {
+        let mut world = World::new();
+        world.insert_resource(GameLog { entries: Vec::new() });
+        world.insert_resource(Purse { gold });
+        world
+    }
+
+    #[test]
+    fn picking_up_gold_adds_it_to_the_purse() {
+        let mut world = world_with_purse(3);
+        let pile = world
+            .spawn((Item, Gold { amount: 10 }, Position { x: 1, y: 1 }))
+            .id();
+
+        pickup(&mut world, pile);
+
+        assert_eq!(world.resource::<Purse>().gold, 13);
+        assert!(world.get_entity(pile).is_err(), "the pile is used up");
+        assert_eq!(world.resource::<GameLog>().entries, vec!["You pick up 10 gold."]);
+    }
+
+    #[test]
+    fn picking_up_an_item_leaves_the_purse_alone() {
+        let mut world = world_with_purse(3);
+        let dagger = world
+            .spawn((Item, Name { name: "Dagger".into() }, Position { x: 1, y: 1 }))
+            .id();
+
+        pickup(&mut world, dagger);
+
+        assert_eq!(world.resource::<Purse>().gold, 3);
+        assert!(world.get::<InBackpack>(dagger).is_some());
     }
 }

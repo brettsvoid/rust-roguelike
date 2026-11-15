@@ -14,6 +14,9 @@ pub struct HealthBar;
 pub struct DepthText;
 
 #[derive(Component)]
+pub struct GoldText;
+
+#[derive(Component)]
 pub struct HungerText;
 
 #[derive(Component)]

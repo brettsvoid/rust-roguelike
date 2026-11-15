@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 use crate::combat::CombatStats;
 use crate::components::{EntryTrigger, InBackpack, Item};
+use crate::economy::Purse;
 use crate::game_flow::RunState;
 use crate::gamelog::GameLog;
 use crate::map::{Map, Position, Tile, FONT_SIZE};
@@ -39,6 +40,7 @@ pub fn spawn_new_game(
 
     let (player_x, player_y) = builder.get_starting_position();
     spawner::spawn_player(commands, &text_font, player_x, player_y);
+    commands.insert_resource(Purse::default());
 
     builder.spawn_entities(commands, rng, &text_font);
 }

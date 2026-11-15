@@ -1,7 +1,21 @@
 {
   "items": [
     {
+      "name": "Gold",
+      "base_value": 1,
+      "tier": 1,
+      "gold": [5, 25],
+      "renderable": {
+        "glyph": "$",
+        "fg": "#FFD700",
+        "bg": "#000000",
+        "order": 0
+      }
+    },
+    {
       "name": "Health Potion",
+      "base_value": 25,
+      "tier": 1,
       "renderable": {
         "glyph": "!",
         "fg": "#FF00FF",
@@ -14,6 +28,8 @@
     },
     {
       "name": "Rations",
+      "base_value": 5,
+      "tier": 1,
       "renderable": {
         "glyph": "%",
         "fg": "#00FF00",
@@ -26,6 +42,8 @@
     },
     {
       "name": "Magic Missile Scroll",
+      "base_value": 40,
+      "tier": 1,
       "renderable": {
         "glyph": ")",
         "fg": "#00FFFF",
@@ -42,6 +60,8 @@
     },
     {
       "name": "Fireball Scroll",
+      "base_value": 75,
+      "tier": 1,
       "renderable": {
         "glyph": ")",
         "fg": "#FFA500",
@@ -58,6 +78,8 @@
     },
     {
       "name": "Confusion Scroll",
+      "base_value": 40,
+      "tier": 1,
       "renderable": {
         "glyph": ")",
         "fg": "#FFC0CB",
@@ -74,6 +96,8 @@
     },
     {
       "name": "Scroll of Magic Mapping",
+      "base_value": 50,
+      "tier": 1,
       "renderable": {
         "glyph": ")",
         "fg": "#6495ED",
@@ -86,6 +110,8 @@
     },
     {
       "name": "Dagger",
+      "base_value": 15,
+      "tier": 1,
       "renderable": {
         "glyph": "/",
         "fg": "#00FFFF",
@@ -99,6 +125,8 @@
     },
     {
       "name": "Longsword",
+      "base_value": 60,
+      "tier": 1,
       "renderable": {
         "glyph": "/",
         "fg": "#FFFF00",
@@ -112,6 +140,8 @@
     },
     {
       "name": "Battleaxe",
+      "base_value": 90,
+      "tier": 1,
       "renderable": {
         "glyph": "¶",
         "fg": "#FF5500",
@@ -125,6 +155,8 @@
     },
     {
       "name": "Shield",
+      "base_value": 20,
+      "tier": 1,
       "renderable": {
         "glyph": "(",
         "fg": "#00FFFF",
@@ -137,6 +169,8 @@
     },
     {
       "name": "Tower Shield",
+      "base_value": 70,
+      "tier": 1,
       "renderable": {
         "glyph": "(",
         "fg": "#FFFF00",
@@ -151,6 +185,7 @@
   "mobs": [
     {
       "name": "Goblin",
+      "gold": [2, 8],
       "renderable": {
         "glyph": "g",
         "fg": "#FF0000",
@@ -168,6 +203,7 @@
     },
     {
       "name": "Orc",
+      "gold": [5, 15],
       "renderable": {
         "glyph": "o",
         "fg": "#FF0000",
@@ -185,6 +221,7 @@
     },
     {
       "name": "Kobold",
+      "gold": [1, 4],
       "renderable": {
         "glyph": "k",
         "fg": "#FF5500",
@@ -521,6 +558,7 @@
     { "name": "Goblin", "weight": 10, "min_depth": 1, "max_depth": 100 },
     { "name": "Orc", "weight": 1, "min_depth": 1, "max_depth": 100, "add_map_depth_to_weight": true },
     { "name": "Health Potion", "weight": 7, "min_depth": 1, "max_depth": 100 },
+    { "name": "Gold", "weight": 6, "min_depth": 1, "max_depth": 100 },
     { "name": "Rations", "weight": 10, "min_depth": 1, "max_depth": 100 },
     { "name": "Magic Missile Scroll", "weight": 2, "min_depth": 1, "max_depth": 100 },
     { "name": "Fireball Scroll", "weight": 1, "min_depth": 2, "max_depth": 100, "add_map_depth_to_weight": true },

@@ -2,13 +2,14 @@ use bevy::prelude::*;
 
 use crate::combat::CombatStats;
 use crate::components::{HungerClock, HungerState};
+use crate::economy::Purse;
 use crate::gamelog::GameLog;
 use crate::map::Map;
 use crate::player::Player;
 use crate::resources::UiFont;
 use crate::RunState;
 
-use super::components::{DepthText, GameLogText, HealthBar, HealthText, HungerText};
+use super::components::{DepthText, GameLogText, GoldText, HealthBar, HealthText, HungerText};
 
 pub struct HudPlugin;
 
@@ -25,6 +26,7 @@ impl Plugin for HudPlugin {
             (
                 update_health_bar,
                 update_depth,
+                update_gold,
                 update_hunger_display,
                 update_game_log,
             )
@@ -97,6 +99,17 @@ fn setup_hud(mut commands: Commands, font: Res<UiFont>) {
                 DepthText,
             ));
 
+            parent.spawn((
+                Text::new("Gold: 0"),
+                TextFont {
+                    font: font.0.clone().into(),
+                    font_size: FontSize::Px(16.0),
+                    ..default()
+                },
+                TextColor(Color::srgb(1.0, 0.84, 0.0)), // Gold
+                GoldText,
+            ));
+
             // Hunger display
             parent.spawn((
                 Text::new(""),
@@ -156,6 +169,12 @@ fn update_health_bar(
 fn update_depth(map: Res<Map>, mut depth_text_query: Query<&mut Text, With<DepthText>>) {
     if let Ok(mut text) = depth_text_query.single_mut() {
         **text = format!("Depth: {}", map.depth);
+    }
+}
+
+fn update_gold(purse: Res<Purse>, mut gold_text_query: Query<&mut Text, With<GoldText>>) {
+    if let Ok(mut text) = gold_text_query.single_mut() {
+        **text = format!("Gold: {}", purse.gold);
     }
 }
 

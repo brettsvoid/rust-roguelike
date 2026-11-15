@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 use crate::bystander::Bystander;
 use crate::combat::CombatStats;
+use crate::economy::Gold;
 use crate::components::{
     AreaOfEffect, BlocksTile, BlocksVisibility, CausesConfusion, Consumable, DefenseBonus,
     Door, EntryTrigger, EquipmentSlot, Equippable, Hidden, InflictsDamage, Item, MagicMapper,
@@ -114,7 +115,7 @@ pub fn spawn_named_entity(
     monster_id: Option<usize>,
 ) -> bool {
     if raws.item_index.contains_key(key) {
-        return spawn_named_item(raws, commands, font, key, x, y);
+        return spawn_named_item(raws, commands, font, key, x, y).is_some();
     } else if raws.mob_index.contains_key(key) {
         return spawn_named_mob(raws, commands, font, key, x, y, monster_id);
     } else if raws.prop_index.contains_key(key) {
@@ -131,10 +132,8 @@ pub fn spawn_named_item(
     key: &str,
     x: i32,
     y: i32,
-) -> bool {
-    let Some(&idx) = raws.item_index.get(key) else {
-        return false;
-    };
+) -> Option<Entity> {
+    let &idx = raws.item_index.get(key)?;
     let item_template = &raws.raws.items[idx];
 
     let mut entity = commands.spawn((
@@ -221,7 +220,17 @@ pub fn spawn_named_item(
         });
     }
 
-    true
+    if let Some(range) = item_template.gold {
+        entity.insert(Gold { amount: roll_gold(range) });
+    }
+
+    Some(entity.id())
+}
+
+/// shortcut: rolls with the thread rng, not `GameRng`; thread `GameRng`
+/// through the spawn functions if seeded runs need to reproduce gold.
+fn roll_gold((min, max): (i32, i32)) -> i32 {
+    rand::random_range(min..=max)
 }
 
 /// Spawn a mob from raw data
@@ -274,6 +283,10 @@ pub fn spawn_named_mob(
 
     if mob_template.blocks_tile {
         entity.insert(BlocksTile);
+    }
+
+    if let Some(range) = mob_template.gold {
+        entity.insert(Gold { amount: roll_gold(range) });
     }
 
     // Add renderable

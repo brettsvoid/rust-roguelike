@@ -13,6 +13,7 @@ mod combat;
 mod components;
 mod debug;
 mod distance;
+mod economy;
 mod game_flow;
 mod gamelog;
 mod gui;
@@ -59,6 +60,7 @@ fn main() {
             ..default()
         }))
         .init_resource::<gamelog::GameLog>()
+        .init_resource::<economy::Purse>()
         .init_resource::<rng::GameRng>()
         .init_resource::<particle::ParticleBuilder>()
         // Core game plugins

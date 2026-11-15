@@ -11,6 +11,9 @@ pub struct Mob {
     pub vision_range: i32,
     #[serde(default)]
     pub ai: Option<String>, // "melee" (default) or "bystander"
+    /// Gold carried, rolled in this inclusive range at spawn, dropped on death.
+    #[serde(default)]
+    pub gold: Option<(i32, i32)>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

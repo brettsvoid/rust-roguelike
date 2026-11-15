@@ -137,6 +137,7 @@ fn cmd_spawn(
         "tower_shield" => Some("Tower Shield"),
         "rations" | "food" => Some("Rations"),
         "magic_map" | "map" => Some("Scroll of Magic Mapping"),
+        "gold" => Some("Gold"),
         _ => None,
     };
 

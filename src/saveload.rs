@@ -13,6 +13,7 @@ use crate::components::{
     HungerClock, HungerState, InBackpack, InflictsDamage, Item, MagicMapper, Name, ProvidesFood,
     ProvidesHealing, Ranged, RenderOrder, RenderableBundle, SingleActivation, Targeting,
 };
+use crate::economy::{Gold, Purse};
 use crate::game_flow::RunState;
 use crate::gamelog::GameLog;
 use crate::map::{tile_walkable, Map, Position, Tile, TileType, FONT_SIZE};
@@ -56,6 +57,7 @@ pub type MonsterSaveQuery<'w, 's> = Query<
         &'static Viewshed,
         &'static Text2d,
         Option<&'static Confusion>,
+        Option<&'static Gold>,
     ),
     With<Monster>,
 >;
@@ -78,7 +80,8 @@ pub type ItemSaveQuery<'w, 's> = Query<
         Option<&'static AreaOfEffect>,
         Option<&'static Targeting>,
         Option<&'static CausesConfusion>,
-        Option<&'static MagicMapper>,
+        // Nested: Bevy query tuples stop at 15 elements.
+        (Option<&'static MagicMapper>, Option<&'static Gold>),
     ),
     With<Item>,
 >;
@@ -106,6 +109,7 @@ pub fn save_on_quit(
     state: Res<State<RunState>>,
     map: Res<Map>,
     game_log: Res<GameLog>,
+    purse: Res<Purse>,
     player_query: PlayerSaveQuery,
     monster_query: MonsterSaveQuery,
     item_query: ItemSaveQuery,
@@ -120,7 +124,7 @@ pub fn save_on_quit(
                 .unwrap_or(false);
 
             if player_alive {
-                save_game(map, game_log, player_query, monster_query, item_query, trap_query);
+                save_game(map, game_log, purse, player_query, monster_query, item_query, trap_query);
             }
         }
         exit.write(AppExit::Success);
@@ -140,6 +144,8 @@ pub struct SaveData {
     #[serde(default)]
     pub traps: Vec<SerializedTrap>,
     pub game_log: Vec<String>,
+    #[serde(default)]
+    pub gold: i32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -185,6 +191,8 @@ pub struct SerializedMonster {
     pub power: i32,
     pub viewshed_range: i32,
     pub confusion_turns: Option<i32>,
+    #[serde(default)]
+    pub gold: Option<i32>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -214,6 +222,8 @@ pub struct ItemProperties {
     pub causes_confusion: Option<i32>,
     #[serde(default)]
     pub magic_mapper: bool,
+    #[serde(default)]
+    pub gold: Option<i32>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -243,6 +253,7 @@ pub struct SerializedTrap {
 pub fn save_game(
     map: Res<Map>,
     game_log: Res<GameLog>,
+    purse: Res<Purse>,
     player_query: PlayerSaveQuery,
     monster_query: MonsterSaveQuery,
     item_query: ItemSaveQuery,
@@ -273,7 +284,7 @@ pub fn save_game(
     let monsters: Vec<SerializedMonster> = monster_query
         .iter()
         .map(
-            |(pos, name, stats, viewshed, text, confusion)| SerializedMonster {
+            |(pos, name, stats, viewshed, text, confusion, gold)| SerializedMonster {
                 x: pos.x,
                 y: pos.y,
                 name: name.name.clone(),
@@ -284,6 +295,7 @@ pub fn save_game(
                 power: stats.power,
                 viewshed_range: viewshed.range,
                 confusion_turns: confusion.map(|c| c.turns),
+                gold: gold.map(|g| g.amount),
             },
         )
         .collect();
@@ -307,7 +319,7 @@ pub fn save_game(
                 aoe,
                 targeting,
                 causes_confusion,
-                magic_mapper,
+                (magic_mapper, gold),
             )| {
                 let location = if let Some(backpack) = in_backpack {
                     if backpack.owner == player_entity {
@@ -349,6 +361,7 @@ pub fn save_game(
                         }),
                         causes_confusion: causes_confusion.map(|c| c.turns),
                         magic_mapper: magic_mapper.is_some(),
+                        gold: gold.map(|g| g.amount),
                     },
                 }
             },
@@ -394,6 +407,7 @@ pub fn save_game(
         items,
         traps,
         game_log: game_log.entries.clone(),
+        gold: purse.gold,
     };
 
     match serde_json::to_string_pretty(&save_data) {
@@ -461,6 +475,9 @@ pub fn load_game(
 
     // Restore game log
     game_log.entries = save_data.game_log;
+    commands.insert_resource(Purse {
+        gold: save_data.gold,
+    });
 
     let text_font = TextFont {
         font: font.0.clone().into(),
@@ -540,6 +557,9 @@ pub fn load_game(
         if let Some(turns) = monster.confusion_turns {
             entity_commands.insert(Confusion { turns });
         }
+        if let Some(amount) = monster.gold {
+            entity_commands.insert(Gold { amount });
+        }
     }
 
     // Spawn items
@@ -602,6 +622,9 @@ pub fn load_game(
         if item.properties.magic_mapper {
             entity_commands.insert(MagicMapper);
         }
+        if let Some(amount) = item.properties.gold {
+            entity_commands.insert(Gold { amount });
+        }
     }
 
     // Spawn traps
@@ -644,6 +667,7 @@ pub fn load_game(
 pub fn save_game(
     _map: Res<Map>,
     _game_log: Res<GameLog>,
+    _purse: Res<Purse>,
     _player_query: PlayerSaveQuery,
     _monster_query: MonsterSaveQuery,
     _item_query: ItemSaveQuery,
@@ -671,4 +695,79 @@ pub fn load_game(
     _font: &UiFont,
 ) -> bool {
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn save_with_gold() -> SaveData {
+        SaveData {
+            map: SerializedMap {
+                tiles: Vec::new(),
+                revealed_tiles: Vec::new(),
+                width: 0,
+                height: 0,
+                depth: 2,
+                bloodstains: Vec::new(),
+            },
+            player: SerializedPlayer {
+                x: 0,
+                y: 0,
+                name: "Player".into(),
+                max_hp: 30,
+                hp: 30,
+                defense: 2,
+                power: 5,
+                viewshed_range: 8,
+                hunger_state: HungerState::Normal,
+                hunger_duration: 20,
+            },
+            monsters: vec![SerializedMonster {
+                x: 1,
+                y: 1,
+                name: "Goblin".into(),
+                glyph: "g".into(),
+                max_hp: 16,
+                hp: 16,
+                defense: 1,
+                power: 4,
+                viewshed_range: 8,
+                confusion_turns: None,
+                gold: Some(6),
+            }],
+            items: vec![SerializedItem {
+                name: "Gold".into(),
+                glyph: "$".into(),
+                color: SerializedColor { r: 1.0, g: 0.84, b: 0.0 },
+                location: ItemLocation::OnGround { x: 2, y: 2 },
+                properties: ItemProperties {
+                    gold: Some(17),
+                    ..default()
+                },
+            }],
+            traps: Vec::new(),
+            game_log: Vec::new(),
+            gold: 42,
+        }
+    }
+
+    #[test]
+    fn gold_survives_a_save_round_trip() {
+        let json = serde_json::to_string(&save_with_gold()).unwrap();
+        let loaded: SaveData = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(loaded.gold, 42);
+        assert_eq!(loaded.monsters[0].gold, Some(6));
+        assert_eq!(loaded.items[0].properties.gold, Some(17));
+    }
+
+    #[test]
+    fn a_save_from_before_gold_loads_with_an_empty_purse() {
+        let mut json = serde_json::to_value(save_with_gold()).unwrap();
+        json.as_object_mut().unwrap().remove("gold");
+        let loaded: SaveData = serde_json::from_value(json).unwrap();
+
+        assert_eq!(loaded.gold, 0);
+    }
 }
