@@ -69,9 +69,8 @@ Direction from the owner's first playtest (15 November 2026):
   feel is not something to preserve, and `docs/design.md` is a guideline that
   will change. Where a ticket has a choice, pick the smoother presentation:
   continuous camera motion, units that glide, eased transitions.
-- Open, to ask the owner: whether "less grid" stops at presentation (tiles stay
-  the gameplay truth, as in XCOM) or reaches the rules (free movement measured
-  in distance). Until answered, tiles stay the gameplay truth.
+- Settled by the owner: this is presentation only. Tiles stay the rules
+  underneath (as in XCOM); nothing the player sees or feels should snap.
 
 Settled questions (owner, 15 November 2026):
 
