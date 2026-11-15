@@ -415,7 +415,7 @@ and adds the `model` names to `raws/spawns.json`.
 - Done when: the party can sell loot and buy gear from each vendor in town.
 
 ### E03 Persistent town state
-- Status: in progress
+- Status: done
 - Needs: E01
 - A `TownState` resource saved to `town.json`: treasury, per-sector goods
   stock and level (smithing, alchemy, textiles, provisions, faith, arcana),
@@ -426,7 +426,7 @@ and adds the `model` names to `raws/spawns.json`.
   death of the party and a new game.
 
 ### E04 Trade simulation
-- Status: todo
+- Status: in progress
 - Needs: E03
 - A pure function `simulate(town, days) -> (town, news)`. Goods the party
   sold enter the matching sector's stock. Each day, caravans carry surplus to
