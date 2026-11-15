@@ -40,7 +40,7 @@ pub fn particle_spawn_system(
     font: Res<UiFont>,
     window: Query<&Window>,
 ) {
-    let Ok(window) = window.get_single() else {
+    let Ok(window) = window.single() else {
         return;
     };
 
@@ -62,8 +62,8 @@ pub fn particle_spawn_system(
             },
             Text2d::new(request.glyph),
             TextFont {
-                font: font.0.clone(),
-                font_size: FONT_SIZE,
+                font: font.0.clone().into(),
+                font_size: FontSize::Px(FONT_SIZE),
                 ..default()
             },
             TextColor(request.color),

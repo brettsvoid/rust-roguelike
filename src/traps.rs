@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use rand::Rng;
+use rand::RngExt;
 
 use crate::{
     combat::SufferDamage,
@@ -71,14 +71,14 @@ pub fn reveal_hidden_system(
     hidden_query: Query<(Entity, &Position, &Name), With<Hidden>>,
     mut rng: ResMut<GameRng>,
 ) {
-    let Ok(viewshed) = player_query.get_single() else {
+    let Ok(viewshed) = player_query.single() else {
         return;
     };
 
     for (entity, pos, name) in &hidden_query {
         if viewshed.visible_tiles.contains(&(pos.x, pos.y)) {
             // 1 in 24 chance to spot hidden entity
-            if rng.0.gen_range(1..=24) == 1 {
+            if rng.0.random_range(1..=24) == 1 {
                 commands.entity(entity).remove::<Hidden>();
                 gamelog
                     .entries

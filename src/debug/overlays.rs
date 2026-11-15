@@ -74,11 +74,11 @@ pub fn update_fov_overlay(
         return;
     }
 
-    let Ok(window) = window.get_single() else {
+    let Ok(window) = window.single() else {
         return;
     };
 
-    let Ok(viewshed) = player_query.get_single() else {
+    let Ok(viewshed) = player_query.single() else {
         return;
     };
 
@@ -125,10 +125,10 @@ pub fn update_tile_info_overlay(
         return;
     }
 
-    let Ok(window) = window.get_single() else {
+    let Ok(window) = window.single() else {
         return;
     };
-    let Ok((camera, camera_transform)) = camera_query.get_single() else {
+    let Ok((camera, camera_transform)) = camera_query.single() else {
         return;
     };
     let Some(cursor_pos) = window.cursor_position() else {
@@ -184,8 +184,8 @@ pub fn update_tile_info_overlay(
         TileInfoOverlay,
         Text2d::new(info_text),
         TextFont {
-            font: font.0.clone(),
-            font_size: 14.0,
+            font: font.0.clone().into(),
+            font_size: FontSize::Px(14.0),
             ..default()
         },
         TextColor(Color::WHITE),
@@ -212,7 +212,7 @@ pub fn update_state_inspector(
 ) {
     // Despawn existing inspector
     for entity in &inspector_query {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 
     if !debug.show_inspector {
@@ -222,7 +222,7 @@ pub fn update_state_inspector(
     let state_name = format!("{:?}", state.get());
     let depth = map.depth;
 
-    let (player_info, hp_info, hunger_info) = if let Ok((pos, stats, hunger)) = player_query.get_single() {
+    let (player_info, hp_info, hunger_info) = if let Ok((pos, stats, hunger)) = player_query.single() {
         (
             format!("({}, {})", pos.x, pos.y),
             format!("{}/{}", stats.hp, stats.max_hp),
@@ -238,8 +238,8 @@ pub fn update_state_inspector(
     let no_fog_str = if debug_state.no_fog { "ON" } else { "OFF" };
 
     let text_font = TextFont {
-        font: font.0.clone(),
-        font_size: 14.0,
+        font: font.0.clone().into(),
+        font_size: FontSize::Px(14.0),
         ..default()
     };
 
@@ -315,8 +315,8 @@ pub fn update_state_inspector(
             parent.spawn((
                 Text::new("F1:FOV F3:Tile F4:This `:Console"),
                 TextFont {
-                    font: font.0.clone(),
-                    font_size: 12.0,
+                    font: font.0.clone().into(),
+                    font_size: FontSize::Px(12.0),
                     ..default()
                 },
                 TextColor(Color::srgb(0.5, 0.5, 0.5)),

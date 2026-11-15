@@ -4,7 +4,7 @@
 //! floor on the other two) and adds a door entity there - at most one per
 //! corridor, so hallways don't turn into door mazes.
 
-use rand::Rng;
+use rand::RngExt;
 
 use crate::map::{TileType, MAP_HEIGHT, MAP_WIDTH};
 use crate::rng::GameRng;
@@ -90,7 +90,7 @@ impl MetaMapBuilder for DoorPlacement {
                     let idx = build_data.map.xy_idx(x, y);
                     if Self::door_possible(build_data, idx) && !doors_placed.contains(&idx) {
                         // 25% chance to place a door when scanning whole map
-                        if rng.0.gen_range(0..4) == 0 {
+                        if rng.0.random_range(0..4) == 0 {
                             build_data.spawn_list.push((idx, "Door".to_string()));
                             doors_placed.push(idx);
                         }

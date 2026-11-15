@@ -1,12 +1,12 @@
 use bevy::prelude::*;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{rngs::StdRng, RngExt, SeedableRng};
 
 #[derive(Resource)]
 pub struct GameRng(pub StdRng);
 
 impl Default for GameRng {
     fn default() -> Self {
-        GameRng(StdRng::from_entropy())
+        GameRng(rand::make_rng())
     }
 }
 
@@ -52,7 +52,7 @@ impl RandomTable {
             return None;
         }
 
-        let mut roll = rng.0.gen_range(1..=self.total_weight);
+        let mut roll = rng.0.random_range(1..=self.total_weight);
         for entry in &self.entries {
             if roll <= entry.weight {
                 return Some(entry.name.clone());

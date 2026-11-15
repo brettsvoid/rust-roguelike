@@ -16,9 +16,9 @@ impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {
         // HUD updates only during actual gameplay
         let in_gameplay = not(in_state(RunState::MainMenu))
-            .and(not(in_state(RunState::GameOver)))
-            .and(not(in_state(RunState::MapGeneration)))
-            .and(not(in_state(RunState::MapBuilderSelect)));
+            .and_then(not(in_state(RunState::GameOver)))
+            .and_then(not(in_state(RunState::MapGeneration)))
+            .and_then(not(in_state(RunState::MapBuilderSelect)));
 
         app.add_systems(Startup, setup_hud).add_systems(
             Update,
@@ -54,8 +54,8 @@ fn setup_hud(mut commands: Commands, font: Res<UiFont>) {
             parent.spawn((
                 Text::new("HP: 30 / 30"),
                 TextFont {
-                    font: font.0.clone(),
-                    font_size: 16.0,
+                    font: font.0.clone().into(),
+                    font_size: FontSize::Px(16.0),
                     ..default()
                 },
                 TextColor(Color::srgb(1.0, 1.0, 0.0)), // Yellow
@@ -89,8 +89,8 @@ fn setup_hud(mut commands: Commands, font: Res<UiFont>) {
             parent.spawn((
                 Text::new("Depth: 1"),
                 TextFont {
-                    font: font.0.clone(),
-                    font_size: 16.0,
+                    font: font.0.clone().into(),
+                    font_size: FontSize::Px(16.0),
                     ..default()
                 },
                 TextColor(Color::srgb(1.0, 1.0, 0.0)), // Yellow
@@ -101,8 +101,8 @@ fn setup_hud(mut commands: Commands, font: Res<UiFont>) {
             parent.spawn((
                 Text::new(""),
                 TextFont {
-                    font: font.0.clone(),
-                    font_size: 16.0,
+                    font: font.0.clone().into(),
+                    font_size: FontSize::Px(16.0),
                     ..default()
                 },
                 TextColor(Color::srgb(0.0, 1.0, 0.0)), // Green (will be updated)
@@ -123,8 +123,8 @@ fn setup_hud(mut commands: Commands, font: Res<UiFont>) {
                     log_parent.spawn((
                         Text::new(""),
                         TextFont {
-                            font: font.0.clone(),
-                            font_size: 14.0,
+                            font: font.0.clone().into(),
+                            font_size: FontSize::Px(14.0),
                             ..default()
                         },
                         TextColor(Color::WHITE),
@@ -139,14 +139,14 @@ fn update_health_bar(
     mut health_text_query: Query<&mut Text, With<HealthText>>,
     mut health_bar_query: Query<&mut Node, With<HealthBar>>,
 ) {
-    if let Ok(stats) = player_query.get_single() {
+    if let Ok(stats) = player_query.single() {
         // Update text
-        if let Ok(mut text) = health_text_query.get_single_mut() {
+        if let Ok(mut text) = health_text_query.single_mut() {
             **text = format!("HP: {} / {}", stats.hp, stats.max_hp);
         }
 
         // Update bar width
-        if let Ok(mut node) = health_bar_query.get_single_mut() {
+        if let Ok(mut node) = health_bar_query.single_mut() {
             let percent = (stats.hp as f32 / stats.max_hp as f32) * 100.0;
             node.width = Val::Percent(percent.max(0.0));
         }
@@ -154,7 +154,7 @@ fn update_health_bar(
 }
 
 fn update_depth(map: Res<Map>, mut depth_text_query: Query<&mut Text, With<DepthText>>) {
-    if let Ok(mut text) = depth_text_query.get_single_mut() {
+    if let Ok(mut text) = depth_text_query.single_mut() {
         **text = format!("Depth: {}", map.depth);
     }
 }
@@ -163,8 +163,8 @@ fn update_hunger_display(
     player_query: Query<&HungerClock, With<Player>>,
     mut hunger_text_query: Query<(&mut Text, &mut TextColor), With<HungerText>>,
 ) {
-    if let Ok(hunger) = player_query.get_single() {
-        if let Ok((mut text, mut color)) = hunger_text_query.get_single_mut() {
+    if let Ok(hunger) = player_query.single() {
+        if let Ok((mut text, mut color)) = hunger_text_query.single_mut() {
             match hunger.state {
                 HungerState::WellFed => {
                     **text = "Well Fed".to_string();
@@ -187,7 +187,7 @@ fn update_hunger_display(
 }
 
 fn update_game_log(game_log: Res<GameLog>, mut log_text_query: Query<&mut Text, With<GameLogText>>) {
-    if let Ok(mut text) = log_text_query.get_single_mut() {
+    if let Ok(mut text) = log_text_query.single_mut() {
         // Show last 5 messages, newest at bottom
         let messages: Vec<&str> = game_log
             .entries

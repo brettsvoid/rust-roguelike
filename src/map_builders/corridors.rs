@@ -7,7 +7,7 @@
 //!   feels more organic than chaining rooms in order
 //! - `CorridorSpawner`: optionally sprinkle monsters/items into corridors
 
-use rand::Rng;
+use rand::RngExt;
 
 use crate::rng::GameRng;
 
@@ -36,7 +36,7 @@ impl MetaMapBuilder for DoglegCorridors {
                 let (x2, y2) = rooms[i + 1].center();
 
                 // Randomly choose horizontal-first or vertical-first
-                if rng.0.gen_bool(0.5) {
+                if rng.0.random_bool(0.5) {
                     let mut c1 = apply_horizontal_tunnel(&mut build_data.map, x1, x2, y1);
                     let mut c2 = apply_vertical_tunnel(&mut build_data.map, y1, y2, x2);
                     c1.append(&mut c2);
@@ -79,14 +79,14 @@ impl MetaMapBuilder for BspCorridors {
                 // Random point within current room
                 let room_width = i32::abs(room.x1 - room.x2).max(1);
                 let room_height = i32::abs(room.y1 - room.y2).max(1);
-                let start_x = room.x1 + rng.0.gen_range(0..room_width);
-                let start_y = room.y1 + rng.0.gen_range(0..room_height);
+                let start_x = room.x1 + rng.0.random_range(0..room_width);
+                let start_y = room.y1 + rng.0.random_range(0..room_height);
 
                 // Random point within next room
                 let next_width = i32::abs(next_room.x1 - next_room.x2).max(1);
                 let next_height = i32::abs(next_room.y1 - next_room.y2).max(1);
-                let end_x = next_room.x1 + rng.0.gen_range(0..next_width);
-                let end_y = next_room.y1 + rng.0.gen_range(0..next_height);
+                let end_x = next_room.x1 + rng.0.random_range(0..next_width);
+                let end_y = next_room.y1 + rng.0.random_range(0..next_height);
 
                 let corridor = draw_corridor(&mut build_data.map, start_x, start_y, end_x, end_y);
                 corridors.push(corridor);
@@ -205,28 +205,28 @@ impl MetaMapBuilder for CorridorSpawner {
                 }
 
                 // 25% chance to spawn something in each corridor
-                if !rng.0.gen_bool(0.25) {
+                if !rng.0.random_bool(0.25) {
                     continue;
                 }
 
                 // Pick a random tile in the corridor (not the endpoints)
                 let spawn_idx = if corridor.len() > 2 {
-                    corridor[rng.0.gen_range(1..corridor.len() - 1)]
+                    corridor[rng.0.random_range(1..corridor.len() - 1)]
                 } else {
                     corridor[0]
                 };
 
                 // Add to spawn list - 50% monster, 50% item
-                if rng.0.gen_bool(0.5) {
+                if rng.0.random_bool(0.5) {
                     // Monster
-                    if rng.0.gen_bool(0.5) {
+                    if rng.0.random_bool(0.5) {
                         build_data.spawn_list.push((spawn_idx, "Goblin".to_string()));
                     } else {
                         build_data.spawn_list.push((spawn_idx, "Orc".to_string()));
                     }
                 } else {
                     // Item
-                    let roll = rng.0.gen_range(0..6);
+                    let roll = rng.0.random_range(0..6);
                     let item = match roll {
                         0 => "Health Potion",
                         1 => "Rations",

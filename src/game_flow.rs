@@ -100,9 +100,9 @@ fn transition_to_awaiting_input(
     player_query: Query<&combat::CombatStats, With<Player>>,
 ) {
     // Don't transition if player is dead (GameOver state should take priority)
-    if let Ok(stats) = player_query.get_single() {
+    if let Ok(stats) = player_query.single() {
         if stats.hp > 0 {
-            next_state.set(RunState::AwaitingInput);
+            next_state.set_if_different(RunState::AwaitingInput);
         }
     }
 }
@@ -113,13 +113,13 @@ fn transition_to_monster_turn(
     player_query: Query<&combat::CombatStats, With<Player>>,
 ) {
     // Don't transition if player is dead (GameOver state should take priority)
-    if let Ok(stats) = player_query.get_single() {
+    if let Ok(stats) = player_query.single() {
         if stats.hp > 0 {
             if pending_magic_map.0 {
                 pending_magic_map.0 = false;
-                next_state.set(RunState::MagicMapReveal);
+                next_state.set_if_different(RunState::MagicMapReveal);
             } else {
-                next_state.set(RunState::MonsterTurn);
+                next_state.set_if_different(RunState::MonsterTurn);
             }
         }
     }
@@ -139,7 +139,7 @@ fn magic_map_reveal(
 
     if row >= map::MAP_HEIGHT as i32 {
         // Done revealing, return to awaiting input
-        next_state.set(RunState::AwaitingInput);
+        next_state.set_if_different(RunState::AwaitingInput);
         return;
     }
 

@@ -68,7 +68,7 @@ fn spawn_inventory_menu(
 ) {
     menu_page.0 = 0;
 
-    let Ok(player_entity) = player_query.get_single() else {
+    let Ok(player_entity) = player_query.single() else {
         return;
     };
 
@@ -103,13 +103,13 @@ fn despawn_inventory_menu(
         commands.entity(entity).despawn();
     }
     for entity in &container_query {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 }
 
 fn handle_inventory_input(
     mut commands: Commands,
-    mut evr_kbd: EventReader<KeyboardInput>,
+    mut evr_kbd: MessageReader<KeyboardInput>,
     mut next_state: ResMut<NextState<RunState>>,
     mut targeting_info: ResMut<TargetingInfo>,
     mut menu_page: ResMut<MenuPage>,
@@ -119,11 +119,11 @@ fn handle_inventory_input(
     menu_query: Query<&ModalMenu, With<InventoryMenuMarker>>,
     mut text_query: Query<&mut Text, With<ModalMenuText>>,
 ) {
-    let Ok(player_entity) = player_query.get_single() else {
+    let Ok(player_entity) = player_query.single() else {
         return;
     };
 
-    let Ok(menu) = menu_query.get_single() else {
+    let Ok(menu) = menu_query.single() else {
         return;
     };
 
@@ -142,14 +142,14 @@ fn handle_inventory_input(
 
         // Handle escape
         if ev.key_code == KeyCode::Escape {
-            next_state.set(RunState::AwaitingInput);
+            next_state.set_if_different(RunState::AwaitingInput);
             return;
         }
 
         // Handle pagination
         if handle_pagination_input(ev.key_code, &mut menu_page, total_items) {
             // Update text in place
-            if let Ok(mut text) = text_query.get_single_mut() {
+            if let Ok(mut text) = text_query.single_mut() {
                 **text = build_menu_text(menu, &menu_page);
             }
             continue;
@@ -162,11 +162,11 @@ fn handle_inventory_input(
                 if let Ok(ranged) = ranged_query.get(item) {
                     targeting_info.range = ranged.range;
                     targeting_info.item = Some(item);
-                    next_state.set(RunState::ShowTargeting);
+                    next_state.set_if_different(RunState::ShowTargeting);
                 } else {
                     // Non-ranged item, use immediately
                     commands.entity(player_entity).insert(WantsToUseItem { item, target: None });
-                    next_state.set(RunState::PlayerTurn);
+                    next_state.set_if_different(RunState::PlayerTurn);
                 }
             }
         }
@@ -186,7 +186,7 @@ fn spawn_drop_menu(
 ) {
     menu_page.0 = 0;
 
-    let Ok(player_entity) = player_query.get_single() else {
+    let Ok(player_entity) = player_query.single() else {
         return;
     };
 
@@ -221,13 +221,13 @@ fn despawn_drop_menu(
         commands.entity(entity).despawn();
     }
     for entity in &container_query {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 }
 
 fn handle_drop_input(
     mut commands: Commands,
-    mut evr_kbd: EventReader<KeyboardInput>,
+    mut evr_kbd: MessageReader<KeyboardInput>,
     mut next_state: ResMut<NextState<RunState>>,
     mut menu_page: ResMut<MenuPage>,
     player_query: Query<Entity, With<Player>>,
@@ -235,11 +235,11 @@ fn handle_drop_input(
     menu_query: Query<&ModalMenu, With<DropMenuMarker>>,
     mut text_query: Query<&mut Text, With<ModalMenuText>>,
 ) {
-    let Ok(player_entity) = player_query.get_single() else {
+    let Ok(player_entity) = player_query.single() else {
         return;
     };
 
-    let Ok(menu) = menu_query.get_single() else {
+    let Ok(menu) = menu_query.single() else {
         return;
     };
 
@@ -258,13 +258,13 @@ fn handle_drop_input(
 
         // Handle escape
         if ev.key_code == KeyCode::Escape {
-            next_state.set(RunState::AwaitingInput);
+            next_state.set_if_different(RunState::AwaitingInput);
             return;
         }
 
         // Handle pagination
         if handle_pagination_input(ev.key_code, &mut menu_page, total_items) {
-            if let Ok(mut text) = text_query.get_single_mut() {
+            if let Ok(mut text) = text_query.single_mut() {
                 **text = build_menu_text(menu, &menu_page);
             }
             continue;
@@ -274,7 +274,7 @@ fn handle_drop_input(
         if let Some(index) = get_selected_index(ev.key_code, &menu_page, total_items) {
             if let Some(&item) = items.get(index) {
                 commands.entity(player_entity).insert(WantsToDropItem { item });
-                next_state.set(RunState::PlayerTurn);
+                next_state.set_if_different(RunState::PlayerTurn);
             }
         }
     }
@@ -293,7 +293,7 @@ fn spawn_remove_menu(
 ) {
     menu_page.0 = 0;
 
-    let Ok(player_entity) = player_query.get_single() else {
+    let Ok(player_entity) = player_query.single() else {
         return;
     };
 
@@ -328,13 +328,13 @@ fn despawn_remove_menu(
         commands.entity(entity).despawn();
     }
     for entity in &container_query {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 }
 
 fn handle_remove_input(
     mut commands: Commands,
-    mut evr_kbd: EventReader<KeyboardInput>,
+    mut evr_kbd: MessageReader<KeyboardInput>,
     mut next_state: ResMut<NextState<RunState>>,
     mut menu_page: ResMut<MenuPage>,
     player_query: Query<Entity, With<Player>>,
@@ -342,11 +342,11 @@ fn handle_remove_input(
     menu_query: Query<&ModalMenu, With<RemoveMenuMarker>>,
     mut text_query: Query<&mut Text, With<ModalMenuText>>,
 ) {
-    let Ok(player_entity) = player_query.get_single() else {
+    let Ok(player_entity) = player_query.single() else {
         return;
     };
 
-    let Ok(menu) = menu_query.get_single() else {
+    let Ok(menu) = menu_query.single() else {
         return;
     };
 
@@ -365,13 +365,13 @@ fn handle_remove_input(
 
         // Handle escape
         if ev.key_code == KeyCode::Escape {
-            next_state.set(RunState::AwaitingInput);
+            next_state.set_if_different(RunState::AwaitingInput);
             return;
         }
 
         // Handle pagination
         if handle_pagination_input(ev.key_code, &mut menu_page, total_items) {
-            if let Ok(mut text) = text_query.get_single_mut() {
+            if let Ok(mut text) = text_query.single_mut() {
                 **text = build_menu_text(menu, &menu_page);
             }
             continue;
@@ -381,7 +381,7 @@ fn handle_remove_input(
         if let Some(index) = get_selected_index(ev.key_code, &menu_page, total_items) {
             if let Some(&item) = items.get(index) {
                 commands.entity(player_entity).insert(WantsToRemoveItem { item });
-                next_state.set(RunState::PlayerTurn);
+                next_state.set_if_different(RunState::PlayerTurn);
             }
         }
     }
@@ -415,15 +415,15 @@ fn spawn_menu_ui(commands: &mut Commands, font: &UiFont, menu: &ModalMenu, menu_
                         border: UiRect::all(Val::Px(2.0)),
                         ..default()
                     },
-                    BorderColor(style.border_color),
+                    BorderColor::all(style.border_color),
                     BackgroundColor(style.background_color),
                 ))
                 .with_children(|inner| {
                     inner.spawn((
                         Text::new(text_content),
                         TextFont {
-                            font: font.0.clone(),
-                            font_size: style.font_size,
+                            font: font.0.clone().into(),
+                            font_size: FontSize::Px(style.font_size),
                             ..default()
                         },
                         TextColor(style.text_color),

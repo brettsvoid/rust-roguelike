@@ -54,7 +54,7 @@ fn cleanup_game_entities(
 ) {
     // Despawn all game entities
     for entity in &entities {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 
     // Reset map to default (will be regenerated on New Game)
@@ -83,7 +83,9 @@ fn spawn_main_menu(mut commands: Commands, font: Res<UiFont>, background: Res<Me
                 align_items: AlignItems::Center,
                 ..default()
             },
-            ImageNode::new(background.0.clone()),
+            ImageNode::new(background.0.clone()).with_mode(NodeImageMode::Stretch),
+            // Spawned in the same frame as the HUD, so without this their draw order is arbitrary.
+            GlobalZIndex(1),
             MainMenu,
         ))
         .with_children(|parent| {
@@ -94,15 +96,15 @@ fn spawn_main_menu(mut commands: Commands, font: Res<UiFont>, background: Res<Me
                         border: UiRect::all(Val::Px(2.0)),
                         ..default()
                     },
-                    BorderColor(Color::WHITE),
+                    BorderColor::all(Color::WHITE),
                     BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.7)),
                 ))
                 .with_children(|menu| {
                     menu.spawn((
                         Text::new(menu_text),
                         TextFont {
-                            font: font.0.clone(),
-                            font_size: 20.0,
+                            font: font.0.clone().into(),
+                            font_size: FontSize::Px(20.0),
                             ..default()
                         },
                         TextColor(Color::WHITE),
@@ -113,15 +115,15 @@ fn spawn_main_menu(mut commands: Commands, font: Res<UiFont>, background: Res<Me
 
 fn despawn_main_menu(mut commands: Commands, menu_query: Query<Entity, With<MainMenu>>) {
     for entity in &menu_query {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 }
 
 fn handle_main_menu_input(
     mut commands: Commands,
-    mut evr_kbd: EventReader<KeyboardInput>,
+    mut evr_kbd: MessageReader<KeyboardInput>,
     mut next_state: ResMut<NextState<RunState>>,
-    mut exit: EventWriter<AppExit>,
+    mut exit: MessageWriter<AppExit>,
     // Resources needed for loading/new game
     entities_to_despawn: Query<Entity, Or<(With<Player>, With<Monster>, With<Item>, With<Tile>, With<EntryTrigger>)>>,
     mut map: ResMut<Map>,
@@ -140,7 +142,7 @@ fn handle_main_menu_input(
                 // New Game - start game immediately (skip visualizer)
                 selected_builder.0 = None;
                 levels::spawn_new_game(&mut commands, &mut map, &mut rng, &font);
-                next_state.set(RunState::PreRun);
+                next_state.set_if_different(RunState::PreRun);
             }
             KeyCode::KeyC => {
                 // Continue - load from save file
@@ -152,15 +154,15 @@ fn handle_main_menu_input(
                         &mut game_log,
                         &font,
                     ) {
-                        next_state.set(RunState::PreRun);
+                        next_state.set_if_different(RunState::PreRun);
                     }
             }
             KeyCode::KeyV => {
                 // Map Visualizer - go to builder selection
-                next_state.set(RunState::MapBuilderSelect);
+                next_state.set_if_different(RunState::MapBuilderSelect);
             }
             KeyCode::KeyQ => {
-                exit.send(AppExit::Success);
+                exit.write(AppExit::Success);
             }
             _ => {}
         }
@@ -223,7 +225,7 @@ fn spawn_builder_menu(
                 align_items: AlignItems::Center,
                 ..default()
             },
-            ImageNode::new(background.0.clone()),
+            ImageNode::new(background.0.clone()).with_mode(NodeImageMode::Stretch),
             BuilderMenu,
         ))
         .with_children(|parent| {
@@ -234,15 +236,15 @@ fn spawn_builder_menu(
                         border: UiRect::all(Val::Px(2.0)),
                         ..default()
                     },
-                    BorderColor(Color::WHITE),
+                    BorderColor::all(Color::WHITE),
                     BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.7)),
                 ))
                 .with_children(|menu| {
                     menu.spawn((
                         Text::new(menu_text),
                         TextFont {
-                            font: font.0.clone(),
-                            font_size: 16.0,
+                            font: font.0.clone().into(),
+                            font_size: FontSize::Px(16.0),
                             ..default()
                         },
                         TextColor(Color::WHITE),
@@ -254,7 +256,7 @@ fn spawn_builder_menu(
 
 fn despawn_builder_menu(mut commands: Commands, menu_query: Query<Entity, With<BuilderMenu>>) {
     for entity in &menu_query {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 }
 
@@ -276,7 +278,7 @@ fn menu_slot(key: KeyCode) -> Option<usize> {
 }
 
 fn handle_builder_menu_input(
-    mut evr_kbd: EventReader<KeyboardInput>,
+    mut evr_kbd: MessageReader<KeyboardInput>,
     mut next_state: ResMut<NextState<RunState>>,
     mut menu_page: ResMut<MenuPage>,
     mut selected_builder: ResMut<SelectedBuilder>,
@@ -298,13 +300,13 @@ fn handle_builder_menu_input(
 
         match ev.key_code {
             KeyCode::Escape => {
-                next_state.set(RunState::MainMenu);
+                next_state.set_if_different(RunState::MainMenu);
             }
             KeyCode::Comma => {
                 if menu_page.0 > 0 {
                     menu_page.0 -= 1;
                     // Update text in place
-                    if let Ok(mut text) = menu_text_query.get_single_mut() {
+                    if let Ok(mut text) = menu_text_query.single_mut() {
                         **text = build_builder_menu_text(&menu_page);
                     }
                 }
@@ -313,7 +315,7 @@ fn handle_builder_menu_input(
                 if menu_page.0 < total_pages.saturating_sub(1) {
                     menu_page.0 += 1;
                     // Update text in place
-                    if let Ok(mut text) = menu_text_query.get_single_mut() {
+                    if let Ok(mut text) = menu_text_query.single_mut() {
                         **text = build_builder_menu_text(&menu_page);
                     }
                 }
@@ -322,7 +324,7 @@ fn handle_builder_menu_input(
                 // Random builder
                 selected_builder.0 = None;
                 mapgen_viz::start_preview(&mut map, &mut rng, &mut mapgen_history, &mut builder_name, None);
-                next_state.set(RunState::MapGeneration);
+                next_state.set_if_different(RunState::MapGeneration);
             }
             key => {
                 if let Some(slot) = menu_slot(key) {
@@ -336,7 +338,7 @@ fn handle_builder_menu_input(
                             &mut builder_name,
                             Some(index),
                         );
-                        next_state.set(RunState::MapGeneration);
+                        next_state.set_if_different(RunState::MapGeneration);
                     }
                 }
             }

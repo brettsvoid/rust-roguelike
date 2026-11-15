@@ -135,7 +135,7 @@ fn get_item(
 
 fn handle_player_input(
     mut commands: Commands,
-    mut evr_kbd: EventReader<KeyboardInput>,
+    mut evr_kbd: MessageReader<KeyboardInput>,
     map: Res<Map>,
     debug_mode: Res<DebugMode>,
     mut gamelog: ResMut<GameLog>,
@@ -157,14 +157,14 @@ fn handle_player_input(
         return;
     }
 
-    let Ok((player_entity, viewshed, mut player_stats, hunger)) = player_query.get_single_mut() else {
+    let Ok((player_entity, viewshed, mut player_stats, hunger)) = player_query.single_mut() else {
         return;
     };
 
     // Get player position
     let (player_x, player_y) = {
         let player_pos_query = position_set.p0();
-        let Ok(pos) = player_pos_query.get_single() else {
+        let Ok(pos) = player_pos_query.single() else {
             return;
         };
         (pos.x, pos.y)
@@ -275,24 +275,24 @@ fn handle_player_input(
 
             // Inventory
             KeyCode::KeyI => {
-                next_state.set(RunState::ShowInventory);
+                next_state.set_if_different(RunState::ShowInventory);
             }
 
             // Drop item
             KeyCode::KeyD => {
-                next_state.set(RunState::ShowDropItem);
+                next_state.set_if_different(RunState::ShowDropItem);
             }
 
             // Remove equipment
             KeyCode::KeyR => {
-                next_state.set(RunState::ShowRemoveItem);
+                next_state.set_if_different(RunState::ShowRemoveItem);
             }
 
             // Go down stairs
             KeyCode::Period => {
                 let idx = xy_idx(player_x, player_y);
                 if map.tiles[idx] == TileType::DownStairs {
-                    next_state.set(RunState::NextLevel);
+                    next_state.set_if_different(RunState::NextLevel);
                 } else {
                     gamelog.entries.push("There are no stairs here.".to_string());
                 }
@@ -306,7 +306,7 @@ fn handle_player_input(
         match result {
             MoveResult::Moved { new_x, new_y } => {
                 let mut player_pos_query = position_set.p0();
-                if let Ok(mut pos) = player_pos_query.get_single_mut() {
+                if let Ok(mut pos) = player_pos_query.single_mut() {
                     pos.x = new_x;
                     pos.y = new_y;
                 }
@@ -323,7 +323,7 @@ fn handle_player_input(
                 // Then update player position
                 {
                     let mut player_pos_query = position_set.p0();
-                    if let Ok(mut pos) = player_pos_query.get_single_mut() {
+                    if let Ok(mut pos) = player_pos_query.single_mut() {
                         pos.x = new_x;
                         pos.y = new_y;
                     }
@@ -336,6 +336,6 @@ fn handle_player_input(
     }
 
     if player_acted {
-        next_state.set(RunState::PlayerTurn);
+        next_state.set_if_different(RunState::PlayerTurn);
     }
 }

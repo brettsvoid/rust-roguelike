@@ -32,7 +32,7 @@ impl Plugin for DebugPlugin {
                     console::update_console,
                     console::handle_console_input,
                 )
-                    .run_if(debug_enabled.and(not(in_state(RunState::MapGeneration)))),
+                    .run_if(debug_enabled.and_then(not(in_state(RunState::MapGeneration)))),
             );
     }
 }

@@ -60,7 +60,7 @@ fn cmd_nofog(debug_state: &mut DebugState) -> String {
 fn cmd_heal(
     player_query: &mut Query<(Entity, &mut Position, &mut CombatStats), With<Player>>,
 ) -> String {
-    if let Ok((_, _, mut stats)) = player_query.get_single_mut() {
+    if let Ok((_, _, mut stats)) = player_query.single_mut() {
         stats.hp = stats.max_hp;
         format!("Healed to {}/{}", stats.hp, stats.max_hp)
     } else {
@@ -88,7 +88,7 @@ fn cmd_teleport(
     match (x, y) {
         (Ok(x), Ok(y)) => {
             if x >= 0 && x < MAP_WIDTH as i32 && y >= 0 && y < MAP_HEIGHT as i32 {
-                if let Ok((_, mut pos, _)) = player_query.get_single_mut() {
+                if let Ok((_, mut pos, _)) = player_query.single_mut() {
                     pos.x = x;
                     pos.y = y;
                     format!("Teleported to ({}, {})", x, y)
@@ -114,14 +114,14 @@ fn cmd_spawn(
     }
     let item_name = parts[1].to_lowercase();
 
-    let Ok((_, pos, _)) = player_query.get_single_mut() else {
+    let Ok((_, pos, _)) = player_query.single_mut() else {
         return "No player found".to_string();
     };
     let (x, y) = (pos.x, pos.y);
 
     let text_font = TextFont {
-        font: font.0.clone(),
-        font_size: 16.0,
+        font: font.0.clone().into(),
+        font_size: FontSize::Px(16.0),
         ..default()
     };
 

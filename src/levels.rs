@@ -30,8 +30,8 @@ pub fn spawn_new_game(
     *map = builder.get_map();
 
     let text_font = TextFont {
-        font: font.0.clone(),
-        font_size: FONT_SIZE,
+        font: font.0.clone().into(),
+        font_size: FontSize::Px(FONT_SIZE),
         ..default()
     };
 
@@ -60,7 +60,7 @@ pub fn go_next_level(
     >,
 ) {
     // Get player entity and items in their backpack
-    let Ok((player_entity, mut player_stats)) = player_query.get_single_mut() else {
+    let Ok((player_entity, mut player_stats)) = player_query.single_mut() else {
         return;
     };
     let player_items: Vec<Entity> = backpack_query
@@ -72,7 +72,7 @@ pub fn go_next_level(
     // Delete all entities except player and their backpack items
     for entity in &entities_to_delete {
         if entity != player_entity && !player_items.contains(&entity) {
-            commands.entity(entity).despawn_recursive();
+            commands.entity(entity).despawn();
         }
     }
 
@@ -83,8 +83,8 @@ pub fn go_next_level(
     *map = builder.get_map();
 
     let text_font = TextFont {
-        font: font.0.clone(),
-        font_size: FONT_SIZE,
+        font: font.0.clone().into(),
+        font_size: FontSize::Px(FONT_SIZE),
         ..default()
     };
 
@@ -116,5 +116,5 @@ pub fn go_next_level(
         new_depth
     ));
 
-    next_state.set(RunState::PreRun);
+    next_state.set_if_different(RunState::PreRun);
 }

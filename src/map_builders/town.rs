@@ -8,7 +8,7 @@
 use std::collections::HashSet;
 
 use rand::seq::SliceRandom;
-use rand::Rng;
+use rand::RngExt;
 
 use crate::map::TileType;
 use crate::rng::GameRng;
@@ -120,11 +120,11 @@ impl TownBuilder {
         }
 
         // Add some piers extending into the water
-        let num_piers = rng.0.gen_range(2..=4);
+        let num_piers = rng.0.random_range(2..=4);
         for _ in 0..num_piers {
-            let pier_y = rng.0.gen_range(5..map.height - 5);
+            let pier_y = rng.0.random_range(5..map.height - 5);
             let pier_start = 12; // Start from land
-            let pier_end = rng.0.gen_range(2..6);
+            let pier_end = rng.0.random_range(2..6);
 
             for x in pier_end..pier_start {
                 let idx = map.xy_idx(x, pier_y);
@@ -143,7 +143,7 @@ impl TownBuilder {
 
         // Wall runs vertically at x=30
         let wall_x = 30;
-        let gate_y = rng.0.gen_range(map.height / 4..map.height * 3 / 4);
+        let gate_y = rng.0.random_range(map.height / 4..map.height * 3 / 4);
 
         for y in 0..map.height {
             // Gate gap in the middle
@@ -186,14 +186,14 @@ impl TownBuilder {
 
         // Try to place 12 buildings
         for _ in 0..12 {
-            let w = rng.0.gen_range(4..8);
-            let h = rng.0.gen_range(4..8);
+            let w = rng.0.random_range(4..8);
+            let h = rng.0.random_range(4..8);
 
             // Try random positions
             let mut placed = false;
             for _ in 0..50 {
-                let x = rng.0.gen_range(14..28 - w);
-                let y = rng.0.gen_range(3..map.height - 3 - h);
+                let x = rng.0.random_range(14..28 - w);
+                let y = rng.0.random_range(3..map.height - 3 - h);
 
                 // Check if area is available
                 let mut can_place = true;
@@ -246,7 +246,7 @@ impl TownBuilder {
         }
 
         // Sort buildings by size (largest first)
-        buildings.sort_by(|a, b| (b.2 * b.3).cmp(&(a.2 * a.3)));
+        buildings.sort_by_key(|b| std::cmp::Reverse(b.2 * b.3));
 
         // Assign tags based on sorted order
         let tags = [
@@ -291,16 +291,16 @@ impl TownBuilder {
             // Place door on the side closest to the main road
             let (door_x, door_y) = if main_road_y < *y {
                 // Road is above building, put door on top
-                (*x + rng.0.gen_range(1..*w - 1), *y)
+                (*x + rng.0.random_range(1..*w - 1), *y)
             } else if main_road_y >= *y + *h {
                 // Road is below building, put door on bottom
-                (*x + rng.0.gen_range(1..*w - 1), *y + *h - 1)
+                (*x + rng.0.random_range(1..*w - 1), *y + *h - 1)
             } else if main_road_y >= *y && main_road_y < *y + *h {
                 // Road is at same level, prefer left side (toward road start)
                 (*x, center_y.clamp(*y + 1, *y + *h - 2))
             } else {
                 // Default to bottom
-                (*x + rng.0.gen_range(1..*w - 1), *y + *h - 1)
+                (*x + rng.0.random_range(1..*w - 1), *y + *h - 1)
             };
 
             let door_idx = map.xy_idx(door_x, door_y);
@@ -405,7 +405,7 @@ impl TownBuilder {
         interior.retain(|&idx| idx != center_idx);
 
         // Add patrons
-        let num_patrons = rng.0.gen_range(1..=3);
+        let num_patrons = rng.0.random_range(1..=3);
         for _ in 0..num_patrons {
             if let Some(&idx) = interior.first() {
                 build_data.spawn_list.push((idx, "Patron".to_string()));
@@ -529,7 +529,7 @@ impl TownBuilder {
         let mut interior = self.get_interior_tiles(rng, build_data, x, y, w, h);
         interior.retain(|&idx| idx != center_idx);
 
-        if rng.0.gen_bool(0.5) && !interior.is_empty() {
+        if rng.0.random_bool(0.5) && !interior.is_empty() {
             let idx = interior[0];
             build_data.spawn_list.push((idx, "Bed".to_string()));
         }
@@ -546,7 +546,7 @@ impl TownBuilder {
     ) {
         // Spawn rats in abandoned buildings
         let interior = self.get_interior_tiles(rng, build_data, x, y, w, h);
-        let num_rats = rng.0.gen_range(1..=3);
+        let num_rats = rng.0.random_range(1..=3);
 
         for i in 0..num_rats {
             if let Some(&idx) = interior.get(i) {

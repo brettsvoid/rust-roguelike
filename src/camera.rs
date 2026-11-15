@@ -54,7 +54,7 @@ impl Plugin for CameraPlugin {
 }
 
 fn update_camera(player_query: Query<&Position, With<Player>>, mut camera: ResMut<Camera>) {
-    if let Ok(player_pos) = player_query.get_single() {
+    if let Ok(player_pos) = player_query.single() {
         camera.x = player_pos.x;
         camera.y = player_pos.y;
     }

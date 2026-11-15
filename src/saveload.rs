@@ -102,7 +102,7 @@ pub type TrapSaveQuery<'w, 's> = Query<
 /// and exit. Registered as a system in main.rs.
 pub fn save_on_quit(
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut exit: EventWriter<AppExit>,
+    mut exit: MessageWriter<AppExit>,
     state: Res<State<RunState>>,
     map: Res<Map>,
     game_log: Res<GameLog>,
@@ -115,7 +115,7 @@ pub fn save_on_quit(
         // Only save if we're in-game (not in MainMenu) and player is alive
         if *state.get() != RunState::MainMenu {
             let player_alive = player_query
-                .get_single()
+                .single()
                 .map(|(_, _, _, stats, _, _)| stats.hp > 0)
                 .unwrap_or(false);
 
@@ -123,7 +123,7 @@ pub fn save_on_quit(
                 save_game(map, game_log, player_query, monster_query, item_query, trap_query);
             }
         }
-        exit.send(AppExit::Success);
+        exit.write(AppExit::Success);
     }
 }
 
@@ -249,7 +249,7 @@ pub fn save_game(
     trap_query: TrapSaveQuery,
 ) {
     let Ok((player_entity, player_pos, player_name, player_stats, player_viewshed, player_hunger)) =
-        player_query.get_single()
+        player_query.single()
     else {
         warn!("Cannot save: no player found");
         return;
@@ -444,7 +444,7 @@ pub fn load_game(
 
     // Despawn all existing game entities
     for entity in entities_to_despawn.iter() {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 
     // Restore map
@@ -463,8 +463,8 @@ pub fn load_game(
     game_log.entries = save_data.game_log;
 
     let text_font = TextFont {
-        font: font.0.clone(),
-        font_size: FONT_SIZE,
+        font: font.0.clone().into(),
+        font_size: FontSize::Px(FONT_SIZE),
         ..default()
     };
 

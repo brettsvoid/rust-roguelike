@@ -10,9 +10,8 @@ pub use prop_structs::*;
 pub use rawmaster::*;
 pub use spawn_table_structs::*;
 
-use lazy_static::lazy_static;
 use serde::Deserialize;
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Raws {
@@ -22,9 +21,7 @@ pub struct Raws {
     pub spawn_table: Vec<SpawnTableEntry>,
 }
 
-lazy_static! {
-    pub static ref RAWS: Mutex<RawMaster> = Mutex::new(RawMaster::empty());
-}
+pub static RAWS: LazyLock<Mutex<RawMaster>> = LazyLock::new(|| Mutex::new(RawMaster::empty()));
 
 pub fn load_raws() {
     let raw_string = include_str!("../../raws/spawns.json");

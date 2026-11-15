@@ -165,7 +165,7 @@ impl MetaMapBuilder for DistantExit {
 // Voronoi Spawning (spawn entities across the map using grid sections)
 // ============================================================================
 
-use rand::Rng;
+use rand::RngExt;
 
 pub struct VoronoiSpawning;
 
@@ -210,10 +210,10 @@ impl MetaMapBuilder for VoronoiSpawning {
 
                 // Spawn 0-2 entities in this region
                 if !region_tiles.is_empty() {
-                    let num_spawns = rng.0.gen_range(0..=2);
+                    let num_spawns = rng.0.random_range(0..=2);
                     for _ in 0..num_spawns {
-                        let spawn_idx = region_tiles[rng.0.gen_range(0..region_tiles.len())];
-                        let roll = rng.0.gen_range(0..100);
+                        let spawn_idx = region_tiles[rng.0.random_range(0..region_tiles.len())];
+                        let roll = rng.0.random_range(0..100);
                         let name = if roll < 10 {
                             "Health Potion"
                         } else if roll < 20 {

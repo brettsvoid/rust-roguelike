@@ -5,7 +5,7 @@
 //! afterwards. That split is what lets the random builders mix and match
 //! room styles with corridor styles.
 
-use rand::Rng;
+use rand::RngExt;
 
 use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
 use crate::rng::GameRng;
@@ -38,10 +38,10 @@ impl InitialMapBuilder for SimpleMapRoomsBuilder {
         let mut rooms = Vec::new();
 
         for _ in 0..MAX_ROOMS {
-            let w = rng.0.gen_range(MIN_SIZE..=MAX_SIZE);
-            let h = rng.0.gen_range(MIN_SIZE..=MAX_SIZE);
-            let x = rng.0.gen_range(1..MAP_WIDTH as i32 - w - 1);
-            let y = rng.0.gen_range(1..MAP_HEIGHT as i32 - h - 1);
+            let w = rng.0.random_range(MIN_SIZE..=MAX_SIZE);
+            let h = rng.0.random_range(MIN_SIZE..=MAX_SIZE);
+            let x = rng.0.random_range(1..MAP_WIDTH as i32 - w - 1);
+            let y = rng.0.random_range(1..MAP_HEIGHT as i32 - h - 1);
             let new_room = Rect::new(x, y, w, h);
 
             let ok = !rooms.iter().any(|r: &Rect| new_room.intersect(r));
@@ -100,7 +100,7 @@ impl BspRoomsBuilder {
         if rects.len() == 1 {
             return rects[0].clone();
         }
-        let idx = rng.0.gen_range(0..rects.len());
+        let idx = rng.0.random_range(0..rects.len());
         rects[idx].clone()
     }
 
@@ -108,11 +108,11 @@ impl BspRoomsBuilder {
         let rect_width = i32::abs(rect.x1 - rect.x2);
         let rect_height = i32::abs(rect.y1 - rect.y2);
 
-        let w = i32::max(3, rng.0.gen_range(1..=i32::min(rect_width, 10)));
-        let h = i32::max(3, rng.0.gen_range(1..=i32::min(rect_height, 10)));
+        let w = i32::max(3, rng.0.random_range(1..=i32::min(rect_width, 10)));
+        let h = i32::max(3, rng.0.random_range(1..=i32::min(rect_height, 10)));
 
-        let x_offset = rng.0.gen_range(0..6);
-        let y_offset = rng.0.gen_range(0..6);
+        let x_offset = rng.0.random_range(0..6);
+        let y_offset = rng.0.random_range(0..6);
 
         Rect::new(rect.x1 + x_offset, rect.y1 + y_offset, w, h)
     }

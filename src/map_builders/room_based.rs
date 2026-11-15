@@ -58,7 +58,7 @@ impl MetaMapBuilder for RoomBasedStairs {
 // Room-Based Spawner (spawn in rooms, skip first)
 // ============================================================================
 
-use rand::Rng;
+use rand::RngExt;
 
 pub struct RoomBasedSpawner;
 
@@ -80,15 +80,15 @@ impl MetaMapBuilder for RoomBasedSpawner {
 }
 
 fn spawn_room_entities(build_data: &mut BuilderMap, room: &crate::shapes::Rect, rng: &mut GameRng) {
-    let num_spawns = rng.0.gen_range(0..=4);
+    let num_spawns = rng.0.random_range(0..=4);
 
     for _ in 0..num_spawns {
-        let x = rng.0.gen_range(room.x1 + 1..room.x2);
-        let y = rng.0.gen_range(room.y1 + 1..room.y2);
+        let x = rng.0.random_range(room.x1 + 1..room.x2);
+        let y = rng.0.random_range(room.y1 + 1..room.y2);
         let idx = build_data.map.xy_idx(x, y);
 
         if build_data.map.tiles[idx] == TileType::Floor {
-            let roll = rng.0.gen_range(0..100);
+            let roll = rng.0.random_range(0..100);
             let name = if roll < 10 {
                 "Health Potion"
             } else if roll < 20 {

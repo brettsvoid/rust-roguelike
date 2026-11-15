@@ -13,9 +13,9 @@ pub struct TooltipPlugin;
 impl Plugin for TooltipPlugin {
     fn build(&self, app: &mut App) {
         let in_gameplay = not(in_state(RunState::MainMenu))
-            .and(not(in_state(RunState::GameOver)))
-            .and(not(in_state(RunState::MapGeneration)))
-            .and(not(in_state(RunState::MapBuilderSelect)));
+            .and_then(not(in_state(RunState::GameOver)))
+            .and_then(not(in_state(RunState::MapGeneration)))
+            .and_then(not(in_state(RunState::MapBuilderSelect)));
 
         app.add_systems(Update, update_tooltip.run_if(in_gameplay));
     }
@@ -40,7 +40,7 @@ fn update_tooltip(
         commands.entity(entity).despawn();
     }
 
-    let Ok(window) = window.get_single() else {
+    let Ok(window) = window.single() else {
         return;
     };
 
@@ -49,7 +49,7 @@ fn update_tooltip(
     };
 
     // Convert screen position to world position
-    let Ok((camera, camera_transform)) = camera_query.get_single() else {
+    let Ok((camera, camera_transform)) = camera_query.single() else {
         return;
     };
 
@@ -117,8 +117,8 @@ fn update_tooltip(
             format!("-> {}", tooltip_text)
         }),
         TextFont {
-            font: font.0.clone(),
-            font_size: 14.0,
+            font: font.0.clone().into(),
+            font_size: FontSize::Px(14.0),
             ..default()
         },
         TextColor(Color::WHITE),

@@ -118,7 +118,7 @@ pub fn damage_system(
     position_query: Query<&Position>,
     player_query: Query<Entity, With<Player>>,
 ) {
-    let player = player_query.get_single().ok();
+    let player = player_query.single().ok();
 
     for (entity, mut stats, damage) in &mut query {
         // Skip damage to player if god mode is on
@@ -152,13 +152,13 @@ pub fn delete_the_dead(
         }
     }
 
-    if let Ok(player_stats) = player_query.get_single() {
+    if let Ok(player_stats) = player_query.single() {
         if player_stats.hp <= 0 {
             log.entries.push("You are dead".to_string());
             // Delete save file on death (permadeath)
             saveload::delete_save_file();
             // Transition to game over screen
-            next_state.set(RunState::GameOver);
+            next_state.set_if_different(RunState::GameOver);
         }
     }
 }

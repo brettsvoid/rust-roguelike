@@ -61,8 +61,8 @@ fn spawn_targeting_ui(mut commands: Commands, font: Res<UiFont>, targeting_info:
                     range
                 )),
                 TextFont {
-                    font: font.0.clone(),
-                    font_size: 16.0,
+                    font: font.0.clone().into(),
+                    font_size: FontSize::Px(16.0),
                     ..default()
                 },
                 TextColor(Color::srgb(1.0, 1.0, 0.0)), // Yellow
@@ -78,7 +78,7 @@ fn despawn_targeting_ui(
     range_query: Query<Entity, With<RangeIndicator>>,
 ) {
     for entity in &menu_query {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
     for entity in &highlight_query {
         commands.entity(entity).despawn();
@@ -110,11 +110,11 @@ fn spawn_target_borders(
         return;
     }
 
-    let Ok(window) = window.get_single() else {
+    let Ok(window) = window.single() else {
         return;
     };
 
-    let Ok(player_pos) = player_query.get_single() else {
+    let Ok(player_pos) = player_query.single() else {
         return;
     };
 
@@ -195,11 +195,11 @@ fn spawn_range_indicator(
     targeting_info: Res<TargetingInfo>,
     player_query: Query<&Position, With<Player>>,
 ) {
-    let Ok(window) = window.get_single() else {
+    let Ok(window) = window.single() else {
         return;
     };
 
-    let Ok(player_pos) = player_query.get_single() else {
+    let Ok(player_pos) = player_query.single() else {
         return;
     };
 
@@ -352,7 +352,7 @@ fn update_target_highlight(
         commands.entity(entity).despawn();
     }
 
-    let Ok(window) = window.get_single() else {
+    let Ok(window) = window.single() else {
         return;
     };
 
@@ -360,7 +360,7 @@ fn update_target_highlight(
         return;
     };
 
-    let Ok((camera, camera_transform)) = camera_query.get_single() else {
+    let Ok((camera, camera_transform)) = camera_query.single() else {
         return;
     };
 
@@ -368,7 +368,7 @@ fn update_target_highlight(
         return;
     };
 
-    let Ok(player_pos) = player_query.get_single() else {
+    let Ok(player_pos) = player_query.single() else {
         return;
     };
 
@@ -479,7 +479,7 @@ fn update_target_highlight(
 
 fn handle_targeting(
     mut commands: Commands,
-    mut evr_kbd: EventReader<KeyboardInput>,
+    mut evr_kbd: MessageReader<KeyboardInput>,
     mouse_button: Res<ButtonInput<MouseButton>>,
     window: Query<&Window>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
@@ -494,7 +494,7 @@ fn handle_targeting(
     // Handle escape to cancel
     for ev in evr_kbd.read() {
         if ev.state == ButtonState::Pressed && ev.key_code == KeyCode::Escape {
-            next_state.set(RunState::AwaitingInput);
+            next_state.set_if_different(RunState::AwaitingInput);
             return;
         }
     }
@@ -504,7 +504,7 @@ fn handle_targeting(
         return;
     }
 
-    let Ok(window) = window.get_single() else {
+    let Ok(window) = window.single() else {
         return;
     };
 
@@ -512,7 +512,7 @@ fn handle_targeting(
         return;
     };
 
-    let Ok((camera, camera_transform)) = camera_query.get_single() else {
+    let Ok((camera, camera_transform)) = camera_query.single() else {
         return;
     };
 
@@ -542,7 +542,7 @@ fn handle_targeting(
     }
 
     // Get player position for range check
-    let Ok((player_entity, player_pos)) = player_query.get_single() else {
+    let Ok((player_entity, player_pos)) = player_query.single() else {
         return;
     };
 
@@ -571,7 +571,7 @@ fn handle_targeting(
                     item,
                     target: Some((map_x, map_y)),
                 });
-                next_state.set(RunState::PlayerTurn);
+                next_state.set_if_different(RunState::PlayerTurn);
             }
         }
         Targeting::Tile => {
@@ -580,7 +580,7 @@ fn handle_targeting(
                 item,
                 target: Some((map_x, map_y)),
             });
-            next_state.set(RunState::PlayerTurn);
+            next_state.set_if_different(RunState::PlayerTurn);
         }
     }
 }

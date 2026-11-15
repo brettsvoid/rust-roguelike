@@ -53,7 +53,7 @@ fn main() {
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "Rust Roguelike".into(),
-                resolution: RESOLUTION.into(),
+                resolution: RESOLUTION.as_uvec2().into(),
                 ..default()
             }),
             ..default()

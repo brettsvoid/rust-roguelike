@@ -14,7 +14,7 @@
 //! Good for: variety - one extra chain step turns any generator into a
 //! whole family of layouts.
 
-use rand::Rng;
+use rand::RngExt;
 use std::collections::{HashMap, HashSet};
 
 use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
@@ -237,7 +237,7 @@ impl WfcSolver {
 
         // Limit patterns to MAX_PATTERNS, keeping highest frequency ones
         if patterns.len() > MAX_PATTERNS {
-            patterns.sort_by(|a, b| b.weight.cmp(&a.weight));
+            patterns.sort_by_key(|a| std::cmp::Reverse(a.weight));
             patterns.truncate(MAX_PATTERNS);
         }
 
@@ -291,7 +291,7 @@ impl WfcSolver {
         if candidates.is_empty() {
             None
         } else {
-            Some(candidates[rng.0.gen_range(0..candidates.len())])
+            Some(candidates[rng.0.random_range(0..candidates.len())])
         }
     }
 
@@ -305,7 +305,7 @@ impl WfcSolver {
         let possible: Vec<usize> = cell.possible.iter().copied().collect();
         let total_weight: u32 = possible.iter().map(|&i| self.patterns[i].weight).sum();
 
-        let mut roll = rng.0.gen_range(0..total_weight);
+        let mut roll = rng.0.random_range(0..total_weight);
         let mut chosen = possible[0];
 
         for &pattern_idx in &possible {

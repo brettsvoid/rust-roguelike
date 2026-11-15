@@ -43,17 +43,17 @@ fn despawn_game_over_menu(
     menu_query: Query<Entity, With<ModalMenuContainer>>,
 ) {
     for entity in &menu_query {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 }
 
 fn handle_game_over_input(
-    mut evr_kbd: EventReader<KeyboardInput>,
+    mut evr_kbd: MessageReader<KeyboardInput>,
     mut next_state: ResMut<NextState<RunState>>,
 ) {
     for ev in evr_kbd.read() {
         if ev.state == ButtonState::Pressed {
-            next_state.set(RunState::MainMenu);
+            next_state.set_if_different(RunState::MainMenu);
             return;
         }
     }

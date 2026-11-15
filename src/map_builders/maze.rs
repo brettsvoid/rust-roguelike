@@ -8,7 +8,7 @@
 //! Good for: claustrophobic, disorienting levels. Use sparingly - full mazes
 //! are slow to explore and can wear players out.
 
-use rand::Rng;
+use rand::RngExt;
 
 use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
 use crate::pathfinding::dijkstra_map;
@@ -194,7 +194,7 @@ impl InitialMapBuilder for MazeBuilder {
         loop {
             let neighbors = grid.get_available_neighbors();
             if !neighbors.is_empty() {
-                let next = neighbors[rng.0.gen_range(0..neighbors.len())];
+                let next = neighbors[rng.0.random_range(0..neighbors.len())];
                 grid.backtrace.push(grid.current);
                 grid.remove_walls(grid.current, next);
                 grid.current = next;

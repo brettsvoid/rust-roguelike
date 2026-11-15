@@ -34,7 +34,7 @@ mod voronoi;
 mod wfc;
 
 use bevy::prelude::*;
-use rand::Rng;
+use rand::RngExt;
 
 use crate::map::Map;
 use crate::rng::GameRng;
@@ -454,12 +454,12 @@ impl MapBuilder for BuilderChain {
 }
 
 pub fn random_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
-    let roll = rng.0.gen_range(0..100);
+    let roll = rng.0.random_range(0..100);
 
     match roll {
         // 20% - Traditional builders (existing BuilderType)
         0..=19 => {
-            let index = rng.0.gen_range(0..BuilderType::ALL.len());
+            let index = rng.0.random_range(0..BuilderType::ALL.len());
             BuilderType::ALL[index].create(depth)
         }
         // 25% - Layered room builders with various corridor types
@@ -476,7 +476,7 @@ pub fn random_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
 /// Generates a layered room builder with sorted rooms and corridors
 fn random_room_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
     // Pick room generator
-    let room_builder: Box<dyn InitialMapBuilder> = if rng.0.gen_bool(0.5) {
+    let room_builder: Box<dyn InitialMapBuilder> = if rng.0.random_bool(0.5) {
         Box::new(SimpleMapRoomsBuilder::new())
     } else {
         Box::new(BspRoomsBuilder::new())
@@ -490,10 +490,10 @@ fn random_room_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
         RoomSort::Bottommost,
         RoomSort::Central,
     ];
-    let sort = sort_strategies[rng.0.gen_range(0..sort_strategies.len())];
+    let sort = sort_strategies[rng.0.random_range(0..sort_strategies.len())];
 
     // Pick corridor type
-    let corridor_roll = rng.0.gen_range(0..4);
+    let corridor_roll = rng.0.random_range(0..4);
 
     let mut chain = BuilderChain::new(depth, "Random Room Builder")
         .start_with(room_builder)
@@ -516,7 +516,7 @@ fn random_room_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
 
 /// Generates a room builder with explosions or corner rounding
 fn random_modified_room_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
-    let room_builder: Box<dyn InitialMapBuilder> = if rng.0.gen_bool(0.5) {
+    let room_builder: Box<dyn InitialMapBuilder> = if rng.0.random_bool(0.5) {
         Box::new(SimpleMapRoomsBuilder::new())
     } else {
         Box::new(BspRoomsBuilder::new())
@@ -525,10 +525,10 @@ fn random_modified_room_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBui
     let mut chain = BuilderChain::new(depth, "Modified Room Builder").start_with(room_builder);
 
     // Apply modifiers
-    if rng.0.gen_bool(0.6) {
+    if rng.0.random_bool(0.6) {
         chain = chain.with(RoomExploder::new());
     }
-    if rng.0.gen_bool(0.4) {
+    if rng.0.random_bool(0.4) {
         chain = chain.with(RoomCornerRounder::new());
     }
 
@@ -545,7 +545,7 @@ fn random_modified_room_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBui
 
 /// Generates a builder with erosion post-processing
 fn random_eroded_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
-    let room_builder: Box<dyn InitialMapBuilder> = if rng.0.gen_bool(0.5) {
+    let room_builder: Box<dyn InitialMapBuilder> = if rng.0.random_bool(0.5) {
         Box::new(SimpleMapRoomsBuilder::new())
     } else {
         Box::new(BspRoomsBuilder::new())
@@ -557,7 +557,7 @@ fn random_eroded_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
         .with(BspCorridors::new());
 
     // Apply erosion
-    if rng.0.gen_bool(0.5) {
+    if rng.0.random_bool(0.5) {
         chain = chain.with(CellularAutomataEroder::new());
     } else {
         chain = chain.with(DrunkardsWalkEroder::light());
@@ -589,7 +589,7 @@ fn random_complex_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> 
         .with(DistantExit::new());
 
     // Maybe add prefabs
-    if rng.0.gen_bool(0.3) {
+    if rng.0.random_bool(0.3) {
         chain = chain.with(PrefabMetaBuilder::vaults());
     }
 

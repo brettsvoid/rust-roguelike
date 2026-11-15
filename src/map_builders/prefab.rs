@@ -9,7 +9,7 @@
 //! Good for: set-piece moments inside otherwise procedural levels.
 
 use bevy::prelude::*;
-use rand::Rng;
+use rand::RngExt;
 
 use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
 use crate::raws::{spawn_named_entity, RAWS};
@@ -423,23 +423,23 @@ impl PrefabMetaBuilder {
         }
 
         // Try to place 1-3 vaults
-        let num_vaults = rng.0.gen_range(1..=3);
+        let num_vaults = rng.0.random_range(1..=3);
 
         for _ in 0..num_vaults {
             // Pick a random vault from eligible ones
-            let vault_idx = rng.0.gen_range(0..eligible_vaults.len());
+            let vault_idx = rng.0.random_range(0..eligible_vaults.len());
             let vault = eligible_vaults[vault_idx];
 
             // Check spawn probability
-            if rng.0.gen::<f32>() > vault.constraints.spawn_chance {
+            if rng.0.random::<f32>() > vault.constraints.spawn_chance {
                 continue;
             }
 
             // Try to find a valid placement (up to 50 attempts)
             let template = &vault.template;
             for _ in 0..50 {
-                let x = rng.0.gen_range(2..MAP_WIDTH as i32 - template.width as i32 - 2);
-                let y = rng.0.gen_range(2..MAP_HEIGHT as i32 - template.height as i32 - 2);
+                let x = rng.0.random_range(2..MAP_WIDTH as i32 - template.width as i32 - 2);
+                let y = rng.0.random_range(2..MAP_HEIGHT as i32 - template.height as i32 - 2);
 
                 if Self::can_place_vault(&build_data.map, vault, x, y) {
                     Self::apply_vault(vault, x, y, build_data);

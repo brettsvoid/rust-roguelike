@@ -8,7 +8,7 @@
 //! Good for: weird, root-system caves with lots of branches. The insectoid
 //! preset mirrors the growth for a strangely biological look.
 
-use rand::Rng;
+use rand::RngExt;
 
 use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
 use crate::pathfinding::dijkstra_map;
@@ -96,8 +96,8 @@ impl InitialMapBuilder for DLABuilder {
         while dla_count_floors(&build_data.map) < target_floor && iterations < 50000 {
             match self.algorithm {
                 DLAAlgorithm::WalkInwards => {
-                    let mut x = rng.0.gen_range(2..MAP_WIDTH as i32 - 2);
-                    let mut y = rng.0.gen_range(2..MAP_HEIGHT as i32 - 2);
+                    let mut x = rng.0.random_range(2..MAP_WIDTH as i32 - 2);
+                    let mut y = rng.0.random_range(2..MAP_HEIGHT as i32 - 2);
                     let mut prev_x = x;
                     let mut prev_y = y;
                     let mut idx = build_data.map.xy_idx(x, y);
@@ -105,7 +105,7 @@ impl InitialMapBuilder for DLABuilder {
                     while build_data.map.tiles[idx] == TileType::Wall {
                         prev_x = x;
                         prev_y = y;
-                        match rng.0.gen_range(0..4) {
+                        match rng.0.random_range(0..4) {
                             0 => { if x > 2 { x -= 1; } }
                             1 => { if x < MAP_WIDTH as i32 - 2 { x += 1; } }
                             2 => { if y > 2 { y -= 1; } }
@@ -121,7 +121,7 @@ impl InitialMapBuilder for DLABuilder {
                     let mut idx = build_data.map.xy_idx(x, y);
 
                     while build_data.map.tiles[idx] == TileType::Floor {
-                        match rng.0.gen_range(0..4) {
+                        match rng.0.random_range(0..4) {
                             0 => { if x > 2 { x -= 1; } }
                             1 => { if x < MAP_WIDTH as i32 - 2 { x += 1; } }
                             2 => { if y > 2 { y -= 1; } }
@@ -132,8 +132,8 @@ impl InitialMapBuilder for DLABuilder {
                     paint(&mut build_data.map, self.symmetry, self.brush_size, x, y);
                 }
                 DLAAlgorithm::CentralAttractor => {
-                    let start_x = rng.0.gen_range(2..MAP_WIDTH as i32 - 2);
-                    let start_y = rng.0.gen_range(2..MAP_HEIGHT as i32 - 2);
+                    let start_x = rng.0.random_range(2..MAP_WIDTH as i32 - 2);
+                    let start_y = rng.0.random_range(2..MAP_HEIGHT as i32 - 2);
                     let path = bresenham_line(start_x, start_y, center_x, center_y);
 
                     let mut prev_x = start_x;

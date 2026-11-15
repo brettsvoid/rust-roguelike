@@ -45,16 +45,16 @@ impl MetaMapBuilder for RoomSorter {
         if let Some(ref mut rooms) = build_data.rooms {
             match self.sort_by {
                 RoomSort::Leftmost => {
-                    rooms.sort_by(|a, b| a.x1.cmp(&b.x1));
+                    rooms.sort_by_key(|a| a.x1);
                 }
                 RoomSort::Rightmost => {
-                    rooms.sort_by(|a, b| b.x2.cmp(&a.x2));
+                    rooms.sort_by_key(|a| std::cmp::Reverse(a.x2));
                 }
                 RoomSort::Topmost => {
-                    rooms.sort_by(|a, b| a.y1.cmp(&b.y1));
+                    rooms.sort_by_key(|a| a.y1);
                 }
                 RoomSort::Bottommost => {
-                    rooms.sort_by(|a, b| b.y2.cmp(&a.y2));
+                    rooms.sort_by_key(|a| std::cmp::Reverse(a.y2));
                 }
                 RoomSort::Central => {
                     let center_x = MAP_WIDTH as i32 / 2;

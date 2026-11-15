@@ -11,7 +11,7 @@
 //! Good for: cellular, honeycomb-like cave networks of connected chambers.
 
 use bevy::prelude::*;
-use rand::Rng;
+use rand::RngExt;
 
 use crate::distance::DistanceAlg;
 use crate::map::{TileType, MAP_HEIGHT, MAP_WIDTH};
@@ -53,8 +53,8 @@ impl InitialMapBuilder for VoronoiCellBuilder {
         // 1. Generate unique seed points
         let mut seeds: Vec<(i32, i32)> = Vec::new();
         while seeds.len() < self.n_seeds {
-            let x = rng.0.gen_range(1..MAP_WIDTH as i32 - 1);
-            let y = rng.0.gen_range(1..MAP_HEIGHT as i32 - 1);
+            let x = rng.0.random_range(1..MAP_WIDTH as i32 - 1);
+            let y = rng.0.random_range(1..MAP_HEIGHT as i32 - 1);
             if !seeds.contains(&(x, y)) {
                 seeds.push((x, y));
             }

@@ -103,8 +103,8 @@ fn spawn_overlay_ui(commands: &mut Commands, font: &UiFont, builder_name: &str) 
                     builder_name
                 )),
                 TextFont {
-                    font: font.0.clone(),
-                    font_size: 16.0,
+                    font: font.0.clone().into(),
+                    font_size: FontSize::Px(16.0),
                     ..default()
                 },
                 TextColor(Color::srgb(1.0, 1.0, 0.0)),
@@ -168,8 +168,8 @@ fn playback(
     }
 
     let text_font = TextFont {
-        font: font.0.clone(),
-        font_size: FONT_SIZE,
+        font: font.0.clone().into(),
+        font_size: FontSize::Px(FONT_SIZE),
         ..default()
     };
     spawn_map_tiles(&mut commands, snapshot, &text_font, TileReveal::Preview);
@@ -179,7 +179,7 @@ fn playback(
 
 fn handle_input(
     mut commands: Commands,
-    mut evr_kbd: EventReader<KeyboardInput>,
+    mut evr_kbd: MessageReader<KeyboardInput>,
     mut next_state: ResMut<NextState<RunState>>,
     mut map: ResMut<Map>,
     mut rng: ResMut<GameRng>,
@@ -199,7 +199,7 @@ fn handle_input(
 
         match ev.key_code {
             KeyCode::Escape => {
-                next_state.set(RunState::MapBuilderSelect);
+                next_state.set_if_different(RunState::MapBuilderSelect);
             }
             KeyCode::Space => {
                 // Regenerate with the same selection and restart playback
@@ -207,7 +207,7 @@ fn handle_input(
                     commands.entity(entity).despawn();
                 }
                 for entity in &ui_query {
-                    commands.entity(entity).despawn_recursive();
+                    commands.entity(entity).despawn();
                 }
 
                 start_preview(
@@ -229,6 +229,6 @@ fn handle_input(
 
 fn cleanup_ui(mut commands: Commands, ui_query: Query<Entity, With<MapGenUI>>) {
     for entity in &ui_query {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 }

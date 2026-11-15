@@ -7,7 +7,7 @@
 //!
 //! Erosion can disconnect areas, so follow with `CullUnreachable`.
 
-use rand::Rng;
+use rand::RngExt;
 
 use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
 use crate::rng::GameRng;
@@ -209,7 +209,7 @@ impl MetaMapBuilder for DrunkardsWalkEroder {
 
         while Self::count_floors(&build_data.map) < target_floors && iterations < max_iterations {
             // Random walk
-            let direction = rng.0.gen_range(0..4);
+            let direction = rng.0.random_range(0..4);
             match direction {
                 0 if y > 1 => y -= 1,
                 1 if y < MAP_HEIGHT as i32 - 2 => y += 1,

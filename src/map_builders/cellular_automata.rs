@@ -7,7 +7,7 @@
 //! Good for: natural caves and caverns. Not great when you want distinct
 //! rooms or predictable corridors.
 
-use rand::Rng;
+use rand::RngExt;
 
 use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
 use crate::pathfinding::dijkstra_map;
@@ -53,7 +53,7 @@ impl InitialMapBuilder for CellularAutomataBuilder {
         // Step 1: Random fill - 55% floor, 45% wall
         for y in 1..MAP_HEIGHT as i32 - 1 {
             for x in 1..MAP_WIDTH as i32 - 1 {
-                let roll = rng.0.gen_range(0..100);
+                let roll = rng.0.random_range(0..100);
                 let idx = build_data.map.xy_idx(x, y);
                 if roll > 55 {
                     build_data.map.tiles[idx] = TileType::Wall;

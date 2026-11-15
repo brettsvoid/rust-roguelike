@@ -1,5 +1,5 @@
 use bevy::{color::palettes, prelude::*};
-use rand::Rng;
+use rand::RngExt;
 
 use crate::{
     combat::CombatStats,
@@ -57,14 +57,14 @@ pub fn spawn_room(
     // Calculate spawn counts based on depth
     let max_monsters_roll = (MAX_MONSTERS + 3) + (map_depth - 1) - 3;
     let num_monsters = if max_monsters_roll > 0 {
-        rng.0.gen_range(1..=max_monsters_roll).max(0)
+        rng.0.random_range(1..=max_monsters_roll).max(0)
     } else {
         0
     };
 
     let max_items_roll = (MAX_ITEMS + 3) + (map_depth - 1) - 3;
     let num_items = if max_items_roll > 0 {
-        rng.0.gen_range(1..=max_items_roll).max(0)
+        rng.0.random_range(1..=max_items_roll).max(0)
     } else {
         0
     };
@@ -81,8 +81,8 @@ pub fn spawn_room(
         let mut added = false;
         let mut attempts = 0;
         while !added && attempts < 20 {
-            let x = rng.0.gen_range(room.x1 + 1..=room.x2);
-            let y = rng.0.gen_range(room.y1 + 1..=room.y2);
+            let x = rng.0.random_range(room.x1 + 1..=room.x2);
+            let y = rng.0.random_range(room.y1 + 1..=room.y2);
             if !spawn_points.contains(&(x, y)) {
                 spawn_points.push((x, y));
                 added = true;
@@ -126,14 +126,14 @@ pub fn spawn_region(
     let area_factor = (tiles.len() as f32 / 50.0).min(1.0); // Scale by region size
     let max_monsters_roll = (((MAX_MONSTERS + 3) + (map_depth - 1) - 3) as f32 * area_factor) as i32;
     let num_monsters = if max_monsters_roll > 0 {
-        rng.0.gen_range(0..=max_monsters_roll)
+        rng.0.random_range(0..=max_monsters_roll)
     } else {
         0
     };
 
     let max_items_roll = (((MAX_ITEMS + 3) + (map_depth - 1) - 3) as f32 * area_factor) as i32;
     let num_items = if max_items_roll > 0 {
-        rng.0.gen_range(0..=max_items_roll)
+        rng.0.random_range(0..=max_items_roll)
     } else {
         0
     };
@@ -149,7 +149,7 @@ pub fn spawn_region(
     for _ in 0..total_spawns {
         let mut attempts = 0;
         while attempts < 20 {
-            let idx = tiles[rng.0.gen_range(0..tiles.len())];
+            let idx = tiles[rng.0.random_range(0..tiles.len())];
             if !spawn_points.contains(&idx) {
                 spawn_points.push(idx);
                 break;

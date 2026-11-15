@@ -297,7 +297,7 @@ pub fn spawn_modal_menu(
     // Add background image if present
     commands.entity(container_id).insert(
         if let Some(ref image) = style.background_image {
-            ImageNode::new(image.clone())
+            ImageNode::new(image.clone()).with_mode(NodeImageMode::Stretch)
         } else {
             ImageNode::default()
         }
@@ -311,15 +311,15 @@ pub fn spawn_modal_menu(
                     border: UiRect::all(Val::Px(2.0)),
                     ..default()
                 },
-                BorderColor(style.border_color),
+                BorderColor::all(style.border_color),
                 BackgroundColor(style.background_color),
             ))
             .with_children(|inner| {
                 inner.spawn((
                     Text::new(text_content),
                     TextFont {
-                        font: font.0.clone(),
-                        font_size: style.font_size,
+                        font: font.0.clone().into(),
+                        font_size: FontSize::Px(style.font_size),
                         ..default()
                     },
                     TextColor(style.text_color),
@@ -337,7 +337,7 @@ pub fn despawn_modal_menu(
     menu_query: &Query<Entity, With<ModalMenuContainer>>,
 ) {
     for entity in menu_query.iter() {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 }
 
@@ -382,11 +382,9 @@ pub fn handle_pagination_input(
                 return true;
             }
         }
-        KeyCode::Period => {
-            if menu_page.0 < total_pages.saturating_sub(1) {
-                menu_page.0 += 1;
-                return true;
-            }
+        KeyCode::Period if menu_page.0 < total_pages.saturating_sub(1) => {
+            menu_page.0 += 1;
+            return true;
         }
         _ => {}
     }
@@ -395,11 +393,11 @@ pub fn handle_pagination_input(
 
 /// System that handles common menu input patterns
 pub fn handle_modal_menu_input(
-    mut evr_kbd: EventReader<KeyboardInput>,
+    mut evr_kbd: MessageReader<KeyboardInput>,
     mut next_state: ResMut<NextState<RunState>>,
     menu_query: Query<&ModalMenu, With<ModalMenuContainer>>,
 ) {
-    let Ok(menu) = menu_query.get_single() else {
+    let Ok(menu) = menu_query.single() else {
         return;
     };
 
@@ -410,14 +408,14 @@ pub fn handle_modal_menu_input(
 
         // Handle any-key transition
         if let Some(state) = menu.any_key_state {
-            next_state.set(state);
+            next_state.set_if_different(state);
             return;
         }
 
         // Handle escape/cancel
         if ev.key_code == KeyCode::Escape {
             if let Some(state) = menu.cancel_state {
-                next_state.set(state);
+                next_state.set_if_different(state);
                 return;
             }
         }

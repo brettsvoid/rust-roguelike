@@ -5,7 +5,7 @@
 //! - `RoomCornerRounder`: knock the sharp corners off rectangular rooms
 //! - `RoomDrawer`: redraw rooms as a chosen shape (rectangles or circles)
 
-use rand::Rng;
+use rand::RngExt;
 
 use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
 use crate::rng::GameRng;
@@ -32,14 +32,14 @@ impl MetaMapBuilder for RoomExploder {
                 let (start_x, start_y) = room.center();
 
                 // Spawn 1-3 random walkers per room
-                let num_walkers = rng.0.gen_range(1..=3);
+                let num_walkers = rng.0.random_range(1..=3);
                 for _ in 0..num_walkers {
                     let mut x = start_x;
                     let mut y = start_y;
 
                     // 20-step drunkard walk
                     for _ in 0..20 {
-                        let direction = rng.0.gen_range(0..4);
+                        let direction = rng.0.random_range(0..4);
                         match direction {
                             0 if y > 1 => y -= 1,
                             1 if y < MAP_HEIGHT as i32 - 2 => y += 1,

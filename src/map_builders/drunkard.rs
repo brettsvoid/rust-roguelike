@@ -8,7 +8,7 @@
 //! Good for: messy natural caves full of dead ends and odd nooks. Guaranteed
 //! fully connected, since every tile was walked to.
 
-use rand::Rng;
+use rand::RngExt;
 
 use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
 use crate::pathfinding::dijkstra_map;
@@ -108,8 +108,8 @@ fn count_floors(map: &Map) -> usize {
 
 fn random_floor_tile(map: &Map, rng: &mut GameRng) -> (i32, i32) {
     loop {
-        let x = rng.0.gen_range(1..MAP_WIDTH as i32 - 1);
-        let y = rng.0.gen_range(1..MAP_HEIGHT as i32 - 1);
+        let x = rng.0.random_range(1..MAP_WIDTH as i32 - 1);
+        let y = rng.0.random_range(1..MAP_HEIGHT as i32 - 1);
         let idx = map.xy_idx(x, y);
         if map.tiles[idx] == TileType::Floor {
             return (x, y);
@@ -146,7 +146,7 @@ impl InitialMapBuilder for DrunkardsWalkBuilder {
 
             // Drunkard walks for its lifetime
             for _ in 0..self.settings.lifetime {
-                let direction = rng.0.gen_range(0..4);
+                let direction = rng.0.random_range(0..4);
                 match direction {
                     0 => {
                         if y > 1 {

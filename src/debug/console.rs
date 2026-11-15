@@ -37,7 +37,7 @@ pub fn update_console(
 ) {
     // Despawn existing console
     for entity in &console_query {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 
     if !debug.show_console {
@@ -45,8 +45,8 @@ pub fn update_console(
     }
 
     let text_font = TextFont {
-        font: font.0.clone(),
-        font_size: 14.0,
+        font: font.0.clone().into(),
+        font_size: FontSize::Px(14.0),
         ..default()
     };
 
@@ -91,8 +91,8 @@ pub fn update_console(
                         output.spawn((
                             Text::new(line.clone()),
                             TextFont {
-                                font: font.0.clone(),
-                                font_size: 12.0,
+                                font: font.0.clone().into(),
+                                font_size: FontSize::Px(12.0),
                                 ..default()
                             },
                             TextColor(Color::srgb(0.8, 0.8, 0.8)),
@@ -112,8 +112,8 @@ pub fn update_console(
             parent.spawn((
                 Text::new("Commands: spawn, teleport, godmode, reveal, nofog, heal, kill_all, help"),
                 TextFont {
-                    font: font.0.clone(),
-                    font_size: 11.0,
+                    font: font.0.clone().into(),
+                    font_size: FontSize::Px(11.0),
                     ..default()
                 },
                 TextColor(Color::srgb(0.4, 0.4, 0.4)),
@@ -126,7 +126,7 @@ pub fn handle_console_input(
     mut debug: ResMut<DebugMode>,
     mut debug_state: ResMut<DebugState>,
     mut god_mode: ResMut<GodMode>,
-    mut evr_kbd: EventReader<KeyboardInput>,
+    mut evr_kbd: MessageReader<KeyboardInput>,
     keyboard: Res<ButtonInput<KeyCode>>,
     font: Res<UiFont>,
     mut player_query: Query<(Entity, &mut Position, &mut CombatStats), With<Player>>,

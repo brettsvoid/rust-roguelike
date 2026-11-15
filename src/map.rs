@@ -372,8 +372,8 @@ impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
         // Run condition: only during actual gameplay (not menus, game over, or map generation)
         let in_gameplay = not(in_state(RunState::MainMenu))
-            .and(not(in_state(RunState::GameOver)))
-            .and(not(in_state(RunState::MapGeneration)));
+            .and_then(not(in_state(RunState::GameOver)))
+            .and_then(not(in_state(RunState::MapGeneration)));
 
         app.init_resource::<Map>().add_systems(
             Update,
@@ -401,7 +401,7 @@ fn update_revealed_tiles(
     query: Query<&Viewshed, With<Player>>,
     mut tiles_query: Query<(&Position, &mut Revealed), With<Tile>>,
 ) {
-    let Ok(viewshed) = query.get_single() else {
+    let Ok(viewshed) = query.single() else {
         return;
     };
 
@@ -466,7 +466,7 @@ fn update_visible_tiles(
     debug_state: Res<DebugState>,
     player: Query<&Viewshed, With<Player>>,
 ) {
-    let Ok(viewshed) = player.get_single() else {
+    let Ok(viewshed) = player.single() else {
         return;
     };
     map.visible_tiles = vec![false; MAP_WIDTH * MAP_HEIGHT];
@@ -519,7 +519,7 @@ fn update_bloodstains(
         commands.entity(entity).despawn();
     }
 
-    let Ok(window) = window.get_single() else {
+    let Ok(window) = window.single() else {
         return;
     };
 

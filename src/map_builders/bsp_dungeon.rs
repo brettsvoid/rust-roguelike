@@ -7,7 +7,7 @@
 //! Good for: dense, tidy dungeons that feel man-made - lots of rooms packed
 //! together without overlap.
 
-use rand::Rng;
+use rand::RngExt;
 
 use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
 use crate::rng::GameRng;
@@ -55,7 +55,7 @@ impl BspDungeonBuilder {
         if rects.len() == 1 {
             return rects[0].clone();
         }
-        let idx = rng.0.gen_range(0..rects.len());
+        let idx = rng.0.random_range(0..rects.len());
         rects[idx].clone()
     }
 
@@ -63,11 +63,11 @@ impl BspDungeonBuilder {
         let rect_width = i32::abs(rect.x1 - rect.x2);
         let rect_height = i32::abs(rect.y1 - rect.y2);
 
-        let w = i32::max(3, rng.0.gen_range(1..=i32::min(rect_width, 10)));
-        let h = i32::max(3, rng.0.gen_range(1..=i32::min(rect_height, 10)));
+        let w = i32::max(3, rng.0.random_range(1..=i32::min(rect_width, 10)));
+        let h = i32::max(3, rng.0.random_range(1..=i32::min(rect_height, 10)));
 
-        let x_offset = rng.0.gen_range(0..6);
-        let y_offset = rng.0.gen_range(0..6);
+        let x_offset = rng.0.random_range(0..6);
+        let y_offset = rng.0.random_range(0..6);
 
         Rect::new(rect.x1 + x_offset, rect.y1 + y_offset, w, h)
     }
@@ -126,18 +126,18 @@ impl BspDungeonBuilder {
         }
 
         // Sort rooms by x position for corridor generation
-        rooms.sort_by(|a, b| a.x1.cmp(&b.x1));
+        rooms.sort_by_key(|a| a.x1);
 
         // Connect rooms with corridors
         for i in 0..rooms.len().saturating_sub(1) {
             let room = &rooms[i];
             let next_room = &rooms[i + 1];
-            let start_x = room.x1 + rng.0.gen_range(0..i32::abs(room.x1 - room.x2).max(1));
-            let start_y = room.y1 + rng.0.gen_range(0..i32::abs(room.y1 - room.y2).max(1));
+            let start_x = room.x1 + rng.0.random_range(0..i32::abs(room.x1 - room.x2).max(1));
+            let start_y = room.y1 + rng.0.random_range(0..i32::abs(room.y1 - room.y2).max(1));
             let end_x =
-                next_room.x1 + rng.0.gen_range(0..i32::abs(next_room.x1 - next_room.x2).max(1));
+                next_room.x1 + rng.0.random_range(0..i32::abs(next_room.x1 - next_room.x2).max(1));
             let end_y =
-                next_room.y1 + rng.0.gen_range(0..i32::abs(next_room.y1 - next_room.y2).max(1));
+                next_room.y1 + rng.0.random_range(0..i32::abs(next_room.y1 - next_room.y2).max(1));
             draw_corridor(map, start_x, start_y, end_x, end_y);
         }
 

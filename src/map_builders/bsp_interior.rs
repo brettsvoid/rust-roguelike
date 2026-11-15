@@ -7,7 +7,7 @@
 //! Good for: man-made interiors - the floor of a fortress, barracks, or
 //! office-like warren of connected rooms.
 
-use rand::Rng;
+use rand::RngExt;
 
 use crate::map::{TileType, MAP_HEIGHT, MAP_WIDTH};
 use crate::rng::GameRng;
@@ -38,7 +38,7 @@ fn add_subrects_recursive(rects: &mut Vec<Rect>, rect: Rect, rng: &mut GameRng) 
     let half_width = width / 2;
     let half_height = height / 2;
 
-    let split = rng.0.gen_range(0..2);
+    let split = rng.0.random_range(0..2);
 
     if split == 0 {
         // Horizontal split
@@ -94,16 +94,16 @@ impl InitialMapBuilder for BspInteriorBuilder {
         }
 
         // Sort rooms by x position for corridor generation
-        rooms.sort_by(|a, b| a.x1.cmp(&b.x1));
+        rooms.sort_by_key(|a| a.x1);
 
         // Connect rooms with corridors
         for i in 0..rooms.len().saturating_sub(1) {
             let room = &rooms[i];
             let next_room = &rooms[i + 1];
-            let start_x = room.x1 + rng.0.gen_range(0..(room.x2 - room.x1).max(1));
-            let start_y = room.y1 + rng.0.gen_range(0..(room.y2 - room.y1).max(1));
-            let end_x = next_room.x1 + rng.0.gen_range(0..(next_room.x2 - next_room.x1).max(1));
-            let end_y = next_room.y1 + rng.0.gen_range(0..(next_room.y2 - next_room.y1).max(1));
+            let start_x = room.x1 + rng.0.random_range(0..(room.x2 - room.x1).max(1));
+            let start_y = room.y1 + rng.0.random_range(0..(room.y2 - room.y1).max(1));
+            let end_x = next_room.x1 + rng.0.random_range(0..(next_room.x2 - next_room.x1).max(1));
+            let end_y = next_room.y1 + rng.0.random_range(0..(next_room.y2 - next_room.y1).max(1));
             draw_corridor(&mut build_data.map, start_x, start_y, end_x, end_y);
             build_data.take_snapshot();
         }
