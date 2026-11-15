@@ -196,7 +196,7 @@ Settled questions (owner, 15 November 2026):
   the WASM outcome is recorded in `CLAUDE.md`.
 
 ### F10 Performance pass
-- Status: todo
+- Status: in progress
 - Needs: F07, F08
 - Measure first. Then, as needed: merge static tile meshes per chunk, cull
   lights outside the view, cap shadow casters.
