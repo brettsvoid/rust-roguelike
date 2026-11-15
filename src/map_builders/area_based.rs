@@ -4,13 +4,15 @@
 //!   chosen spot (center, an edge, a corner)
 //! - `CullUnreachable`: wall off any floor the player could never reach
 //! - `DistantExit`: put the stairs on the farthest walkable tile
-//! - `VoronoiSpawning`: sprinkle monsters and items region by region
+//! - `VoronoiSpawning`: sprinkle monsters and items region by region, rolled
+//!   from the depth's spawn table
 //!
 //! Chain these after any initial builder that doesn't handle start/stairs/
 //! spawns itself.
 
 use crate::map::{TileType, MAP_HEIGHT, MAP_WIDTH};
 use crate::pathfinding::dijkstra_map;
+use crate::raws::{get_spawn_table_for_depth, RAWS};
 use crate::rng::GameRng;
 
 use super::{BuilderMap, MetaMapBuilder};
@@ -183,6 +185,7 @@ impl MetaMapBuilder for VoronoiSpawning {
         let start_idx = build_data.map.xy_idx(start_pos.0, start_pos.1);
 
         let dijkstra = dijkstra_map(&build_data.map, &[start_idx]);
+        let spawn_table = get_spawn_table_for_depth(&RAWS.lock().unwrap(), build_data.depth);
 
         // Divide map into 4x4 grid sections
         let section_width = MAP_WIDTH / 4;
@@ -213,17 +216,9 @@ impl MetaMapBuilder for VoronoiSpawning {
                     let num_spawns = rng.0.random_range(0..=2);
                     for _ in 0..num_spawns {
                         let spawn_idx = region_tiles[rng.0.random_range(0..region_tiles.len())];
-                        let roll = rng.0.random_range(0..100);
-                        let name = if roll < 10 {
-                            "Health Potion"
-                        } else if roll < 20 {
-                            "Magic Missile Scroll"
-                        } else if roll < 60 {
-                            "Goblin"
-                        } else {
-                            "Orc"
-                        };
-                        build_data.spawn_list.push((spawn_idx, name.to_string()));
+                        if let Some(name) = spawn_table.roll(rng) {
+                            build_data.spawn_list.push((spawn_idx, name));
+                        }
                     }
                 }
             }
