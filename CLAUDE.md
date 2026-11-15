@@ -93,6 +93,9 @@ of the same logic. The build should stay at zero warnings.
 - Saves on quit (Q key), loads on Continue from main menu
 - Permadeath: save file deleted on load and on player death
 - WASM: save/load disabled (no filesystem access)
+- Town state (`economy/town.rs`) lives in its own `town.json`, loaded at startup
+  and saved whenever `TownState` changes. Permadeath never deletes it. A bad or
+  wrong-version file is renamed to `town.json.bad-<secs>` and a fresh town founded.
 
 ### Coordinate System
 

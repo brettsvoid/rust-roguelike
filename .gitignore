@@ -2,3 +2,5 @@
 
 .DS_Store
 savegame.json
+town.json
+town.json.*

@@ -74,6 +74,7 @@ fn main() {
             monsters::MonstersPlugin,
             bystander::BystanderPlugin,
             camera::CameraPlugin,
+            economy::town::TownPlugin,
         ))
         // UI plugins
         .add_plugins((

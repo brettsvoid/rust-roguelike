@@ -3,6 +3,8 @@
 
 use bevy::prelude::*;
 
+pub mod town;
+
 /// The party's shared gold. A resource, not a player component, so it
 /// belongs to the whole party.
 #[derive(Resource, Default, Debug)]

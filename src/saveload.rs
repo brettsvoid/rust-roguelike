@@ -23,8 +23,11 @@ use crate::player::Player;
 use crate::resources::UiFont;
 use crate::viewshed::Viewshed;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), not(test)))]
 const SAVE_FILE: &str = "savegame.json";
+// Tests drive the real death path; keep it away from a developer's save.
+#[cfg(all(not(target_arch = "wasm32"), test))]
+const SAVE_FILE: &str = "savegame.test-never-written.json";
 
 // ============================================================================
 // Save Queries
