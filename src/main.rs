@@ -27,6 +27,7 @@ mod map_indexing;
 mod map_render;
 mod mapgen_viz;
 mod monsters;
+mod occlusion;
 mod particle;
 mod pathfinding;
 mod picking;
@@ -76,6 +77,7 @@ fn main() {
             monsters::MonstersPlugin,
             bystander::BystanderPlugin,
             camera::CameraPlugin,
+            occlusion::OcclusionPlugin,
             economy::town::TownPlugin,
         ))
         // UI plugins

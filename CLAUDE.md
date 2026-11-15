@@ -66,6 +66,7 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
 - **MapPlugin** (`map.rs`) - Map data, fog of war, position-to-screen translation, `grid_to_world`
 - **CameraPlugin** (`camera.rs`) - The logical `Camera` follow target, the isometric 3D camera and the 2D overlay camera
 - **PickingPlugin** (`picking.rs`) - Cursor to grid cell via the `Camera3d` ray on the floor plane, the `HoveredTile` resource, the hover highlight and `TileMarks` (flat unlit quads for tile overlays)
+- **OcclusionPlugin** (`occlusion.rs`) - Cuts walls down to stubs and hides town roofs so the player and the visible floor stay in view (see Coordinate System)
 - **MapGenVizPlugin** (`mapgen_viz.rs`) - The map generation visualizer (main menu tool)
 - **MonstersPlugin** (`monsters.rs`) - Monster spawning and AI
 - **GuiPlugin** (`gui.rs`) - Main menu and builder-select menu (other UI lives in `ui/`)
@@ -129,6 +130,12 @@ of the same logic. The build should stay at zero warnings.
   window, over a `BlocksPicking` UI panel (the HUD, the targeting banner), off the map, or outside
   gameplay. Every mouse consumer (tooltip, targeting, debug tile info) reads `HoveredTile`; order
   such systems `.after(picking::update_hovered_tile)`. Don't convert the cursor any other way
+- Occlusion: the camera looks from the +x, +z side, so a wall hides tiles up to two steps
+  towards -x, -z. `occlusion::walls_to_cut` lists every wall that would hide a visible non-wall
+  tile or the player; those are drawn as a 0.25-unit stub (the wall `Transform` is scaled, the
+  mesh is shared). Town buildings (closed `WoodFloor` rooms) get a flat roof slab at wall height.
+  A roof hides while the player is inside the building or behind it; while it shows, its walls
+  stay full height
 - Tile overlays (hover, targeting range, area, target) are `TileMarks::mark` quads just above the
   floor, never 2D sprites
 - `translate_positions` moves a 3D entity (`EntityShape`) to `grid_to_world` plus its shape's lift
