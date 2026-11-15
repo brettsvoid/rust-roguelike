@@ -409,7 +409,7 @@ and adds the `model` names to `raws/spawns.json`.
   item has a value.
 
 ### E02 Vendors and the shop screen
-- Status: in progress
+- Status: done
 - Needs: E01, F05
 - The blacksmith, alchemist, clothier, barkeep and priest become vendors.
   Clicking one opens a buy and sell screen built on the modal menu toolkit in
