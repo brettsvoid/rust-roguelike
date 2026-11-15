@@ -451,7 +451,7 @@ and adds the `model` names to `raws/spawns.json`.
   setup sells higher tiers and has the new vendor.
 
 ### E06 The town visibly grows
-- Status: in progress
+- Status: done
 - Needs: E04, F02
 - `map_builders/town.rs` reads `TownState`. As the town levels, abandoned
   buildings are repaired, hovels become houses, new buildings and market
