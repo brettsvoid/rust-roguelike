@@ -99,7 +99,7 @@ Open questions for the owner (found while writing design.md):
   command in `CLAUDE.md`.
 
 ### F02 Grey-box 3D map
-- Status: in progress
+- Status: done
 - Needs: F01
 - Enable the Bevy 3D features (PBR, glTF, tonemapping). Add a `Camera3d` with
   an orthographic isometric rig (yaw 45 degrees, pitch about 35) that follows
@@ -112,7 +112,7 @@ Open questions for the owner (found while writing design.md):
   recognisable isometric grey-box geometry, and UI text still renders.
 
 ### F03 Grey-box 3D entities and fog of war
-- Status: todo
+- Status: in progress
 - Needs: F02
 - `RenderableBundle` spawns a coloured primitive per entity (capsule for
   creatures, small box for items, per-prop box) using the raws colour.
@@ -126,7 +126,7 @@ Open questions for the owner (found while writing design.md):
   and a harness screenshot shows the three fog states.
 
 ### F04 Mouse picking and tile hover
-- Status: todo
+- Status: in progress
 - Needs: F02
 - A pure function from cursor ray to grid tile (ray against the `y = 0`
   plane). A `HoveredTile` resource and a highlight quad on the hovered tile.
@@ -412,6 +412,9 @@ and adds the `model` names to `raws/spawns.json`.
   Clicking one opens a buy and sell screen built on the modal menu toolkit in
   `src/ui/menu.rs`. Each vendor buys and sells its own item categories. Sell
   price is a fraction of buy price.
+  Use `economy::stock::restock`, `town::stocked_by` and the `trade` price
+  functions. Replace the placeholder in `unlock_text` (`ui/menus/ledger.rs`)
+  with the real unlocks from `town::STALLS`.
 - Done when: the party can sell loot and buy gear from each vendor in town.
 
 ### E03 Persistent town state
@@ -438,7 +441,7 @@ and adds the `model` names to `raws/spawns.json`.
   and the news log reports what happened while the party was away.
 
 ### E05 Tiered stock and new content
-- Status: in progress
+- Status: done
 - Needs: E04
 - Sector level gates which item tiers each vendor stocks. Add tiered weapons,
   armour, potions, scrolls and magic items to the raws, and deeper monsters to
@@ -448,7 +451,7 @@ and adds the `model` names to `raws/spawns.json`.
   setup sells higher tiers and has the new vendor.
 
 ### E06 The town visibly grows
-- Status: todo
+- Status: in progress
 - Needs: E04, F02
 - `map_builders/town.rs` reads `TownState`. As the town levels, abandoned
   buildings are repaired, hovels become houses, new buildings and market
