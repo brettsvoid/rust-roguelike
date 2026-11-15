@@ -70,7 +70,7 @@ cargo run -- --screenshot loop.png --reveal-map --console "spawn dagger" \
   --keys iat --frames 900
 # "spawn heart" drops a stand-in Heart of the Abyss; carrying it, the portal is refused:
 cargo run -- --screenshot heart.png --depth 4 --console "spawn portal" \
-  --console "spawn heart" --keys gggib --frames 300
+  --console "spawn heart" --keys gggia --frames 300
 ```
 
 Verify every visible change with a harness screenshot that you look at.
