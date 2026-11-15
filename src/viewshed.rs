@@ -17,16 +17,25 @@ impl Plugin for ViewshedPlugin {
     }
 }
 
+/// Walls, entities with `BlocksVisibility` and anything off the map block sight.
+fn opaque(map: &Map, x: i32, y: i32) -> bool {
+    if x < 0 || x >= map.width || y < 0 || y >= map.height {
+        return true;
+    }
+    let idx = map.xy_idx(x, y);
+    tile_opaque(map.tiles[idx]) || map.view_blocked.contains(&idx)
+}
+
+/// Whether nothing opaque stands between `from` and `to` on the Bresenham
+/// line. The two end tiles themselves do not count.
+pub fn line_of_sight(map: &Map, from: (i32, i32), to: (i32, i32)) -> bool {
+    let line = bresenham_line(from.0, from.1, to.0, to.1);
+    let between = line.len().saturating_sub(2);
+    !line.iter().skip(1).take(between).any(|&(x, y)| opaque(map, x, y))
+}
+
 pub fn update_viewshed(map: Res<Map>, mut query: Query<(&Position, &mut Viewshed)>) {
-    let is_opaque = |x: i32, y: i32| {
-        // Bounds check - treat out-of-bounds as opaque
-        if x < 0 || x >= map.width || y < 0 || y >= map.height {
-            return true;
-        }
-        let idx = map.xy_idx(x, y);
-        // Block visibility for opaque tiles and entities with BlocksVisibility
-        tile_opaque(map.tiles[idx]) || map.view_blocked.contains(&idx)
-    };
+    let is_opaque = |x: i32, y: i32| opaque(&map, x, y);
 
     for (pos, mut viewshed) in &mut query {
         viewshed.visible_tiles.clear();

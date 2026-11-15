@@ -142,7 +142,27 @@
       },
       "weapon": {
         "slot": "melee",
-        "power_bonus": 2
+        "damage": [1, 3],
+        "crit_chance": 15
+      }
+    },
+    {
+      "name": "Shortbow",
+      "base_value": 30,
+      "tier": 1,
+      "sector": "smithing",
+      "renderable": {
+        "glyph": "}",
+        "fg": "#C8A060",
+        "bg": "#000000",
+        "order": 0
+      },
+      "weapon": {
+        "slot": "ranged",
+        "damage": [1, 4],
+        "range": 8,
+        "optimal_range": 5,
+        "crit_chance": 10
       }
     },
     {
@@ -158,7 +178,8 @@
       },
       "weapon": {
         "slot": "melee",
-        "power_bonus": 4
+        "damage": [3, 5],
+        "crit_chance": 10
       }
     },
     {
@@ -174,7 +195,8 @@
       },
       "weapon": {
         "slot": "melee",
-        "power_bonus": 5
+        "damage": [3, 7],
+        "crit_chance": 10
       }
     },
     {
@@ -232,7 +254,8 @@
       },
       "weapon": {
         "slot": "melee",
-        "power_bonus": 6
+        "damage": [4, 8],
+        "crit_chance": 10
       }
     },
     {
@@ -277,7 +300,8 @@
       },
       "weapon": {
         "slot": "melee",
-        "power_bonus": 8
+        "damage": [5, 11],
+        "crit_chance": 10
       }
     },
     {
@@ -309,7 +333,8 @@
       },
       "weapon": {
         "slot": "melee",
-        "power_bonus": 10
+        "damage": [8, 12],
+        "crit_chance": 15
       }
     },
     {
@@ -638,7 +663,8 @@
       },
       "weapon": {
         "slot": "melee",
-        "power_bonus": 4
+        "damage": [3, 5],
+        "crit_chance": 5
       }
     },
     {
@@ -686,7 +712,8 @@
       },
       "weapon": {
         "slot": "melee",
-        "power_bonus": 10
+        "damage": [8, 12],
+        "crit_chance": 10
       }
     },
     {
@@ -721,7 +748,8 @@
       },
       "weapon": {
         "slot": "melee",
-        "power_bonus": 6
+        "damage": [4, 8],
+        "crit_chance": 5
       }
     },
     {
@@ -788,7 +816,8 @@
       },
       "weapon": {
         "slot": "melee",
-        "power_bonus": 10
+        "damage": [8, 12],
+        "crit_chance": 5
       }
     },
     {
@@ -879,7 +908,8 @@
         "max_hp": 2,
         "hp": 2,
         "defense": 0,
-        "power": 1
+        "power": 1,
+        "defence": 10
       },
       "vision_range": 4
     },
@@ -1059,7 +1089,8 @@
         "hp": 6,
         "defense": 0,
         "power": 3,
-        "movement": 6
+        "movement": 6,
+        "defence": 20
       },
       "vision_range": 6
     },
@@ -1454,6 +1485,7 @@
     { "name": "Town Portal", "weight": 2, "min_depth": 1, "max_depth": 100 },
     { "name": "Scroll of Magic Mapping", "weight": 2, "min_depth": 2, "max_depth": 7 },
     { "name": "Dagger", "weight": 3, "min_depth": 0, "max_depth": 5 },
+    { "name": "Shortbow", "weight": 2, "min_depth": 0, "max_depth": 5 },
     { "name": "Longsword", "weight": 1, "min_depth": 2, "max_depth": 7 },
     { "name": "Battleaxe", "weight": 1, "min_depth": 2, "max_depth": 7 },
     { "name": "Shield", "weight": 3, "min_depth": 0, "max_depth": 5 },

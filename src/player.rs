@@ -9,8 +9,8 @@ use rand::RngExt;
 
 use crate::{
     bystander::Bystander,
-    combat::{CombatStats, WantsToMelee},
-    components::{BlocksTile, BlocksVisibility, Confusion, Door, HungerClock, HungerState, Item, WantsToPickupItem},
+    combat::{in_reach, Arms, CombatStats, WantsToAttack},
+    components::{BlocksTile, BlocksVisibility, Confusion, Door, HungerClock, HungerState, Item, Name, WantsToPickupItem},
     debug::DebugMode,
     economy::town::Vendor,
     entity_render::{EntityShape, Renderable},
@@ -251,7 +251,7 @@ fn try_move_player(
     // Check for attackable targets (monsters)
     for potential_target in map.tile_content[destination_idx].iter() {
         if combat_stats.get(*potential_target).is_ok() {
-            commands.entity(player_entity).insert(WantsToMelee {
+            commands.entity(player_entity).insert(WantsToAttack {
                 target: *potential_target,
             });
             return MoveResult::Attacked { target: *potential_target };
@@ -317,10 +317,10 @@ pub(crate) fn handle_player_input(
     mut next_state: ResMut<NextState<RunState>>,
     other_combat_stats: Query<&CombatStats, Without<PartyMember>>,
     items: Query<(Entity, &Position), (With<Item>, Without<PartyMember>, Without<Bystander>)>,
-    monsters: Query<&Position, (With<Monster>, Without<PartyMember>, Without<Bystander>)>,
+    monsters: Query<(Entity, &Position, &Name), (With<Monster>, Without<PartyMember>, Without<Bystander>)>,
     mut doors: Query<(Entity, &mut Door, &mut Renderable), Without<PartyMember>>,
     mut positions: Query<&mut Position, Or<(With<Bystander>, With<PartyMember>)>>,
-    (debug_mode, mode, mut turn_ended, mut hero_action, range, confused, mut rng): (
+    (debug_mode, mode, mut turn_ended, mut hero_action, range, confused, mut rng, arms): (
         Res<DebugMode>,
         Res<Mode>,
         ResMut<TurnEnded>,
@@ -328,6 +328,7 @@ pub(crate) fn handle_player_input(
         Res<MoveRange>,
         Query<(), With<Confusion>>,
         ResMut<GameRng>,
+        Arms,
     ),
 ) {
     // Don't process player input if debug console is open
@@ -348,9 +349,12 @@ pub(crate) fn handle_player_input(
         .collect();
     roster.sort_by_key(|m| m.0);
     // Seen by any member: `Map::visible_tiles` would count every tile under no-fog.
-    let hostile_in_view = monsters
+    let seen_hostiles: Vec<(Entity, (i32, i32), &Name)> = monsters
         .iter()
-        .any(|pos| party.iter().any(|(.., viewshed)| viewshed.visible_tiles.contains(&(pos.x, pos.y))));
+        .filter(|(_, pos, _)| party.iter().any(|(.., viewshed)| viewshed.visible_tiles.contains(&(pos.x, pos.y))))
+        .map(|(entity, pos, name)| (entity, (pos.x, pos.y), name))
+        .collect();
+    let hostile_in_view = !seen_hostiles.is_empty();
     let Ok((_, _, mut player_stats, hunger, _)) = party.get_mut(player_entity) else {
         return;
     };
@@ -467,9 +471,19 @@ pub(crate) fn handle_player_input(
                     next_state.set_if_different(RunState::NextLevel);
                 }
             } else if matches!(*mode, Mode::Combat { .. }) {
-                // One action: a move within range, or an attack or a door beside the hero.
+                // One action: an attack on a hostile in reach, a move within
+                // range, or a door beside the hero. A refused attack costs nothing.
                 let beside = (target.0 - player_x).abs() <= 1 && (target.1 - player_y).abs() <= 1;
-                if let Some(ap) = range.ap(target) {
+                if let Some(&(foe, _, foe_name)) = seen_hostiles.iter().find(|h| h.1 == target) {
+                    match in_reach(&map, &arms.weapon(player_entity), (player_x, player_y), target) {
+                        Ok(_) => {
+                            commands.entity(player_entity).insert(WantsToAttack { target: foe });
+                            player_acted = true;
+                            action = Some(Action::Attack);
+                        }
+                        Err(refusal) => gamelog.entries.push(refusal.message(&foe_name.name)),
+                    }
+                } else if let Some(ap) = range.ap(target) {
                     let to = if confused.contains(player_entity) {
                         gamelog.entries.push("You are confused and stumble.".to_string());
                         let reachable = |cell| range.ap(cell).is_some();

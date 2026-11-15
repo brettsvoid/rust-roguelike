@@ -7,7 +7,7 @@ use std::fs;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
 
-use crate::combat::CombatStats;
+use crate::combat::{CombatStats, DEFAULT_AIM};
 use crate::components::{
     AreaOfEffect, BlocksTile, CausesConfusion, Confusion, Consumable, EntryTrigger, Hidden,
     HungerClock, HungerState, InBackpack, InflictsDamage, Item, MagicMapper, Name, ProvidesFood, TownPortal,
@@ -181,6 +181,10 @@ pub struct SerializedMember {
     pub power: i32,
     #[serde(default = "default_movement")]
     pub movement: i32,
+    #[serde(default = "default_aim")]
+    pub aim: i32,
+    #[serde(default)]
+    pub defence: i32,
     pub viewshed_range: i32,
     #[serde(default)]
     pub hunger_state: HungerState,
@@ -196,6 +200,10 @@ fn default_movement() -> i32 {
     DEFAULT_MOVEMENT
 }
 
+fn default_aim() -> i32 {
+    DEFAULT_AIM
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct SerializedMonster {
     pub x: i32,
@@ -208,6 +216,10 @@ pub struct SerializedMonster {
     pub power: i32,
     #[serde(default = "default_movement")]
     pub movement: i32,
+    #[serde(default = "default_aim")]
+    pub aim: i32,
+    #[serde(default)]
+    pub defence: i32,
     pub viewshed_range: i32,
     pub confusion_turns: Option<i32>,
     #[serde(default)]
@@ -293,9 +305,11 @@ pub fn save_game(
             color: serialize_color(renderable.fg),
             max_hp: stats.max_hp,
             hp: stats.hp,
-            defense: stats.defense,
+            defense: stats.armour,
             power: stats.power,
             movement: stats.movement,
+            aim: stats.aim,
+            defence: stats.defence,
             viewshed_range: viewshed.range,
             hunger_state: hunger.state,
             hunger_duration: hunger.duration,
@@ -320,9 +334,11 @@ pub fn save_game(
                 glyph: renderable.glyph.clone(),
                 max_hp: stats.max_hp,
                 hp: stats.hp,
-                defense: stats.defense,
+                defense: stats.armour,
                 power: stats.power,
                 movement: stats.movement,
+                aim: stats.aim,
+                defence: stats.defence,
                 viewshed_range: viewshed.range,
                 confusion_turns: confusion.map(|c| c.turns),
                 gold: gold.map(|g| g.amount),
@@ -563,9 +579,11 @@ fn restore_game(
                 CombatStats {
                     max_hp: member.max_hp,
                     hp: member.hp,
-                    defense: member.defense,
+                    armour: member.defense,
                     power: member.power,
                     movement: member.movement,
+                    aim: member.aim,
+                    defence: member.defence,
                 },
                 Viewshed {
                     range: member.viewshed_range,
@@ -601,9 +619,11 @@ fn restore_game(
             CombatStats {
                 max_hp: monster.max_hp,
                 hp: monster.hp,
-                defense: monster.defense,
+                armour: monster.defense,
                 power: monster.power,
                 movement: monster.movement,
+                aim: monster.aim,
+                defence: monster.defence,
             },
             Viewshed {
                 range: monster.viewshed_range,
@@ -771,6 +791,8 @@ mod tests {
             defense: 2,
             power: 5,
             movement: DEFAULT_MOVEMENT,
+            aim: DEFAULT_AIM,
+            defence: 0,
             viewshed_range: 8,
             hunger_state: HungerState::Normal,
             hunger_duration: 20,
@@ -799,6 +821,8 @@ mod tests {
                 defense: 1,
                 power: 4,
                 movement: DEFAULT_MOVEMENT,
+                aim: DEFAULT_AIM,
+                defence: 0,
                 viewshed_range: 8,
                 confusion_turns: None,
                 gold: Some(6),

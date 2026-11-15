@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use rand::RngExt;
 
 use crate::{
-    combat::CombatStats,
+    combat::{CombatStats, DEFAULT_AIM},
     components::{HungerClock, HungerState, Name, RenderableBundle},
     entity_render::EntityShape,
     map::{Position, MAP_WIDTH},
@@ -27,9 +27,11 @@ pub fn party_member(slot: usize, x: i32, y: i32) -> impl Bundle {
         CombatStats {
             max_hp: 30,
             hp: 30,
-            defense: 2,
+            armour: 2,
             power: 5,
             movement: DEFAULT_MOVEMENT,
+            aim: DEFAULT_AIM,
+            defence: 0,
         },
         Viewshed {
             range: 8,

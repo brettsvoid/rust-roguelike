@@ -1,7 +1,11 @@
 use bevy::prelude::*;
 
+use crate::combat::{aim_at, Arms, CombatStats};
 use crate::components::Name;
+use crate::game_flow::Mode;
 use crate::map::{Map, Position};
+use crate::monsters::Monster;
+use crate::party::ActiveUnit;
 use crate::picking::{update_hovered_tile, HoveredTile};
 use crate::resources::UiFont;
 use crate::RunState;
@@ -21,13 +25,17 @@ impl Plugin for TooltipPlugin {
     }
 }
 
+/// Names what is under the cursor. In combat a hostile the active hero can
+/// attack also shows the chance to hit it.
+#[allow(clippy::too_many_arguments)]
 fn update_tooltip(
     mut commands: Commands,
     window: Query<&Window>,
     hovered: Res<HoveredTile>,
     map: Res<Map>,
     font: Res<UiFont>,
-    entities_query: Query<(&Position, &Name)>,
+    (mode, active, arms): (Res<Mode>, Res<ActiveUnit>, Arms),
+    entities_query: Query<(&Position, &Name, Option<&CombatStats>, Has<Monster>)>,
     tooltip_query: Query<Entity, With<Tooltip>>,
 ) {
     for entity in &tooltip_query {
@@ -47,11 +55,23 @@ fn update_tooltip(
         return;
     }
 
+    let attacker = active
+        .0
+        .filter(|&unit| matches!(*mode, Mode::Combat { .. }) && mode.can_act(unit))
+        .and_then(|unit| entities_query.get(unit).ok().and_then(|(pos, _, stats, _)| Some((unit, pos, stats?))));
+    let chance = |target: &Position, defence: i32| {
+        let (unit, from, stats) = attacker?;
+        aim_at(&map, &arms.weapon(unit), stats.aim, (from.x, from.y), defence, (target.x, target.y)).ok()
+    };
+
     // Find entities at this position (using world coordinates)
     let mut tooltip_names: Vec<String> = Vec::new();
-    for (pos, name) in &entities_query {
+    for (pos, name, stats, monster) in &entities_query {
         if pos.x == map_x && pos.y == map_y {
-            tooltip_names.push(name.name.clone());
+            match stats.filter(|_| monster).and_then(|s| chance(pos, s.defence)) {
+                Some(chance) => tooltip_names.push(format!("{} ({chance}% to hit)", name.name)),
+                None => tooltip_names.push(name.name.clone()),
+            }
         }
     }
 

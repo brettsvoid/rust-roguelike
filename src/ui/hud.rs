@@ -126,6 +126,8 @@ fn setup_hud(mut commands: Commands, font: Res<UiFont>) {
                     flex_direction: FlexDirection::Column,
                     height: Val::Percent(100.0),
                     flex_grow: 1.0,
+                    // Clip the oldest lines, not the newest, when the log wraps.
+                    justify_content: JustifyContent::FlexEnd,
                     overflow: Overflow::clip(),
                     ..default()
                 })

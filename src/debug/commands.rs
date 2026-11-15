@@ -180,6 +180,7 @@ fn cmd_spawn(
         "fireball" => Some("Fireball Scroll"),
         "confusion" => Some("Confusion Scroll"),
         "dagger" => Some("Dagger"),
+        "bow" | "shortbow" => Some("Shortbow"),
         "shield" => Some("Shield"),
         "longsword" | "sword" => Some("Longsword"),
         "tower_shield" => Some("Tower Shield"),

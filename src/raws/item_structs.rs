@@ -50,8 +50,22 @@ pub struct Consumable {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Weapon {
+    /// "melee" or "ranged"; both take the weapon hand.
     pub slot: String,
-    pub power_bonus: i32,
+    /// Damage range rolled on a hit, added to the wielder's power.
+    pub damage: (i32, i32),
+    /// The farthest target in tiles; 1 (melee) when missing.
+    #[serde(default = "melee_range")]
+    pub range: i32,
+    /// No range penalty up to this far; `range` when missing.
+    #[serde(default)]
+    pub optimal_range: Option<i32>,
+    /// Percent chance that a hit is a critical.
+    pub crit_chance: i32,
+}
+
+fn melee_range() -> i32 {
+    1
 }
 
 #[derive(Deserialize, Debug, Clone)]

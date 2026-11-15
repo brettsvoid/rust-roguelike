@@ -3,15 +3,15 @@ use std::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 
 use crate::bystander::Bystander;
-use crate::combat::CombatStats;
+use crate::combat::{CombatStats, DEFAULT_AIM};
 use crate::economy::Gold;
 use crate::entity_render::EntityShape;
 use crate::models::Model;
 use crate::components::{
     AreaOfEffect, BlocksTile, BlocksVisibility, CausesConfusion, Consumable, DefenseBonus,
     Door, EntryTrigger, EquipmentSlot, Equippable, Hidden, InflictsDamage, Item, MagicMapper,
-    MeleePowerBonus, Name, Poison, PoisonsOnHit, ProvidesFood, ProvidesHealing, Ranged,
-    RenderableBundle, SingleActivation, Targeting, TownPortal,
+    Name, Poison, PoisonsOnHit, ProvidesFood, ProvidesHealing, Ranged,
+    RenderableBundle, SingleActivation, Targeting, TownPortal, Weapon,
 };
 use crate::lighting::LightSource;
 use crate::map::Position;
@@ -197,13 +197,15 @@ pub fn spawn_named_item(
     // Handle weapon
     if let Some(ref weapon) = item_template.weapon {
         let slot = match weapon.slot.as_str() {
-            "melee" => EquipmentSlot::Melee,
             "shield" => EquipmentSlot::Shield,
             _ => EquipmentSlot::Melee,
         };
         entity.insert(Equippable { slot });
-        entity.insert(MeleePowerBonus {
-            power: weapon.power_bonus,
+        entity.insert(Weapon {
+            damage: weapon.damage,
+            range: weapon.range,
+            optimal_range: weapon.optimal_range.unwrap_or(weapon.range),
+            crit_chance: weapon.crit_chance,
         });
     }
 
@@ -268,9 +270,11 @@ pub fn spawn_named_mob(
         CombatStats {
             max_hp: mob_template.stats.max_hp,
             hp: mob_template.stats.hp,
-            defense: mob_template.stats.defense,
+            armour: mob_template.stats.defense,
             power: mob_template.stats.power,
             movement: mob_template.stats.movement.unwrap_or(DEFAULT_MOVEMENT),
+            aim: mob_template.stats.aim.unwrap_or(DEFAULT_AIM),
+            defence: mob_template.stats.defence,
         },
         Viewshed {
             range: mob_template.vision_range,

@@ -1,17 +1,21 @@
 use bevy::prelude::*;
 
 use crate::{
-    combat::{CombatStats, SufferDamage},
+    combat::{
+        chebyshev, hit_chance, roll_attack, roll_damage, spell_damage, CombatStats, Outcome, SufferDamage, DEFAULT_AIM,
+        LEVEL_GROUND, NO_COVER, SPELL_AIM_BONUS,
+    },
     components::{
         AreaOfEffect, CausesConfusion, Confusion, Consumable, Equippable, Equipped, HungerClock,
         HungerState, InBackpack, InflictsDamage, MagicMapper, Name, ProvidesFood, ProvidesHealing,
-        WantsToDropItem, WantsToPickupItem, WantsToRemoveItem, WantsToUseItem,
+        Ranged, WantsToDropItem, WantsToPickupItem, WantsToRemoveItem, WantsToUseItem, Weapon,
     },
     distance::DistanceAlg,
     economy::{Gold, Purse},
     gamelog::GameLog,
     map::Position,
     effects::{EffectKind, Effects},
+    rng::GameRng,
     PendingMagicMap,
 };
 
@@ -55,15 +59,18 @@ pub fn item_collection_system(
     }
 }
 
+/// Damage scrolls roll damage through `combat::roll_damage`, ignoring armour.
+/// A single-target one also rolls to hit like a shot, with `SPELL_AIM_BONUS`;
+/// an area one hits everything in its radius. Confusion always lands.
 pub fn item_use_system(
     mut commands: Commands,
     mut gamelog: ResMut<GameLog>,
-    mut effects: ResMut<Effects>,
+    (mut effects, mut rng): (ResMut<Effects>, ResMut<GameRng>),
     mut pending_magic_map: ResMut<PendingMagicMap>,
     use_query: Query<(Entity, &WantsToUseItem, &Position)>,
     consumable_query: Query<&Consumable>,
     healing_query: Query<(&ProvidesHealing, &Name)>,
-    damage_query: Query<(&InflictsDamage, &Name)>,
+    damage_query: Query<(&InflictsDamage, &Name, Option<&Ranged>)>,
     confusion_query: Query<(&CausesConfusion, &Name)>,
     food_mapper_query: Query<(Option<&ProvidesFood>, Option<&MagicMapper>)>,
     aoe_query: Query<&AreaOfEffect>,
@@ -139,7 +146,8 @@ pub fn item_use_system(
         // Apply effects if the item has a target position
         if let Some((target_x, target_y)) = wants_use.target {
             // Apply damage if the item inflicts it
-            if let Ok((inflicts, item_name)) = damage_query.get(wants_use.item) {
+            if let Ok((inflicts, item_name, ranged)) = damage_query.get(wants_use.item) {
+                let damage = spell_damage(inflicts.damage);
                 // Check if this is an AoE item
                 if let Ok(aoe) = aoe_query.get(wants_use.item) {
                     let radius = aoe.radius as f32;
@@ -153,10 +161,11 @@ pub fn item_use_system(
                             Vec2::new(pos.x as f32, pos.y as f32),
                         );
                         if distance <= aoe.radius as f32 {
-                            SufferDamage::new_damage(&mut commands, target_entity, inflicts.damage);
+                            let amount = roll_damage(&mut rng, damage, 0, 0, false);
+                            SufferDamage::new_damage(&mut commands, target_entity, amount);
                             gamelog.entries.push(format!(
                                 "{} hits {} for {} hp.",
-                                item_name.name, target_name.name, inflicts.damage
+                                item_name.name, target_name.name, amount
                             ));
                             hit_count += 1;
                         }
@@ -168,16 +177,28 @@ pub fn item_use_system(
                     }
                 } else {
                     // Single target - find entity at exact position
+                    let from = (user_pos.x, user_pos.y);
+                    let caster = target_query.get(entity).map_or("You", |(.., name)| name.name.as_str());
+                    let aim = stats_query.get(entity).map_or(DEFAULT_AIM, |s| s.aim) + SPELL_AIM_BONUS;
+                    // The targeting screen has already checked the range.
+                    let range = ranged.map_or(1, |r| r.range);
+                    let spell = Weapon { damage, range, optimal_range: range, crit_chance: 0 };
                     for (target_entity, pos, target_name) in &target_query {
                         if pos.x == target_x && pos.y == target_y {
-                            SufferDamage::new_damage(&mut commands, target_entity, inflicts.damage);
-                            gamelog.entries.push(format!(
-                                "You use {} on {}, inflicting {} hp.",
-                                item_name.name, target_name.name, inflicts.damage
-                            ));
-
-                            let from = (user_pos.x, user_pos.y);
                             effects.play(EffectKind::MagicMissile { from }, pos.x, pos.y);
+                            let defence = stats_query.get(target_entity).map_or(0, |s| s.defence);
+                            let distance = chebyshev(from, (pos.x, pos.y));
+                            let chance = hit_chance(aim, defence, distance, &spell, NO_COVER, LEVEL_GROUND);
+                            let (item, target) = (&item_name.name, &target_name.name);
+                            if roll_attack(&mut rng, chance, spell.crit_chance) == Outcome::Miss {
+                                gamelog.entries.push(format!("{caster} casts {item} at {target}: miss ({chance}%)"));
+                            } else {
+                                let amount = roll_damage(&mut rng, damage, 0, 0, false);
+                                SufferDamage::new_damage(&mut commands, target_entity, amount);
+                                gamelog
+                                    .entries
+                                    .push(format!("{caster} casts {item} at {target}: hit for {amount} ({chance}%)"));
+                            }
                             break;
                         }
                     }

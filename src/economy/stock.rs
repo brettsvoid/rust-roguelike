@@ -86,7 +86,7 @@ mod tests {
                 Vendor::Priest
             ]
         );
-        assert_eq!(shelf(&town, Vendor::Blacksmith), [("Dagger", 3), ("Shield", 3)]);
+        assert_eq!(shelf(&town, Vendor::Blacksmith), [("Dagger", 3), ("Shield", 3), ("Shortbow", 3)]);
         assert_eq!(
             shelf(&town, Vendor::Alchemist),
             [
@@ -127,6 +127,7 @@ mod tests {
                 ("Longsword", 2),
                 ("Scale Mail", 1),
                 ("Shield", 3),
+                ("Shortbow", 3),
                 ("Tower Shield", 2),
                 ("Warhammer", 1)
             ]

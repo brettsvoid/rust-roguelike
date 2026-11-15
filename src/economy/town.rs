@@ -487,9 +487,11 @@ mod tests {
             CombatStats {
                 max_hp: 30,
                 hp: 0,
-                defense: 0,
+                armour: 0,
                 power: 0,
                 movement: crate::tactics::DEFAULT_MOVEMENT,
+                aim: crate::combat::DEFAULT_AIM,
+                defence: 0,
             },
         ));
         world.run_system_once(delete_the_dead).unwrap();

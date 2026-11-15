@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use rand::RngExt;
 
 use crate::{
-    combat::{CombatStats, WantsToMelee},
+    combat::{in_reach, Arms, CombatStats, WantsToAttack},
     components::{Confusion, Name},
     effects::{EffectKind, Effects},
     game_flow::Mode,
@@ -62,8 +62,9 @@ pub fn monster_target<T: Copy>(
 
 /// Each living monster's turn. Exploring, it takes one step or attacks. In
 /// combat it spends `AP_PER_ROUND` action points by the heroes' rules: a move
-/// goes as far along its path as one AP reaches, and an attack on a hero beside
-/// it ends its turn. A confused monster's moves go to a random neighbour.
+/// goes as far along its path as one AP reaches, and an attack on a hero in
+/// reach of its weapon ends its turn. A confused monster's moves go to a
+/// random neighbour.
 #[allow(clippy::too_many_arguments)]
 pub fn monster_ai(
     mut commands: Commands,
@@ -72,6 +73,7 @@ pub fn monster_ai(
     mut effects: ResMut<Effects>,
     mut rng: ResMut<GameRng>,
     mode: Res<Mode>,
+    arms: Arms,
     mut monster_query: Query<
         (Entity, &mut Position, &mut Viewshed, &Name, &CombatStats, Has<Confusion>),
         (With<Monster>, Without<PartyMember>),
@@ -92,9 +94,9 @@ pub fn monster_ai(
         while ap > 0 {
             let here = (pos.x, pos.y);
             let target = monster_target(here, &party, |tile| viewshed.visible_tiles.contains(&tile));
-            let beside = |(x, y): (i32, i32)| (x - here.0).abs() <= 1 && (y - here.1).abs() <= 1;
-            if let Some((target, _)) = target.filter(|&(_, at)| beside(at)) {
-                commands.entity(entity).insert(WantsToMelee { target });
+            let weapon = arms.weapon(entity);
+            if let Some((target, _)) = target.filter(|&(_, at)| in_reach(&map, &weapon, here, at).is_ok()) {
+                commands.entity(entity).insert(WantsToAttack { target });
                 break;
             }
 

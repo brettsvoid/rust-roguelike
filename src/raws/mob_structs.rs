@@ -24,8 +24,15 @@ pub struct MobStats {
     pub max_hp: i32,
     pub hp: i32,
     pub power: i32,
+    /// Armour: taken off each hit's damage (`CombatStats::armour`). Not `defence`.
     pub defense: i32,
     /// Tiles per action point; `tactics::DEFAULT_MOVEMENT` when missing.
     #[serde(default)]
     pub movement: Option<i32>,
+    /// Base chance to hit in percent; `combat::DEFAULT_AIM` when missing.
+    #[serde(default)]
+    pub aim: Option<i32>,
+    /// Taken off attackers' chance to hit.
+    #[serde(default)]
+    pub defence: i32,
 }

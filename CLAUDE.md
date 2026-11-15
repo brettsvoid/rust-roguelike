@@ -49,6 +49,12 @@ cargo run -- --screenshot fx.png --depth 2 --console "effect missile" --frames 1
 # the goblin beside him, which ends his turn:
 cargo run -- --screenshot combat.png --depth 2 --reveal-map --console godmode \
   --click 30,28 --click 34,27 --keys n --click 35,28 --keys enn --click 33,28 --frames 300
+# The harness prints the whole game log as "log>" lines when it captures. Keys also reach the
+# inventory: `.gia.` picks up a spawned bow and equips it (the leading and trailing `.` pad the
+# frame where the item spawns and the one where the inventory closes). Aldric shoots the goblin
+# two tiles away in round 2 ("hit for 8 (65%)" at seed 42):
+cargo run -- --screenshot bow.png --depth 3 --reveal-map --console godmode --console "spawn bow" \
+  --keys .gia. --click 30,28 --click 35,26 --click 33,30 --keys ennn --click 33,28 --frames 40
 # --shop VENDOR clicks that vendor (blacksmith, alchemist, clothier, barkeep, priest,
 # enchanter): the active hero walks beside them and the shop opens. Inputs after it are
 # fed into the shop: n (Tab: buy or sell), a to j (trade that line), ! (Escape: close).
@@ -92,8 +98,10 @@ for that overhaul. Key points:
   turn, stopping when a hostile comes into view), attacks an adjacent hostile, walks to stairs
   and takes them, and on the hero's own tile picks up an item; the other heroes follow.
   In combat, left click on a tile in the drawn move range moves there as one action (blue zone
-  1 AP, green zone a 2 AP dash), on an adjacent hostile attacks, and on an adjacent closed door
-  opens it; anything else logs "Out of range.". A click on another hero, or Tab, selects them
+  1 AP, green zone a 2 AP dash), on a hostile the party sees attacks it with the hero's weapon
+  if it is in range and line of sight (otherwise logs why and spends nothing), and on an
+  adjacent closed door opens it; anything else logs "Out of range.". Hovering a hostile in
+  combat shows the active hero's chance to hit it in the tooltip. A click on another hero, or Tab, selects them
   (no turn passes; in combat only heroes with AP left).
   WASD pans the camera, the scroll wheel zooms, C recentres. G picks up, I inventory, X drops
   (D pans), R removes equipment, `.` takes the stairs, Space waits (in combat it ends that hero's
@@ -104,7 +112,7 @@ The Architecture section below describes the code as it is now. The current
 build is mid-conversion: the map and entities are grey-box 3D primitives on
 an isometric camera, with a party of four heroes. Exploring, the active hero
 leads and the others follow; on contact the game drops into combat rounds where
-every unit spends 2 action points a round (hit chances and cover come later).
+every unit spends 2 action points a round and attacks roll to hit (cover comes later).
 
 ## Architecture
 
@@ -135,7 +143,8 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
 - **MonstersPlugin** (`monsters.rs`) - Monster spawning and AI. `monster_target` picks the nearest
   hero a monster sees or stands next to. Exploring, `monster_ai` takes one step or attacks per
   turn; in combat each monster spends its AP by the heroes' rules (move as far along its path as
-  one AP reaches, attack when beside a hero, which ends its turn)
+  one AP reaches, attack when a hero is in reach of its weapon, which ends its turn). Monsters
+  have no weapons yet, so in practice they attack from beside a hero
 - **GuiPlugin** (`gui.rs`) - Main menu and builder-select menu (other UI lives in `ui/`)
 - **LightingPlugin** (`lighting.rs`) - `LightSource` point lights, flicker, the shadow caster cap,
   and the per-depth ambient light, fog, bloom and town sun (see Lighting)
@@ -160,6 +169,23 @@ Non-plugin modules worth knowing:
   diagonals 1.45 like the pathfinder, giving each reachable tile its AP cost and path) and
   `confused_step`. Movement is `CombatStats::movement`, from the raws `stats.movement` for
   monsters (Giant Bat 6)
+- `combat.rs` - Attacks, damage and death. The pure rules: `hit_chance(aim, defence, distance,
+  weapon, cover, height)` is `aim - defence - cover - 10 per tile past the weapon's optimal range
+  + 10 per level above the target`, clamped to 5..95, and 0 past the weapon's range. Callers pass
+  `NO_COVER` and `LEVEL_GROUND` until C05 and a map with height. `in_reach` checks range
+  (Chebyshev) and `viewshed::line_of_sight` (Bresenham, walls and `BlocksVisibility` block);
+  `aim_at` combines both. `roll_attack` rolls hit then crit, `roll_damage` rolls the weapon's
+  damage + power (+1 well fed), +half rounded up on a crit, less armour, never below 0. All
+  rolls go through `GameRng`. `attack_system` resolves `WantsToAttack` (melee or ranged alike)
+  and logs "Aldric shoots Goblin #0: hit for 5 (55%)". `Arms` (a `SystemParam`) gives a unit's
+  equipped `Weapon` or `Weapon::NATURAL` (power -1..+1, range 1, 5% crit) and its worn armour.
+  `CombatStats`: `armour` (raws and saves call it `defense`) cuts damage, `defence` cuts hit
+  chance, `aim` defaults to `DEFAULT_AIM` (65)
+- Weapons in the raws: `weapon { slot, damage: [min, max], crit_chance, range (default 1),
+  optimal_range (default range) }`; `slot` "ranged" (the Shortbow: range 8, optimal 5) takes
+  the weapon hand like "melee". Damage scrolls roll `spell_damage` (a quarter either side of
+  their `damage`) and ignore armour; Magic Missile rolls to hit with aim +25 (`SPELL_AIM_BONUS`),
+  area scrolls hit everything in the radius, Confusion always lands
 - `levels.rs` - New-game setup and level changes (`change_level`, run in `RunState::NextLevel`).
   The town is depth 0 (`TOWN_DEPTH`), the dungeon depths 1 to 12. Down stairs go one level
   deeper, or from town to the deepest depth reached; the up stairs (only on depth 1, at the start)
@@ -333,8 +359,8 @@ of the same logic. The build should stay at zero warnings.
 ### Effects
 
 - Gameplay asks for one with `ResMut<Effects>` and `effects.play(EffectKind, x, y)` at the target
-  tile: `HitSpark` (melee and trap hits), `Fireball { radius }`, `MagicMissile { from }` (a bolt
-  from the caster's tile), `Healing`, `Confusion`
+  tile: `HitSpark` (attack and trap hits), `Fireball { radius }`, `MagicMissile { from }` (a bolt
+  from the caster's tile, also every ranged weapon shot), `Healing`, `Confusion`
 - `EffectKind::style` is the one table of how each kind looks: mesh, HDR colour, lifetime, piece
   count, `Motion` and an optional point light. `piece_transform` places every piece as a pure
   function of progress (0 to 1) and `envelope` sets the brightness, so new kinds are a table row

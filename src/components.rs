@@ -135,9 +135,22 @@ pub struct Equipped {
     pub slot: EquipmentSlot,
 }
 
-#[derive(Component, Debug)]
-pub struct MeleePowerBonus {
-    pub power: i32,
+/// An attack: on an equipped item, or `Weapon::NATURAL` for a unit without one.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Weapon {
+    /// Rolled on a hit (inclusive) and added to the attacker's power.
+    pub damage: (i32, i32),
+    /// The farthest target in tiles, by Chebyshev distance. Melee is 1.
+    pub range: i32,
+    /// Targets up to this far take no range penalty.
+    pub optimal_range: i32,
+    /// Percent chance that a hit is a critical.
+    pub crit_chance: i32,
+}
+
+impl Weapon {
+    /// Fists, claws and teeth: the attacker's power, give or take one.
+    pub const NATURAL: Weapon = Weapon { damage: (-1, 1), range: 1, optimal_range: 1, crit_chance: 5 };
 }
 
 #[derive(Component, Debug)]
