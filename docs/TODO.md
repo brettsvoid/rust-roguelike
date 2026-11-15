@@ -63,16 +63,17 @@ Assumed defaults (the owner can overrule; change the ticket if so):
 - A Town Portal scroll and the up stairs return the party to town. Coming back
   to the dungeon regenerates the level at the deepest depth reached.
 
-Open questions for the owner (found while writing design.md):
+Settled questions (owner, 15 November 2026):
 
-1. Depth numbering. In the code the town is depth 1 and the dungeon starts at
-   depth 2, but the design's 12-level table starts at depth 1. Either the
-   dungeon runs from depth 2 to 13 or the town becomes depth 0. Settle before
-   E07.
-2. May the party use a Town Portal while carrying the Heart? If so the escape
-   back to the surface can be skipped. Settle before E07.
-3. How poison and confusion interact with action points. Settle before C03.
-4. The action point cost of using an item. Default: 1 AP. Settle in C03.
+1. Depth numbering. The town is depth 0 and the dungeon runs from depth 1 to
+   12, matching the design table. E07 makes the change (the code today has the
+   town at depth 1), including the harness `--depth` meaning, the HUD, saves
+   and `CLAUDE.md`.
+2. The Heart blocks Town Portals. A party carrying it must climb out. E07.
+3. Status effects under action points. Poison deals its damage at the start of
+   the unit's turn. A confused unit's move goes to a random adjacent tile and
+   still costs its AP. C03.
+4. Using an item costs 1 AP. C03.
 
 ---
 
@@ -311,7 +312,9 @@ and adds the `model` names to `raws/spawns.json`.
 - Status: todo
 - Needs: C02
 - Each unit has 2 action points per round and a `movement` stat. Actions:
-  move (1 AP), dash (2 AP), attack (ends the unit's turn), use item, end turn.
+  move (1 AP), dash (2 AP), attack (ends the unit's turn), use item (1 AP),
+  end turn. Poison deals its damage at the start of the unit's turn. A
+  confused unit's move goes to a random adjacent tile and still costs its AP.
   Units act in any order within the party phase. Move range comes from a pure
   flood fill over `Map::get_available_exits` and is drawn as a one-AP zone and
   a two-AP zone. Monsters spend AP by the same rules.
@@ -463,9 +466,12 @@ and adds the `model` names to `raws/spawns.json`.
 ### E07 Returning to town
 - Status: todo
 - Needs: E02, C02
-- Up stairs on depth 2 and a Town Portal scroll bring the party back to town.
-  Leaving town returns to the deepest depth reached with a fresh level. Each
-  return runs the trade simulation for the days spent away.
+- Renumber first: the town becomes depth 0 and the dungeon depths 1 to 12
+  (today the town is depth 1), in the code, the harness `--depth` flag, the
+  HUD, saves and `CLAUDE.md`. Up stairs on depth 1 and a Town Portal scroll
+  bring the party back to town. A party carrying the Heart cannot use a Town
+  Portal. Leaving town returns to the deepest depth reached with a fresh
+  level. Each return runs the trade simulation for the days spent away.
 - Files: `src/levels.rs`, `raws/spawns.json`.
 - Done when: the loop of delve, return, sell, see the news, buy and delve
   again works end to end.
