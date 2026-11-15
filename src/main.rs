@@ -26,6 +26,7 @@ mod map_builders;
 mod map_indexing;
 mod map_render;
 mod mapgen_viz;
+mod models;
 mod monsters;
 mod occlusion;
 mod particle;
@@ -74,6 +75,7 @@ fn main() {
             player::PlayerPlugin,
             viewshed::ViewshedPlugin,
             map::MapPlugin,
+            models::ModelsPlugin,
             monsters::MonstersPlugin,
             bystander::BystanderPlugin,
             camera::CameraPlugin,

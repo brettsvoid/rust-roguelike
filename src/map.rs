@@ -458,11 +458,12 @@ fn update_revealed_state(mut tiles_query: Query<(&mut TextColor, &Revealed), Wit
 fn update_tile_mesh_visibility(
     assets: Res<TileAssets>,
     mut tiles_query: Query<
-        (&TileMesh, &Revealed, &mut Visibility, &mut MeshMaterial3d<StandardMaterial>),
+        (&TileMesh, &Revealed, &mut Visibility, Option<&mut MeshMaterial3d<StandardMaterial>>),
         Changed<Revealed>,
     >,
 ) {
-    for (TileMesh(tile), revealed, mut visibility, mut material) in &mut tiles_query {
+    // Tile models have no material of their own; `models::update_model_fog` dims them.
+    for (TileMesh(tile), revealed, mut visibility, material) in &mut tiles_query {
         let explored = match revealed.0 {
             RevealedState::Hidden => {
                 *visibility = Visibility::Hidden;
@@ -472,7 +473,7 @@ fn update_tile_mesh_visibility(
             RevealedState::Visible => false,
         };
         *visibility = Visibility::Inherited;
-        if let Some(handle) = assets.material(*tile, explored) {
+        if let (Some(mut material), Some(handle)) = (material, assets.material(*tile, explored)) {
             if material.0 != handle {
                 material.0 = handle;
             }

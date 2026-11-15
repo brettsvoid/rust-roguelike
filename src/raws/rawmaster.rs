@@ -6,6 +6,7 @@ use crate::bystander::Bystander;
 use crate::combat::CombatStats;
 use crate::economy::Gold;
 use crate::entity_render::EntityShape;
+use crate::models::Model;
 use crate::components::{
     AreaOfEffect, BlocksTile, BlocksVisibility, CausesConfusion, Consumable, DefenseBonus,
     Door, EntryTrigger, EquipmentSlot, Equippable, Hidden, InflictsDamage, Item, MagicMapper,
@@ -115,6 +116,14 @@ pub fn spawn_named_entity(
     false
 }
 
+fn insert_renderable(entity: &mut EntityCommands, renderable: &super::Renderable, shape: EntityShape) {
+    // The model goes in first: inserting the shape dresses the entity, and that reads it.
+    if let Some(model) = &renderable.model {
+        entity.insert(Model(model.clone()));
+    }
+    entity.insert(RenderableBundle::new(&renderable.glyph, parse_color(&renderable.fg), shape));
+}
+
 /// Spawn an item from raw data
 pub fn spawn_named_item(
     raws: &RawMaster,
@@ -134,13 +143,8 @@ pub fn spawn_named_item(
         Position { x, y },
     ));
 
-    // Add renderable
     if let Some(ref renderable) = item_template.renderable {
-        entity.insert(RenderableBundle::new(
-            &renderable.glyph,
-            parse_color(&renderable.fg),
-            EntityShape::Item,
-        ));
+        insert_renderable(&mut entity, renderable, EntityShape::Item);
     }
 
     // Handle consumable effects
@@ -287,13 +291,8 @@ pub fn spawn_named_mob(
         entity.insert(Gold { amount: roll_gold(range) });
     }
 
-    // Add renderable
     if let Some(ref renderable) = mob_template.renderable {
-        entity.insert(RenderableBundle::new(
-            &renderable.glyph,
-            parse_color(&renderable.fg),
-            EntityShape::Creature,
-        ));
+        insert_renderable(&mut entity, renderable, EntityShape::Creature);
     }
 
     true
@@ -319,17 +318,13 @@ pub fn spawn_named_prop(
         Position { x, y },
     ));
 
-    // Add renderable
     if let Some(ref renderable) = prop_template.renderable {
-        entity.insert(RenderableBundle::new(
-            &renderable.glyph,
-            parse_color(&renderable.fg),
-            match prop_template.door_open {
-                Some(false) => EntityShape::Door,
-                Some(true) => EntityShape::OpenDoor,
-                None => EntityShape::Prop,
-            },
-        ));
+        let shape = match prop_template.door_open {
+            Some(false) => EntityShape::Door,
+            Some(true) => EntityShape::OpenDoor,
+            None => EntityShape::Prop,
+        };
+        insert_renderable(&mut entity, renderable, shape);
     }
 
     // Door handling

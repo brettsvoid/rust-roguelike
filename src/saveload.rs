@@ -777,6 +777,7 @@ mod tests {
         app.init_resource::<Assets<Mesh>>()
             .init_resource::<Assets<StandardMaterial>>()
             .init_resource::<EntityAssets>()
+            .insert_resource(crate::models::AvailableModels(default()))
             .add_observer(attach_entity_mesh)
             .add_systems(Update, crate::map::translate_positions);
         app.world_mut()

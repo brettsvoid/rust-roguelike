@@ -91,6 +91,7 @@ Non-plugin modules worth knowing:
   with `EntityShape` + `Renderable` (raws glyph and colour) gets a shared mesh per shape and a
   shared material per colour from `EntityAssets` via the `attach_entity_mesh` observer. Spawn
   map entities with `RenderableBundle`; re-inserting `EntityShape` re-dresses (doors opening)
+- `models.rs` - The model pipeline (see Models below)
 - `levels.rs` - New-game setup and descending to the next level
 - `saveload.rs` - Save/load plus the save-on-quit (Q) system
 
@@ -106,6 +107,34 @@ The game uses a turn-based `RunState` enum (defined in `game_flow.rs`, re-export
 
 Each player step (a click walk takes one per turn) triggers the `PlayerTurn` → `MonsterTurn` →
 `AwaitingInput` cycle.
+
+### Models
+
+Drop a glTF binary in `assets/models/<name>.glb` and the matching primitive turns into it,
+with no code change. A missing file keeps the grey-box primitive, silently (`AvailableModels`
+scans the folder once at startup, so restart after adding a file).
+
+- Mobs, items and props: set `"model": "<name>"` in the entry's `renderable` in
+  `raws/spawns.json`, beside `glyph`. An open door looks for `<name>_open`.
+- Tiles: the name comes from `models::tile_model_name`: `tile_floor`, `tile_wood_floor`,
+  `tile_road`, `tile_grass`, `tile_bridge`, `tile_shallow_water`, `tile_deep_water`,
+  `tile_down_stairs`, and `tile_wall_<mask>` where the mask (0 to 15) is `Map::wall_glyph_at`:
+  N=1, S=2, W=4, E=8, set where that neighbour is a wall next to floor.
+- Conventions: one Blender unit is one metre and one tile, origin at the tile centre on the
+  floor, walls 2 m tall. In Blender's top view +X is east and +Y is north (towards smaller grid y).
+- Fog: entity models hide with their entity. Tile models swap each mesh's material for a
+  dimmed copy (`map_render::dimmed`) when explored but out of view.
+- Export: Blender sources live in `art/`. Each top-level collection becomes one `.glb` named
+  after it: `blender art/<file>.blend --background --python art/export.py`.
+  `art/export.py` is untested in Blender so far; check its first export by eye.
+- `art/make_test_model.py` writes `assets/models/test_pyramid.glb` (no Blender needed). Copy it to
+  a used name, e.g. `tile_floor.glb`, to check the pipeline, and delete the copy afterwards.
+- Every model is loaded at startup and kept. The harness starts the game only once they have
+  all loaded, so model entities spawn in the same frame and order each run (byte-identical PNGs).
+- Wall cut-away (`occlusion.rs`) scales the wall tile's `Transform` on y, so a wall model is
+  squashed to a stub the same way as the primitive.
+- Model scenes need `reflect_auto_register` (in `Cargo.toml`): scenes are copied into the world
+  by reflection.
 
 ### Dead Code Convention
 

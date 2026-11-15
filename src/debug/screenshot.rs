@@ -30,6 +30,7 @@ use crate::debug::{DebugState, GodMode};
 use crate::economy::town::TownState;
 use crate::levels;
 use crate::map::{Map, Position};
+use crate::models::AvailableModels;
 use crate::monsters::Monster;
 use crate::picking::{self, FakeCursor, HoveredTile};
 use crate::player::{self, Player, WalkPath};
@@ -62,7 +63,9 @@ impl Plugin for ScreenshotPlugin {
                         .run_if(in_state(RunState::AwaitingInput))
                         .after(picking::update_hovered_tile)
                         .before(player::handle_player_input),
-                    start_game.run_if(in_state(RunState::MainMenu)),
+                    // Models load async; starting only once they are in keeps the
+                    // picture the same run to run.
+                    start_game.run_if(in_state(RunState::MainMenu)).run_if(models_loaded),
                     (prepare_capture, enter_targeting).run_if(in_state(RunState::AwaitingInput)),
                     capture_after_frames.run_if(not(in_state(RunState::MainMenu))),
                 ),
@@ -205,6 +208,19 @@ fn start_game(
         debug_state.no_fog = true;
     }
     next_state.set_if_different(RunState::PreRun);
+}
+
+/// True from the third frame after every model has loaded: by then their meshes
+/// are on the GPU too, so the level's own meshes are uploaded the same way each run.
+fn models_loaded(
+    models: Res<AvailableModels>,
+    asset_server: Res<AssetServer>,
+    mut frames_loaded: Local<u32>,
+) -> bool {
+    if models.loaded(&asset_server) {
+        *frames_loaded += 1;
+    }
+    *frames_loaded > 2
 }
 
 fn is_town_command(cmd: &str) -> bool {

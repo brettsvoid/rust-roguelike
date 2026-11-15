@@ -24,6 +24,7 @@ bevy = { version = "0.20.1", default-features = false, features = [
     "bevy_winit",
     "multi_threaded",
     "png",
+    "reflect_auto_register",
     "tonemapping_luts",
     "zstd_rust",
 ] }

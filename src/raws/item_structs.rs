@@ -39,6 +39,9 @@ pub struct Armour {
 pub struct Renderable {
     pub glyph: String,
     pub fg: String,
+    /// Loads `assets/models/<model>.glb`; without the file the grey-box primitive stays.
+    #[serde(default)]
+    pub model: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
