@@ -21,11 +21,21 @@ cargo run --features file_watcher
 ## Game Design
 
 See [docs/design.md](docs/design.md) for the full game design document and
-[docs/ROADMAP.md](docs/ROADMAP.md) for what's done and what's still to do. Key points:
+[docs/ROADMAP.md](docs/ROADMAP.md) for what's done and what's still to do.
+The game is mid-overhaul to isometric 3D with party tactics and a living town.
+[docs/TODO.md](docs/TODO.md) holds the owner's decisions and the ticket list
+for that overhaul. Key points:
 - **Goal**: Descend 12 levels to retrieve the Heart of the Abyss, then escape back to the surface
-- **Genre**: Turn-based roguelike with permadeath and procedural generation
+- **Genre**: Turn-based tactical roguelike with permadeath and procedural generation
 - **Theme**: Classic fantasy dungeon crawler (orcs, goblins, undead, demons)
-- **Mechanics**: Combat, exploration, hunger/survival, items/equipment
+- **Presentation**: Isometric true 3D, dark torch-lit dungeons, stylised low-poly models
+- **Party and combat**: A party of 4 heroes (default), XCOM-style combat (action points, hit chances, cover, overwatch). Free click-to-move exploration drops into turn mode on contact
+- **Living town**: Loot sold in town is traded with neighbouring towns, sectors level up and stock better gear. The town persists across permadeath
+- **Controls**: Point and click, WASD camera pan
+- **Mechanics**: Hunger/survival, items/equipment
+
+The Architecture section below describes the code as it is now. The current
+build is still the ASCII single-player game with keyboard movement.
 
 ## Architecture
 

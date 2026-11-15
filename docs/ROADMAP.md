@@ -3,6 +3,10 @@
 Working list of what's done, what's in progress, and what's still to do.
 The game design lives in [design.md](design.md) - this file tracks the work.
 
+The overhaul to an isometric 3D game with party tactics and a living town is
+tracked ticket by ticket in [TODO.md](TODO.md). Where this file and TODO.md
+disagree, TODO.md wins.
+
 ## Done
 
 - [x] Core loop: turn-based movement, melee combat, monster AI, death
@@ -22,30 +26,22 @@ The game design lives in [design.md](design.md) - this file tracks the work.
 
 ## Next up
 
-- [ ] Finish town: shopkeepers with actual shops, dungeon entrance flow
+Outside the overhaul tickets:
+
 - [ ] Level theming per depth band (see the depth table in design.md) -
       pick builder chains + spawn tables per theme instead of fully random
-- [ ] Equipment progression: more weapons/armor in the raws, drop tables
 - [ ] Boss encounters at key depths
 - [ ] The Heart of the Abyss + return journey (difficulty scaling on the way up)
 - [ ] Item identification (unidentified potions/scrolls)
 - [ ] Sound effects / music
 
-## Sprite graphics (future)
+Moved into [TODO.md](TODO.md):
 
-The plan: move from ASCII glyphs to image sprites, eventually animated.
-
-- [ ] Pick a tileset (e.g. Kenney or DawnLike are free; or custom pixel art)
-- [ ] Swap tile rendering from `Text2d` to `Sprite` with a `TextureAtlas` -
-      the seam for this is `map_render.rs` (all map tiles spawn there) and
-      `RenderableBundle` in `components.rs` (all entities spawn through it)
-- [ ] Map `TileType` + wall bitmask -> atlas indices (the `WallGlyph` mask
-      already computes which wall piece to use - same logic, different art)
-- [ ] Entity sprites driven from the raws JSON (add a `sprite` field next
-      to `glyph` so both renderers work during the transition)
-- [ ] Animated sprites (Bevy: timer-driven `TextureAtlas` index cycling) -
-      idle animations first, then attack/damage flashes
-- [ ] Particle/effect sprites to replace the text-based particles
+- Shopkeepers and shops: E02 onwards (vendors, town state, trade, tiered
+  stock, returning to town)
+- Equipment progression and drop tables: E01 (item values) and E05 (tiered
+  weapons, armour and loot by depth)
+- Graphics: the 3D plan (F and A tickets) replaces the old sprite plan
 
 ## Code health
 
@@ -63,8 +59,7 @@ Still to do:
       `CorridorSpawner` hardcode entity names - they should roll on the JSON
       spawn tables like `spawn_room` does
 - [ ] Save/load doesn't persist equipment (Equipped/Equippable) or bystanders
-      yet - extend `saveload.rs` when equipment matters, or replace the
-      hand-rolled serialization with something reflection-based
+      yet - TODO.md ticket P01 reworks `saveload.rs` and fixes this
 - [ ] `MapBuilder` trait has only one implementor (`BuilderChain`) - could
       collapse the trait away and return `BuilderChain` directly
 - [ ] Wire up unused toolbox pieces when wanted: `RoomDrawer` (circular
