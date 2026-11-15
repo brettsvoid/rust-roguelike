@@ -1,4 +1,4 @@
-//! The starting town (depth 1).
+//! The starting town (depth 0).
 //!
 //! Not procedural chaos like the dungeons - a hand-shaped map: grass with a
 //! river, a main road with a bridge, and a handful of buildings (pub,

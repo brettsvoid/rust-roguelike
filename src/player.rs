@@ -411,9 +411,9 @@ pub(crate) fn handle_player_input(
                 next_state.set_if_different(RunState::ShowRemoveItem);
             }
 
-            // Town ledger; depth 1 is the town
+            // Town ledger
             KeyCode::KeyT => {
-                if map.depth == 1 {
+                if map.depth == crate::levels::TOWN_DEPTH {
                     next_state.set_if_different(RunState::ShowLedger);
                 } else {
                     gamelog.entries.push("The town ledger is kept in town.".to_string());

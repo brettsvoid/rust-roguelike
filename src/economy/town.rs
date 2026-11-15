@@ -510,7 +510,7 @@ mod tests {
                  mut rng: ResMut<GameRng>,
                  font: Res<UiFont>,
                  mut town: ResMut<TownState>| {
-                    crate::levels::spawn_new_game(&mut commands, &mut map, &mut rng, &font, &mut town, 1);
+                    crate::levels::spawn_new_game(&mut commands, &mut map, &mut rng, &font, &mut town, crate::levels::TOWN_DEPTH);
                 },
             )
             .unwrap();

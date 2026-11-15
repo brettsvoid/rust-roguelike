@@ -623,11 +623,11 @@ pub fn default_builder(depth: i32) -> Box<dyn MapBuilder> {
 }
 
 /// Selects the appropriate builder based on dungeon depth.
-/// Depth 1 is the starting town, grown to `town`'s levels; other depths use
-/// random dungeon generation.
+/// Depth 0 is the town, grown to `town`'s levels; the dungeon depths below
+/// it use random dungeon generation.
 pub fn level_builder(depth: i32, rng: &mut GameRng, town: &TownState) -> Box<dyn MapBuilder> {
     match depth {
-        1 => Box::new(BuilderChain::new(depth, "Town").start_with(Box::new(TownBuilder::new(town)))),
+        crate::levels::TOWN_DEPTH => Box::new(BuilderChain::new(depth, "Town").start_with(Box::new(TownBuilder::new(town)))),
         _ => {
             let mut builder = random_builder(depth, rng);
             builder.then(WallTorches::new());

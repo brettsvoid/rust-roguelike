@@ -1,7 +1,8 @@
 //! Screenshot harness: `cargo run -- --screenshot out.png [--seed N] [--depth N]
 //! [--reveal-map] [--frames N] [--console CMD]... [--ledger] [--cursor X,Y]
 //! [--target ITEM] [--keys KEYS]... [--click X,Y]... [--shop VENDOR]...` starts
-//! a seeded new game, waits, saves a PNG of the window and exits. `--console` runs a debug console
+//! a seeded new game, waits, saves a PNG of the window and exits. `--depth` 0 (the
+//! default) is the town, 1 to 12 the dungeon. `--console` runs a debug console
 //! command once play begins (repeatable); `town ...` commands run before the
 //! level is built instead, e.g. "town level smithing 4"; `--ledger` then opens
 //! the town ledger. `--cursor` fakes the mouse at window point X,Y (logical
@@ -142,7 +143,7 @@ fn key_input(c: char) -> Option<HarnessInput> {
 fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<ScreenshotArgs>, String> {
     let mut path = None;
     let mut seed = 42;
-    let mut depth = 1;
+    let mut depth = levels::TOWN_DEPTH;
     let mut reveal_map = false;
     let mut frames = 60;
     let mut console = Vec::new();
@@ -188,8 +189,8 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
         }
     }
 
-    if depth < 1 {
-        return Err("--depth must be 1 or more".into());
+    if depth < levels::TOWN_DEPTH {
+        return Err("--depth must be 0 (the town) or more".into());
     }
     if frames < 1 {
         return Err("--frames must be 1 or more".into());
@@ -436,7 +437,7 @@ mod tests {
             Ok(Some(ScreenshotArgs {
                 path: PathBuf::from("a.png"),
                 seed: 42,
-                depth: 1,
+                depth: 0,
                 reveal_map: false,
                 frames: 60,
                 console: vec![],
@@ -450,7 +451,7 @@ mod tests {
 
     #[test]
     fn rejects_bad_input() {
-        assert!(parse("--screenshot a.png --depth 0").is_err());
+        assert!(parse("--screenshot a.png --depth -1").is_err());
         assert!(parse("--screenshot a.png --frames 0").is_err());
         assert!(parse("--screenshot a.png --seed x").is_err());
         assert!(parse("--screenshot").is_err());

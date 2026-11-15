@@ -112,7 +112,7 @@ mod tests {
         assert_eq!(unspawned, Vec::<&String>::new());
     }
 
-    /// Loot is tiered by depth. Depth 1 is the town, the dungeon is 2 to 13.
+    /// Loot is tiered by depth. Depth 0 is the town, the dungeon is 1 to 12.
     /// Gold, health potions and rations are staples found at every depth.
     #[test]
     fn deeper_levels_roll_higher_tier_loot() {
@@ -129,13 +129,13 @@ mod tests {
                 .collect()
         };
         let cases = [
-            (2, vec![1]),
-            (4, vec![1, 2]),
-            (6, vec![1, 2, 3]),
-            (8, vec![2, 3, 4]),
-            (10, vec![3, 4, 5]),
-            (12, vec![4, 5]),
-            (13, vec![5]),
+            (1, vec![1]),
+            (3, vec![1, 2]),
+            (5, vec![1, 2, 3]),
+            (7, vec![2, 3, 4]),
+            (9, vec![3, 4, 5]),
+            (11, vec![4, 5]),
+            (12, vec![5]),
         ];
         for (depth, tiers) in cases {
             assert_eq!(tiers_at(depth), tiers.into_iter().collect(), "depth {depth}");
@@ -153,13 +153,13 @@ mod tests {
                 .map(|e| e.name.as_str())
                 .collect()
         };
-        assert_eq!(mobs_at(2), ["Kobold", "Rat", "Giant Bat", "Goblin", "Orc"]);
+        assert_eq!(mobs_at(1), ["Kobold", "Rat", "Giant Bat", "Goblin", "Orc"]);
         assert_eq!(
-            mobs_at(6),
+            mobs_at(5),
             ["Goblin", "Hobgoblin", "Orc", "Orc Warrior", "Orc Shaman"]
         );
-        assert_eq!(mobs_at(9), ["Skeleton", "Wraith", "Lich", "Imp"]);
-        assert_eq!(mobs_at(13), ["Imp", "Hellhound", "Demon Lord"]);
+        assert_eq!(mobs_at(8), ["Skeleton", "Wraith", "Lich", "Imp"]);
+        assert_eq!(mobs_at(12), ["Imp", "Hellhound", "Demon Lord"]);
     }
 
     #[test]

@@ -156,7 +156,7 @@ pub const TOTALLY_NOT_A_TRAP: PrefabVault = PrefabVault {
 pub const MONSTER_DEN: PrefabVault = PrefabVault {
     template: MONSTER_DEN_TEMPLATE,
     constraints: VaultConstraints {
-        min_depth: 2,          // Only appears on level 2+
+        min_depth: 1,          // Every dungeon level
         max_depth: i32::MAX,
         spawn_chance: 0.7,     // 70% chance to spawn
         min_floor_percent: 80,
@@ -167,7 +167,7 @@ pub const CHECKERBOARD_TRAP: PrefabVault = PrefabVault {
     template: CHECKERBOARD_TRAP_TEMPLATE,
     constraints: VaultConstraints {
         min_depth: 1,
-        max_depth: 5,          // Only on early levels
+        max_depth: 4,          // Only on early levels
         spawn_chance: 0.5,     // 50% chance
         min_floor_percent: 80,
     },

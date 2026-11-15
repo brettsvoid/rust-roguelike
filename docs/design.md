@@ -263,8 +263,8 @@ simulation for the days spent away (E07).
 | 10-11 | The Dark Realm    | Abyssal plane   | Demons, elite monsters               |
 | 12    | Heart Chamber     | Final level     | Boss encounter, the Heart            |
 
-In the code the town is depth 1 and the dungeon starts at depth 2. How this
-table maps onto that numbering is open. Dungeon loot is tiered by depth (E05).
+In the code the town is depth 0 and the dungeon runs from depth 1 to 12, as
+in this table. Dungeon loot is tiered by depth (E05).
 
 ### Return Journey
 

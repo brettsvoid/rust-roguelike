@@ -18,15 +18,16 @@ cargo build --release
 cargo run --features file_watcher
 
 # Screenshot harness: start a seeded new game, wait N frames, save a PNG, exit.
-# Depth 1 is the town. Same seed and flags give a byte-identical PNG.
+# Depth 0 is the town, the dungeon is depths 1 to 12. Same seed and flags give a
+# byte-identical PNG.
 # Known exception: runs with clicks or a lit effect (missile, fireball) can differ by a
 # few isolated pixels between runs, with identical game state. Cause not found yet.
 # The harness reads and writes town.json in the working directory: copy a baseline
 # back before each run when you compare captures, since sales and purchases change it.
-# Defaults: --seed 42 --depth 1 --frames 60, fog on unless --reveal-map.
-cargo run -- --screenshot out.png --seed 42 --depth 3 --reveal-map --frames 60
+# Defaults: --seed 42 --depth 0 --frames 60, fog on unless --reveal-map.
+cargo run -- --screenshot out.png --seed 42 --depth 2 --reveal-map --frames 60
 # Fake the mouse at a window point (logical pixels) and enter targeting with an item:
-cargo run -- --screenshot out.png --depth 3 --reveal-map --cursor 720,430 \
+cargo run -- --screenshot out.png --depth 2 --reveal-map --cursor 720,430 \
   --console "spawn fireball" --target "Fireball Scroll"
 # --click X,Y left-clicks grid cell X,Y (repeatable; the next input waits for the
 # walk to end; a click on another hero selects them). --keys presses keys through the
@@ -34,18 +35,18 @@ cargo run -- --screenshot out.png --depth 3 --reveal-map --cursor 720,430 \
 # e (end the party phase in combat), w a s d (pan), c (recentre), + and - (scroll to
 # zoom). Input is fed only while the game waits for it. They run in the order given,
 # e.g. walk five tiles east so explored-but-unseen tiles show:
-cargo run -- --screenshot fog.png --seed 42 --depth 3 --click 45,20 --frames 120
-# Select the third hero (Tab twice) and walk them; at seed 42 depth 3 the party
+cargo run -- --screenshot fog.png --seed 42 --depth 2 --click 45,20 --frames 120
+# Select the third hero (Tab twice) and walk them; at seed 42 depth 2 the party
 # stands on (40,21) (41,21) (39,21) (40,22):
-cargo run -- --screenshot tab.png --seed 42 --depth 3 --keys nn --click 43,25 --frames 150
+cargo run -- --screenshot tab.png --seed 42 --depth 2 --keys nn --click 43,25 --frames 150
 # Play an effect on the active hero's tile (spark, fireball, missile, heal, confusion; blood
 # stains the active hero's tile and two east). It starts about frame 3, so frame 12 is ~0.15 s in:
-cargo run -- --screenshot fx.png --depth 3 --console "effect missile" --frames 12
+cargo run -- --screenshot fx.png --depth 2 --console "effect missile" --frames 12
 # Walk south-west until two goblins see the party (combat, round 1, Aldric on (36,24)).
 # Aldric moves (1 AP, 1 left), Tab, Brenna dashes (2 AP), E ends the phase: the goblins
 # close in (one moves four tiles over two moves). Tab twice back to Aldric, who attacks
 # the goblin beside him, which ends his turn:
-cargo run -- --screenshot combat.png --depth 3 --reveal-map --console godmode \
+cargo run -- --screenshot combat.png --depth 2 --reveal-map --console godmode \
   --click 30,28 --click 34,27 --keys n --click 35,28 --keys enn --click 33,28 --frames 300
 # --shop VENDOR clicks that vendor (blacksmith, alchemist, clothier, barkeep, priest,
 # enchanter): the active hero walks beside them and the shop opens. Inputs after it are
@@ -303,7 +304,7 @@ of the same logic. The build should stay at zero warnings.
 - `FRAME_TIME_LOG=1 cargo run --release` turns vsync off and logs frame times, for performance checks
 - Only the `MAX_SHADOW_LIGHTS` point lights nearest the active hero cast shadows (cube maps are six
   passes each); the rest light through walls within their radius
-- `apply_environment` switches on `Map::depth`: depth 1 (the town) gets a low warm directional sun
+- `apply_environment` switches on `Map::depth`: depth 0 (the town) gets a low warm directional sun
   with shadows and brighter ambient; dungeons get near-black ambient. Both get HDR, bloom,
   the default TonyMcMapface tonemapping and linear distance fog that darkens the far side of view
 - `WallTorches` (`map_builders/wall_torches.rs`) is appended to every dungeon chain in

@@ -392,7 +392,7 @@ pub fn get_spawn_table_for_depth(raws: &RawMaster, depth: i32) -> RandomTable {
         if depth >= entry.min_depth && depth <= entry.max_depth {
             let mut weight = entry.weight;
             if entry.add_map_depth_to_weight {
-                weight += depth - 1;
+                weight += depth;
             }
             if weight > 0 {
                 table = table.add(&entry.name, weight);

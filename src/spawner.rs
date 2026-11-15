@@ -60,14 +60,14 @@ pub fn spawn_room(
     map_depth: i32,
 ) {
     // Calculate spawn counts based on depth
-    let max_monsters_roll = (MAX_MONSTERS + 3) + (map_depth - 1) - 3;
+    let max_monsters_roll = (MAX_MONSTERS + 3) + map_depth - 3;
     let num_monsters = if max_monsters_roll > 0 {
         rng.0.random_range(1..=max_monsters_roll).max(0)
     } else {
         0
     };
 
-    let max_items_roll = (MAX_ITEMS + 3) + (map_depth - 1) - 3;
+    let max_items_roll = (MAX_ITEMS + 3) + map_depth - 3;
     let num_items = if max_items_roll > 0 {
         rng.0.random_range(1..=max_items_roll).max(0)
     } else {
@@ -128,14 +128,14 @@ pub fn spawn_region(
 
     // Calculate spawn counts based on depth and region size
     let area_factor = (tiles.len() as f32 / 50.0).min(1.0); // Scale by region size
-    let max_monsters_roll = (((MAX_MONSTERS + 3) + (map_depth - 1) - 3) as f32 * area_factor) as i32;
+    let max_monsters_roll = (((MAX_MONSTERS + 3) + map_depth - 3) as f32 * area_factor) as i32;
     let num_monsters = if max_monsters_roll > 0 {
         rng.0.random_range(0..=max_monsters_roll)
     } else {
         0
     };
 
-    let max_items_roll = (((MAX_ITEMS + 3) + (map_depth - 1) - 3) as f32 * area_factor) as i32;
+    let max_items_roll = (((MAX_ITEMS + 3) + map_depth - 3) as f32 * area_factor) as i32;
     let num_items = if max_items_roll > 0 {
         rng.0.random_range(0..=max_items_roll)
     } else {

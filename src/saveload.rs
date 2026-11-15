@@ -770,7 +770,7 @@ mod tests {
                 revealed_tiles: Vec::new(),
                 width: 0,
                 height: 0,
-                depth: 2,
+                depth: 1,
                 bloodstains: Vec::new(),
             },
             party: vec![member(0, "Aldric", 0), member(2, "Corin", 3)],

@@ -19,8 +19,11 @@ use crate::rng::GameRng;
 use crate::spawner;
 use crate::viewshed::Viewshed;
 
+/// The town's depth. The dungeon runs from depth 1 to 12 below it.
+pub const TOWN_DEPTH: i32 = 0;
+
 /// Build the starting map and spawn the party plus initial entities.
-/// Called from the main menu when starting a new game (depth 1), and by the
+/// Called from the main menu when starting a new game (in town), and by the
 /// screenshot harness at any depth. Starting in town refills the vendors'
 /// shelves; a return to town should do the same.
 pub fn spawn_new_game(
@@ -31,10 +34,9 @@ pub fn spawn_new_game(
     town: &mut TownState,
     depth: i32,
 ) {
-    if depth == 1 {
+    if depth == TOWN_DEPTH {
         restock(town, &crate::raws::RAWS.lock().unwrap().raws.items);
     }
-    // Depth 1 is the town; deeper levels get procedural dungeons
     let mut builder = map_builders::level_builder(depth, rng, town);
     builder.build_map(rng);
     *map = builder.get_map();

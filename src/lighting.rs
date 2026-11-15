@@ -52,9 +52,6 @@ const MAX_SHADOW_LIGHTS: usize = 4;
 /// the same fraction of its radius whatever its size.
 const LUMENS_PER_RADIUS_SQUARED: f32 = 6_000.0;
 
-/// The town is depth 1 (see `levels.rs`).
-const TOWN_DEPTH: i32 = 1;
-
 pub struct LightingPlugin;
 
 impl Plugin for LightingPlugin {
@@ -225,7 +222,7 @@ fn apply_environment(
     camera: Single<(Entity, &mut Camera), With<Camera3d>>,
     suns: Query<Entity, With<Sun>>,
 ) {
-    let town = map.depth == TOWN_DEPTH;
+    let town = map.depth == crate::levels::TOWN_DEPTH;
     if *current == Some(town) {
         return;
     }

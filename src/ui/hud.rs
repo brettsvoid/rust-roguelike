@@ -186,7 +186,10 @@ fn hunger_label(state: HungerState) -> &'static str {
 
 fn update_depth(map: Res<Map>, mut depth_text_query: Query<&mut Text, With<DepthText>>) {
     if let Ok(mut text) = depth_text_query.single_mut() {
-        **text = format!("Depth: {}", map.depth);
+        **text = match map.depth {
+            crate::levels::TOWN_DEPTH => "Town".to_string(),
+            depth => format!("Depth: {depth}"),
+        };
     }
 }
 
