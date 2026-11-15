@@ -468,11 +468,24 @@ and adds the `model` names to `raws/spawns.json`.
   again works end to end.
 
 ### E08 Town ledger screen
-- Status: in progress
+- Status: done
 - Needs: E04
 - A screen in town showing the town's level, each sector's progress to its
   next level, what it will unlock, trade routes and the recent news.
 - Done when: the screen reflects `TownState` and updates after a sale.
+
+### E09 Fix caravan starvation
+- Status: in progress
+- Needs: E04
+- Found by E08: only one caravan leaves per day, to the neighbour that takes
+  the most goods, so a sector whose buyer takes less never trades while a
+  bigger sector has stock. Faith sat at 0 progress with 300 gold of stock
+  waiting for 9 days while smithing traded daily. Every sector with stock and
+  a willing neighbour must make progress. Retune so the first level-up still
+  lands in the third run.
+- Done when: a unit test pins that no stocked sector with a buyer is starved
+  over any 3-day window, and the ledger capture shows faith and smithing both
+  progressing.
 
 ---
 
