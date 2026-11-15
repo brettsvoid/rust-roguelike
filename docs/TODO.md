@@ -332,7 +332,7 @@ and adds the `model` names to `raws/spawns.json`.
   cases, and bows and spells work on the same rules.
 
 ### C05 Cover and flanking
-- Status: in progress
+- Status: done
 - Needs: C04
 - Walls and tall props give full cover, low props half cover, per direction.
   Props get a `cover` value in the raws. A flanked target gets no cover and
@@ -341,7 +341,7 @@ and adds the `model` names to `raws/spawns.json`.
   indicator agrees with them.
 
 ### C06 Overwatch and hunker down
-- Status: todo
+- Status: in progress
 - Needs: C04
 - Overwatch spends the turn and fires at the first hostile that moves in view
   during the enemy phase, with an aim penalty. Hunker down doubles cover until
