@@ -398,7 +398,7 @@ and adds the `model` names to `raws/spawns.json`.
 ## E: Economy and the living town
 
 ### E01 Gold and item values
-- Status: in progress
+- Status: done
 - Needs: F00
 - Items in the raws gain `base_value` and `tier`. A party purse resource.
   Gold drops from monsters and appears in spawn tables. The HUD shows gold.
@@ -415,7 +415,7 @@ and adds the `model` names to `raws/spawns.json`.
 - Done when: the party can sell loot and buy gear from each vendor in town.
 
 ### E03 Persistent town state
-- Status: todo
+- Status: in progress
 - Needs: E01
 - A `TownState` resource saved to `town.json`: treasury, per-sector goods
   stock and level (smithing, alchemy, textiles, provisions, faith, arcana),
