@@ -1,7 +1,8 @@
 //! Screenshot harness: `cargo run -- --screenshot out.png [--seed N] [--depth N]
 //! [--reveal-map] [--frames N] [--console CMD]... [--ledger]` starts a seeded
 //! new game, waits, saves a PNG of the window and exits. `--console` runs a
-//! debug console command once play begins (repeatable, e.g. "town days 10");
+//! debug console command once play begins (repeatable); `town ...` commands
+//! run before the level is built instead, e.g. "town level smithing 4";
 //! `--ledger` then opens the town ledger. Every visual change is verified with it.
 
 use std::path::PathBuf;
@@ -120,9 +121,15 @@ fn start_game(
     mut rng: ResMut<GameRng>,
     font: Res<UiFont>,
     mut debug_state: ResMut<DebugState>,
+    mut town: ResMut<TownState>,
     mut next_state: ResMut<NextState<RunState>>,
 ) {
-    levels::spawn_new_game(&mut commands, &mut map, &mut rng, &font, args.depth);
+    // Town commands run before the level is built, so the town shows them.
+    for cmd in args.console.iter().filter(|c| is_town_command(c)) {
+        let parts: Vec<&str> = cmd.split_whitespace().collect();
+        info!("console> {cmd}: {}", super::commands::cmd_town(&parts, &mut town));
+    }
+    levels::spawn_new_game(&mut commands, &mut map, &mut rng, &font, &town, args.depth);
     if args.reveal_map {
         debug_state.reveal_map = true;
         debug_state.no_fog = true;
@@ -130,7 +137,11 @@ fn start_game(
     next_state.set_if_different(RunState::PreRun);
 }
 
-/// Once play begins: run the `--console` commands, then open the ledger.
+fn is_town_command(cmd: &str) -> bool {
+    cmd.split_whitespace().next() == Some("town")
+}
+
+/// Once play begins: run the other `--console` commands, then open the ledger.
 #[allow(clippy::too_many_arguments)]
 fn prepare_capture(
     mut commands: Commands,
@@ -147,7 +158,7 @@ fn prepare_capture(
     if std::mem::replace(&mut *done, true) {
         return;
     }
-    for cmd in &args.console {
+    for cmd in args.console.iter().filter(|c| !is_town_command(c)) {
         let out = super::commands::execute_command(
             cmd,
             &mut commands,

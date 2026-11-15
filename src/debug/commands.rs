@@ -40,7 +40,7 @@ pub fn execute_command(
 }
 
 fn cmd_help() -> String {
-    "Commands: spawn <item>, teleport <x> <y>, godmode, reveal, nofog, heal, kill_all, town sell <sector> <value>, town days <n>".to_string()
+    "Commands: spawn <item>, teleport <x> <y>, godmode, reveal, nofog, heal, kill_all, town sell <sector> <value>, town days <n>, town level <sector> <n>".to_string()
 }
 
 fn cmd_godmode(god_mode: &mut GodMode) -> String {
@@ -61,9 +61,22 @@ fn cmd_nofog(debug_state: &mut DebugState) -> String {
     format!("No fog: {}", if debug_state.no_fog { "ON" } else { "OFF" })
 }
 
-/// Drive the town without vendors or time passing: record a sale or run days.
-fn cmd_town(parts: &[&str], town: &mut ResMut<TownState>) -> String {
+/// Drive the town without vendors or time passing: record a sale, run days
+/// or set a sector's level outright.
+pub(super) fn cmd_town(parts: &[&str], town: &mut ResMut<TownState>) -> String {
     match parts[1..] {
+        ["level", sector, level] => {
+            let sector = Sector::ALL
+                .into_iter()
+                .find(|s| s.name().eq_ignore_ascii_case(sector));
+            match (sector, level.parse::<u32>()) {
+                (Some(sector), Ok(level @ 1..=5)) => {
+                    town.sectors.get_mut(&sector).unwrap().level = level;
+                    format!("{} is now level {level}", sector.name())
+                }
+                _ => "Usage: town level <sector> <1-5>".to_string(),
+            }
+        }
         ["sell", sector, value] => {
             let sector = Sector::ALL
                 .into_iter()
@@ -80,7 +93,7 @@ fn cmd_town(parts: &[&str], town: &mut ResMut<TownState>) -> String {
             Ok(n) => format!("{n} days passed, {} news", trade::simulate(town, n).len()),
             Err(_) => "Usage: town days <n>".to_string(),
         },
-        _ => "Usage: town sell <sector> <value> | town days <n>".to_string(),
+        _ => "Usage: town sell <sector> <value> | town days <n> | town level <sector> <n>".to_string(),
     }
 }
 

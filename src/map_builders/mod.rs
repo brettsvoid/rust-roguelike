@@ -36,6 +36,7 @@ mod wfc;
 use bevy::prelude::*;
 use rand::RngExt;
 
+use crate::economy::town::TownState;
 use crate::map::Map;
 use crate::rng::GameRng;
 use crate::shapes::Rect;
@@ -615,17 +616,11 @@ pub fn default_builder(depth: i32) -> Box<dyn MapBuilder> {
 }
 
 /// Selects the appropriate builder based on dungeon depth.
-/// Depth 1 is the starting town, other depths use random dungeon generation.
-pub fn level_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
+/// Depth 1 is the starting town, grown to `town`'s levels; other depths use
+/// random dungeon generation.
+pub fn level_builder(depth: i32, rng: &mut GameRng, town: &TownState) -> Box<dyn MapBuilder> {
     match depth {
-        1 => town_builder(depth),
+        1 => Box::new(BuilderChain::new(depth, "Town").start_with(Box::new(TownBuilder::new(town)))),
         _ => random_builder(depth, rng),
     }
-}
-
-fn town_builder(depth: i32) -> Box<dyn MapBuilder> {
-    Box::new(
-        BuilderChain::new(depth, "Town")
-            .start_with(Box::new(TownBuilder::new())),
-    )
 }

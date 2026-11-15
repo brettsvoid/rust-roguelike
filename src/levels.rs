@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 use crate::combat::CombatStats;
 use crate::components::{EntryTrigger, InBackpack, Item};
+use crate::economy::town::TownState;
 use crate::economy::Purse;
 use crate::game_flow::RunState;
 use crate::gamelog::GameLog;
@@ -25,10 +26,11 @@ pub fn spawn_new_game(
     map: &mut Map,
     rng: &mut GameRng,
     font: &UiFont,
+    town: &TownState,
     depth: i32,
 ) {
     // Depth 1 is the town; deeper levels get procedural dungeons
-    let mut builder = map_builders::level_builder(depth, rng);
+    let mut builder = map_builders::level_builder(depth, rng, town);
     builder.build_map(rng);
     *map = builder.get_map();
 
@@ -56,6 +58,7 @@ pub fn go_next_level(
     mut next_state: ResMut<NextState<RunState>>,
     font: Res<UiFont>,
     mut rng: ResMut<GameRng>,
+    town: Res<TownState>,
     mut player_query: Query<(Entity, &mut CombatStats), With<Player>>,
     backpack_query: Query<(Entity, &InBackpack)>,
     entities_to_delete: Query<
@@ -82,7 +85,7 @@ pub fn go_next_level(
 
     // Generate new map with increased depth using level-appropriate builder
     let new_depth = map.depth + 1;
-    let mut builder = map_builders::level_builder(new_depth, &mut rng);
+    let mut builder = map_builders::level_builder(new_depth, &mut rng, &town);
     builder.build_map(&mut rng);
     *map = builder.get_map();
 

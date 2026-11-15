@@ -1013,6 +1013,24 @@
       "ai": "bystander"
     },
     {
+      "name": "Enchanter",
+      "renderable": {
+        "glyph": "@",
+        "fg": "#9370DB",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 10,
+        "hp": 10,
+        "defense": 0,
+        "power": 1
+      },
+      "vision_range": 8,
+      "ai": "bystander"
+    },
+    {
       "name": "Giant Bat",
       "renderable": {
         "glyph": "b",
@@ -1359,6 +1377,24 @@
       "renderable": {
         "glyph": "n",
         "fg": "#8B4513",
+        "bg": "#000000",
+        "order": 0
+      }
+    },
+    {
+      "name": "Market Stall",
+      "renderable": {
+        "glyph": "m",
+        "fg": "#DAA520",
+        "bg": "#000000",
+        "order": 0
+      }
+    },
+    {
+      "name": "Lamp Post",
+      "renderable": {
+        "glyph": "!",
+        "fg": "#FFD700",
         "bg": "#000000",
         "order": 0
       }
