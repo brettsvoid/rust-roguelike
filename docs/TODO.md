@@ -464,7 +464,7 @@ and adds the `model` names to `raws/spawns.json`.
   the same seed show the same layout visibly grown.
 
 ### E07 Returning to town
-- Status: in progress
+- Status: done
 - Needs: E02, C02
 - Renumber first: the town becomes depth 0 and the dungeon depths 1 to 12
   (today the town is depth 1), in the code, the harness `--depth` flag, the
