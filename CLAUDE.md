@@ -42,7 +42,9 @@ for that overhaul. Key points:
 - **Mechanics**: Hunger/survival, items/equipment
 
 The Architecture section below describes the code as it is now. The current
-build is still the ASCII single-player game with keyboard movement.
+build is mid-conversion: map tiles are grey-box 3D on an isometric camera,
+while entities are still ASCII `Text2d` glyphs, single player, with keyboard
+movement.
 
 ## Architecture
 
@@ -56,7 +58,8 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
 - **ResourcesPlugin** (`resources.rs`) - Loads shared resources like fonts
 - **PlayerPlugin** (`player.rs`) - Player spawning and input handling (HJKL/arrow keys/numpad)
 - **ViewshedPlugin** (`viewshed.rs`) - Field of view calculation using Bresenham line algorithm
-- **MapPlugin** (`map.rs`) - Map data, fog of war, position-to-screen translation
+- **MapPlugin** (`map.rs`) - Map data, fog of war, position-to-screen translation, `grid_to_world`
+- **CameraPlugin** (`camera.rs`) - The logical `Camera` follow target, the isometric 3D camera and the 2D overlay camera
 - **MapGenVizPlugin** (`mapgen_viz.rs`) - The map generation visualizer (main menu tool)
 - **MonstersPlugin** (`monsters.rs`) - Monster spawning and AI
 - **GuiPlugin** (`gui.rs`) - Main menu and builder-select menu (other UI lives in `ui/`)
@@ -64,7 +67,9 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
 Non-plugin modules worth knowing:
 
 - `map_builders/` - All procedural generation, organized as builder chains (see its module doc)
-- `map_render.rs` - The one place map tiles get drawn (`spawn_map_tiles`, `tile_glyph`)
+- `map_render.rs` - The one place map tiles get drawn. `spawn_map_tiles` spawns 3D tiles in game
+  (looks in `tile_style`, shared meshes and materials in the `TileAssets` resource) and `Text2d`
+  glyphs for the visualiser (`TileReveal::Preview`, looks in `tile_glyph`)
 - `levels.rs` - New-game setup and descending to the next level
 - `saveload.rs` - Save/load plus the save-on-quit (Q) system
 
@@ -99,10 +104,17 @@ of the same logic. The build should stay at zero warnings.
 
 ### Coordinate System
 
-- `Position` component uses grid coordinates (not pixels)
-- `translate_positions` system converts grid positions to screen coordinates
+- `Position` component uses grid coordinates (not pixels) and stays the gameplay truth
 - Map origin (0,0) is top-left; Y increases downward
-- Text2d characters render each tile ("." for floor, "#" for wall)
+- 3D: `map::grid_to_world` is the only grid-to-world mapping. Grid `(x, y)` is the tile centre at
+  world `(x, 0, y)`, one tile is one world unit, the floor is `y = 0`, walls are 2 units tall
+- The 3D camera is orthographic, yaw 45 degrees, pitch 35 degrees, and follows the logical
+  `Camera` resource (which follows the player). Move that resource to move the view
+- Camera layering: the `Camera3d` (order 0) draws the world and clears the screen; the `Camera2d`
+  (order 1, no clear, `IsDefaultUiCamera`) draws UI and any `Text2d` on top. Queries for the
+  render camera must filter `With<Camera2d>` or `With<Camera3d>`, since `single()` fails with two
+- 2D: `translate_positions` converts grid positions to screen pixels for `Text2d` entities
+  (everything except 3D tiles, which are placed once at spawn)
 
 ### Key Resources
 
