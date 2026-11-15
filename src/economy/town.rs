@@ -436,7 +436,7 @@ mod tests {
                  mut map: ResMut<Map>,
                  mut rng: ResMut<GameRng>,
                  font: Res<UiFont>| {
-                    crate::levels::spawn_new_game(&mut commands, &mut map, &mut rng, &font);
+                    crate::levels::spawn_new_game(&mut commands, &mut map, &mut rng, &font, 1);
                 },
             )
             .unwrap();
