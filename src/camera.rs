@@ -1,18 +1,26 @@
 use bevy::camera::{Camera as RenderCamera, ScalingMode};
+use bevy::input::keyboard::KeyboardInput;
+use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
+use bevy::input::ButtonState;
 use bevy::prelude::*;
 use bevy::render::view::NoIndirectDrawing;
 
-use crate::map::{grid_to_world, Position};
+use crate::debug::DebugMode;
+use crate::map::{grid_to_world, Map, Position};
 use crate::player::Player;
+use crate::RunState;
 
 // Screen dimensions in tiles (viewport)
 pub const SCREEN_WIDTH: i32 = 80;
 pub const SCREEN_HEIGHT: i32 = 43;
 
+/// The grid cell the view centres on. It follows the player until panned,
+/// and goes back to following when the player moves or the view is recentred.
 #[derive(Resource, Default)]
 pub struct Camera {
     pub x: i32,
     pub y: i32,
+    pub panned: bool,
 }
 
 impl Camera {
@@ -48,6 +56,9 @@ const ISO_PITCH: f32 = 35.0_f32.to_radians();
 const ISO_DISTANCE: f32 = 50.0;
 /// How many world units (tiles) fit top to bottom on screen.
 const ISO_VIEW_HEIGHT: f32 = 24.0;
+/// Zoom limits, in tiles top to bottom.
+const MIN_VIEW_HEIGHT: f32 = 8.0;
+const MAX_VIEW_HEIGHT: f32 = 48.0;
 
 pub struct CameraPlugin;
 
@@ -55,7 +66,16 @@ impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Camera>()
             .add_systems(Startup, spawn_cameras)
-            .add_systems(Update, (update_camera, follow_iso_camera).chain());
+            .add_systems(
+                Update,
+                (
+                    (pan_camera, zoom_camera)
+                        .run_if(in_state(RunState::AwaitingInput).or_else(in_state(RunState::ShowTargeting))),
+                    update_camera,
+                    follow_iso_camera,
+                )
+                    .chain(),
+            );
     }
 }
 
@@ -109,10 +129,73 @@ pub(crate) fn iso_camera_transform(target: Vec3) -> Transform {
     Transform::from_translation(target + offset).looking_at(target, Vec3::Y)
 }
 
-fn update_camera(player_query: Query<&Position, With<Player>>, mut camera: ResMut<Camera>) {
+fn update_camera(player_query: Query<Ref<Position>, With<Player>>, mut camera: ResMut<Camera>) {
     if let Ok(player_pos) = player_query.single() {
-        camera.x = player_pos.x;
-        camera.y = player_pos.y;
+        if player_pos.is_changed() {
+            camera.panned = false;
+        }
+        if !camera.panned {
+            camera.x = player_pos.x;
+            camera.y = player_pos.y;
+        }
+    }
+}
+
+/// The grid step that moves the view one tile along the screen for a WASD
+/// key. The rig looks towards -x and -z, so screen up is grid (-1, -1).
+fn pan_step(key: KeyCode) -> Option<IVec2> {
+    match key {
+        KeyCode::KeyW => Some(IVec2::new(-1, -1)),
+        KeyCode::KeyS => Some(IVec2::new(1, 1)),
+        KeyCode::KeyA => Some(IVec2::new(-1, 1)),
+        KeyCode::KeyD => Some(IVec2::new(1, -1)),
+        _ => None,
+    }
+}
+
+/// WASD pans one step per press and per key repeat; C recentres on the player.
+fn pan_camera(
+    mut evr_kbd: MessageReader<KeyboardInput>,
+    debug_mode: Res<DebugMode>,
+    map: Res<Map>,
+    mut camera: ResMut<Camera>,
+) {
+    for ev in evr_kbd.read() {
+        if ev.state == ButtonState::Released || debug_mode.show_console {
+            continue;
+        }
+        if ev.key_code == KeyCode::KeyC {
+            camera.panned = false;
+        } else if let Some(step) = pan_step(ev.key_code) {
+            camera.x = (camera.x + step.x).clamp(0, map.width - 1);
+            camera.y = (camera.y + step.y).clamp(0, map.height - 1);
+            camera.panned = true;
+        }
+    }
+}
+
+/// The view height after scrolling `lines` notches: each notch up zooms in
+/// by a tenth, within the zoom limits.
+fn zoomed_view_height(height: f32, lines: f32) -> f32 {
+    (height * 0.9_f32.powf(lines)).clamp(MIN_VIEW_HEIGHT, MAX_VIEW_HEIGHT)
+}
+
+fn zoom_camera(mut evr_wheel: MessageReader<MouseWheel>, mut projection: Single<&mut Projection, With<Camera3d>>) {
+    // shortcut: 40 pixels count as one notch for trackpads, tune when someone tries one.
+    let lines: f32 = evr_wheel
+        .read()
+        .map(|ev| match ev.unit {
+            MouseScrollUnit::Line => ev.y,
+            MouseScrollUnit::Pixel => ev.y / 40.0,
+        })
+        .sum();
+    if lines == 0.0 {
+        return;
+    }
+    if let Projection::Orthographic(ortho) = &mut **projection {
+        if let ScalingMode::FixedVertical { viewport_height } = &mut ortho.scaling_mode {
+            *viewport_height = zoomed_view_height(*viewport_height, lines);
+        }
     }
 }
 
@@ -120,4 +203,31 @@ fn update_camera(player_query: Query<&Position, With<Player>>, mut camera: ResMu
 /// has to move that.
 pub(crate) fn follow_iso_camera(camera: Res<Camera>, mut rig: Single<&mut Transform, With<Camera3d>>) {
     **rig = iso_camera_transform(grid_to_world(camera.x, camera.y));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wasd_pans_along_the_screen_axes() {
+        let rig = iso_camera_transform(Vec3::ZERO);
+        let on_floor = |v: Vec3| Vec2::new(v.x, v.z).normalize();
+        let grid = |key| pan_step(key).unwrap().as_vec2().normalize();
+        let close = |a: Vec2, b: Vec2| (a - b).length() < 1e-5;
+        assert!(close(grid(KeyCode::KeyW), on_floor(*rig.up())));
+        assert!(close(grid(KeyCode::KeyS), -on_floor(*rig.up())));
+        assert!(close(grid(KeyCode::KeyD), on_floor(*rig.right())));
+        assert!(close(grid(KeyCode::KeyA), -on_floor(*rig.right())));
+        assert_eq!(pan_step(KeyCode::KeyQ), None);
+    }
+
+    #[test]
+    fn scrolling_zooms_by_a_tenth_a_notch_within_limits() {
+        assert!((zoomed_view_height(24.0, 1.0) - 21.6).abs() < 1e-4);
+        assert!((zoomed_view_height(24.0, -1.0) - 24.0 / 0.9).abs() < 1e-4);
+        assert_eq!(zoomed_view_height(24.0, 0.0), 24.0);
+        assert_eq!(zoomed_view_height(9.0, 5.0), MIN_VIEW_HEIGHT);
+        assert_eq!(zoomed_view_height(45.0, -5.0), MAX_VIEW_HEIGHT);
+    }
 }

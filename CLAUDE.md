@@ -24,9 +24,11 @@ cargo run -- --screenshot out.png --seed 42 --depth 3 --reveal-map --frames 60
 # Fake the mouse at a window point (logical pixels) and enter targeting with an item:
 cargo run -- --screenshot out.png --depth 3 --reveal-map --cursor 720,430 \
   --console "spawn fireball" --target "Fireball Scroll"
-# --keys presses one key per turn through the real input (h j k l y u n m g .),
-# e.g. walk ten tiles west so explored-but-unseen tiles show:
-cargo run -- --screenshot fog.png --seed 42 --depth 3 --keys hhhhhhhhhh --frames 120
+# --click X,Y left-clicks grid cell X,Y (repeatable; the next input waits for the
+# walk to end). --keys presses keys through the real input: g . (pick up, descend),
+# w a s d (pan), c (recentre), + and - (scroll to zoom). They run in the order given,
+# e.g. walk five tiles east so explored-but-unseen tiles show:
+cargo run -- --screenshot fog.png --seed 42 --depth 3 --click 45,20 --frames 120
 ```
 
 Verify every visible change with a harness screenshot that you look at.
@@ -44,12 +46,17 @@ for that overhaul. Key points:
 - **Presentation**: Isometric true 3D, dark torch-lit dungeons, stylised low-poly models
 - **Party and combat**: A party of 4 heroes (default), XCOM-style combat (action points, hit chances, cover, overwatch). Free click-to-move exploration drops into turn mode on contact
 - **Living town**: Loot sold in town is traded with neighbouring towns, sectors level up and stock better gear. The town persists across permadeath
-- **Controls**: Point and click, WASD camera pan
+- **Controls**: Left click walks to an explored tile (one tile per turn, stopping when a hostile
+  comes into view), attacks an adjacent hostile, walks to the down stairs and takes them, and on
+  the player's own tile picks up an item. WASD pans the camera, the scroll wheel zooms, C
+  recentres. G picks up, I inventory, X drops (D pans), R removes equipment, `.` descends, Space
+  waits, T opens the ledger in town, Q saves and quits
 - **Mechanics**: Hunger/survival, items/equipment
 
 The Architecture section below describes the code as it is now. The current
 build is mid-conversion: the map and entities are grey-box 3D primitives on
-an isometric camera, single player, with keyboard movement.
+an isometric camera, single player, with click-to-move and no party or
+tactical combat yet.
 
 ## Architecture
 
@@ -61,10 +68,12 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
 
 - **GameFlowPlugin** (`game_flow.rs`) - The `RunState` turn state machine and turn scheduling
 - **ResourcesPlugin** (`resources.rs`) - Loads shared resources like fonts
-- **PlayerPlugin** (`player.rs`) - Player spawning and input handling (HJKL/arrow keys/numpad)
+- **PlayerPlugin** (`player.rs`) - Player input: keys, left click to walk/attack/pick up/descend, the
+  `WalkPath` resource (the cells of a click walk still to take, and whether to take the stairs on
+  arrival) and the hover path preview
 - **ViewshedPlugin** (`viewshed.rs`) - Field of view calculation using Bresenham line algorithm
 - **MapPlugin** (`map.rs`) - Map data, fog of war, position-to-screen translation, `grid_to_world`
-- **CameraPlugin** (`camera.rs`) - The logical `Camera` follow target, the isometric 3D camera and the 2D overlay camera
+- **CameraPlugin** (`camera.rs`) - The logical `Camera` follow target, WASD pan, scroll zoom, the isometric 3D camera and the 2D overlay camera
 - **PickingPlugin** (`picking.rs`) - Cursor to grid cell via the `Camera3d` ray on the floor plane, the `HoveredTile` resource, the hover highlight and `TileMarks` (flat unlit quads for tile overlays)
 - **OcclusionPlugin** (`occlusion.rs`) - Cuts walls down to stubs and hides town roofs so the player and the visible floor stay in view (see Coordinate System)
 - **MapGenVizPlugin** (`mapgen_viz.rs`) - The map generation visualizer (main menu tool)
@@ -95,7 +104,8 @@ The game uses a turn-based `RunState` enum (defined in `game_flow.rs`, re-export
 - `MonsterTurn` - Processing monster AI
 - `ShowInventory` / `ShowDropItem` / `ShowTargeting` - UI overlay states
 
-Player movement triggers `PlayerTurn` → `MonsterTurn` → `AwaitingInput` cycle.
+Each player step (a click walk takes one per turn) triggers the `PlayerTurn` → `MonsterTurn` →
+`AwaitingInput` cycle.
 
 ### Dead Code Convention
 
@@ -121,7 +131,8 @@ of the same logic. The build should stay at zero warnings.
 - 3D: `map::grid_to_world` is the only grid-to-world mapping. Grid `(x, y)` is the tile centre at
   world `(x, 0, y)`, one tile is one world unit, the floor is `y = 0`, walls are 2 units tall
 - The 3D camera is orthographic, yaw 45 degrees, pitch 35 degrees, and follows the logical
-  `Camera` resource (which follows the player). Move that resource to move the view
+  `Camera` resource. That resource follows the player until WASD sets `panned`; the player moving
+  or C clears it. Move that resource to move the view. Zoom is the projection's `viewport_height`
 - Camera layering: the `Camera3d` (order 0) draws the world and clears the screen; the `Camera2d`
   (order 1, no clear, `IsDefaultUiCamera`) draws UI and any `Text2d` on top. Queries for the
   render camera must filter `With<Camera2d>` or `With<Camera3d>`, since `single()` fails with two
@@ -136,8 +147,9 @@ of the same logic. The build should stay at zero warnings.
   mesh is shared). Town buildings (closed `WoodFloor` rooms) get a flat roof slab at wall height.
   A roof hides while the player is inside the building or behind it; while it shows, its walls
   stay full height
-- Tile overlays (hover, targeting range, area, target) are `TileMarks::mark` quads just above the
-  floor, never 2D sprites
+- Click-to-move paths (`pathfinding::a_star_explored`) only cross explored tiles
+- Tile overlays (hover, path preview, targeting range, area, target) are `TileMarks::mark` quads
+  just above the floor, never 2D sprites
 - `translate_positions` moves a 3D entity (`EntityShape`) to `grid_to_world` plus its shape's lift
   whenever its `Position` changes. Tiles are placed once at spawn. Particles and bloodstains have
   no `Position` (they are not on the tile for gameplay) and get their transform at spawn

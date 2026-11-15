@@ -1,18 +1,24 @@
 //! Screenshot harness: `cargo run -- --screenshot out.png [--seed N] [--depth N]
 //! [--reveal-map] [--frames N] [--console CMD]... [--ledger] [--cursor X,Y]
-//! [--target ITEM] [--keys KEYS]` starts a seeded new game, waits, saves a PNG
-//! of the window and exits. `--console` runs a debug console command once play
-//! begins (repeatable); `town ...` commands run before the level is built
-//! instead, e.g. "town level smithing 4"; `--ledger` then opens the town ledger.
-//! `--cursor` fakes the mouse at window point X,Y (logical pixels); `--target`
-//! enters targeting with the named item (e.g. `--console "spawn fireball"
-//! --target "Fireball Scroll"`). `--keys hjkl` presses one key per turn through
-//! the real input system (h j k l y u n m g and `.`); a key that takes no turn
-//! stalls the rest. Every visual change is verified with it.
+//! [--target ITEM] [--keys KEYS]... [--click X,Y]...` starts a seeded new game,
+//! waits, saves a PNG of the window and exits. `--console` runs a debug console
+//! command once play begins (repeatable); `town ...` commands run before the
+//! level is built instead, e.g. "town level smithing 4"; `--ledger` then opens
+//! the town ledger. `--cursor` fakes the mouse at window point X,Y (logical
+//! pixels); `--target` enters targeting with the named item (e.g. `--console
+//! "spawn fireball" --target "Fireball Scroll"`). `--keys` and `--click` queue
+//! input in the order given, fed through the real input systems one at a time
+//! while the game waits for input: `--keys` presses keys (`g`, `.`, `w` `a` `s`
+//! `d` to pan, `c` to recentre, `+` and `-` scroll the wheel to zoom in and
+//! out); `--click X,Y` left-clicks grid cell X,Y as if the mouse hovered it,
+//! and the next input waits until the walk it starts ends. Every visual change
+//! is verified with it.
 
 use std::path::PathBuf;
 
 use bevy::input::keyboard::{Key, KeyboardInput, NativeKey};
+use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
+use bevy::input::touch::TouchPhase;
 use bevy::input::ButtonState;
 use bevy::prelude::*;
 use bevy::render::view::screenshot::{save_to_disk, Screenshot, ScreenshotCaptured};
@@ -25,8 +31,8 @@ use crate::economy::town::TownState;
 use crate::levels;
 use crate::map::{Map, Position};
 use crate::monsters::Monster;
-use crate::picking::FakeCursor;
-use crate::player::Player;
+use crate::picking::{self, FakeCursor, HoveredTile};
+use crate::player::{self, Player, WalkPath};
 use crate::resources::UiFont;
 use crate::rng::GameRng;
 use crate::{RunState, TargetingInfo};
@@ -49,10 +55,13 @@ impl Plugin for ScreenshotPlugin {
         app.insert_resource(GameRng::seeded(args.seed))
             .insert_resource(args)
             .add_systems(Startup, ignore_mouse)
-            .add_systems(OnEnter(RunState::AwaitingInput), press_next_key)
             .add_systems(
                 Update,
                 (
+                    feed_next_input
+                        .run_if(in_state(RunState::AwaitingInput))
+                        .after(picking::update_hovered_tile)
+                        .before(player::handle_player_input),
                     start_game.run_if(in_state(RunState::MainMenu)),
                     (prepare_capture, enter_targeting).run_if(in_state(RunState::AwaitingInput)),
                     capture_after_frames.run_if(not(in_state(RunState::MainMenu))),
@@ -72,23 +81,32 @@ pub struct ScreenshotArgs {
     pub ledger: bool,
     pub cursor: Option<Vec2>,
     pub target: Option<String>,
-    pub keys: Vec<KeyCode>,
+    pub inputs: Vec<HarnessInput>,
 }
 
-fn key_code(c: char) -> Option<KeyCode> {
-    Some(match c {
-        'h' => KeyCode::KeyH,
-        'j' => KeyCode::KeyJ,
-        'k' => KeyCode::KeyK,
-        'l' => KeyCode::KeyL,
-        'y' => KeyCode::KeyY,
-        'u' => KeyCode::KeyU,
-        'n' => KeyCode::KeyN,
-        'm' => KeyCode::KeyM,
+/// One queued `--keys` key or `--click`.
+#[derive(Debug, PartialEq)]
+pub enum HarnessInput {
+    Key(KeyCode),
+    /// Wheel notches, up (zoom in) positive.
+    Scroll(f32),
+    Click(i32, i32),
+}
+
+fn key_input(c: char) -> Option<HarnessInput> {
+    let key = match c {
+        '+' => return Some(HarnessInput::Scroll(1.0)),
+        '-' => return Some(HarnessInput::Scroll(-1.0)),
         'g' => KeyCode::KeyG,
         '.' => KeyCode::Period,
+        'w' => KeyCode::KeyW,
+        'a' => KeyCode::KeyA,
+        's' => KeyCode::KeyS,
+        'd' => KeyCode::KeyD,
+        'c' => KeyCode::KeyC,
         _ => return None,
-    })
+    };
+    Some(HarnessInput::Key(key))
 }
 
 /// `Ok(None)` when `--screenshot` is absent, so the game starts normally.
@@ -102,7 +120,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
     let mut ledger = false;
     let mut cursor = None;
     let mut target = None;
-    let mut keys = Vec::new();
+    let mut inputs = Vec::new();
 
     let mut args = args.into_iter();
     while let Some(flag) = args.next() {
@@ -128,10 +146,13 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
             }
             "--target" => target = Some(value),
             "--keys" => {
-                keys = value
-                    .chars()
-                    .map(|c| key_code(c).ok_or(format!("--keys: no key for {c:?}")))
-                    .collect::<Result<_, _>>()?
+                for c in value.chars() {
+                    inputs.push(key_input(c).ok_or(format!("--keys: no key for {c:?}"))?);
+                }
+            }
+            "--click" => {
+                let (x, y) = value.split_once(',').ok_or_else(bad)?;
+                inputs.push(HarnessInput::Click(x.parse().map_err(|_| bad())?, y.parse().map_err(|_| bad())?));
             }
             _ => return Err(format!("unknown argument: {flag}")),
         }
@@ -153,7 +174,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
         ledger,
         cursor,
         target,
-        keys,
+        inputs,
     }))
 }
 
@@ -240,27 +261,52 @@ fn enter_targeting(
     }
 }
 
-/// Each time the game waits for input, press the next `--keys` key. Runs on
-/// entering the state, so the key lands in this frame's input handling and
-/// the next waits for the turn to come round.
-fn press_next_key(
+/// While the game waits for input and no walk is under way, feeds the next
+/// queued input. Runs after picking and before the player's input handling,
+/// so a click lands on its cell this frame.
+fn feed_next_input(
     args: Res<ScreenshotArgs>,
     mut next: Local<usize>,
+    walk: Res<WalkPath>,
     window: Single<Entity, With<PrimaryWindow>>,
     mut keyboard: MessageWriter<KeyboardInput>,
+    mut wheel: MessageWriter<MouseWheel>,
+    mut mouse: ResMut<ButtonInput<MouseButton>>,
+    mut hovered: ResMut<HoveredTile>,
 ) {
-    let Some(&key_code) = args.keys.get(*next) else {
+    if walk.is_active() {
+        return;
+    }
+    let Some(input) = args.inputs.get(*next) else {
         return;
     };
     *next += 1;
-    keyboard.write(KeyboardInput {
-        key_code,
-        logical_key: Key::Unidentified(NativeKey::Unidentified),
-        state: ButtonState::Pressed,
-        text: None,
-        repeat: false,
-        window: *window,
-    });
+    match *input {
+        HarnessInput::Key(key_code) => {
+            keyboard.write(KeyboardInput {
+                key_code,
+                logical_key: Key::Unidentified(NativeKey::Unidentified),
+                state: ButtonState::Pressed,
+                text: None,
+                repeat: false,
+                window: *window,
+            });
+        }
+        HarnessInput::Scroll(y) => {
+            wheel.write(MouseWheel {
+                unit: MouseScrollUnit::Line,
+                x: 0.0,
+                y,
+                window: *window,
+                phase: TouchPhase::Moved,
+            });
+        }
+        HarnessInput::Click(x, y) => {
+            hovered.tile = Some((x, y));
+            mouse.release(MouseButton::Left);
+            mouse.press(MouseButton::Left);
+        }
+    }
 }
 
 /// Counts frames after the game starts, then captures the window once.
@@ -294,7 +340,7 @@ mod tests {
     #[test]
     fn all_flags() {
         assert_eq!(
-            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger --keys hl."),
+            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger --keys g. --click 3,-4 --keys wasdc+-"),
             Ok(Some(ScreenshotArgs {
                 path: PathBuf::from("a.png"),
                 seed: 7,
@@ -305,7 +351,18 @@ mod tests {
                 ledger: true,
                 cursor: Some(Vec2::new(640.0, 400.5)),
                 target: Some("Dagger".into()),
-                keys: vec![KeyCode::KeyH, KeyCode::KeyL, KeyCode::Period],
+                inputs: vec![
+                    HarnessInput::Key(KeyCode::KeyG),
+                    HarnessInput::Key(KeyCode::Period),
+                    HarnessInput::Click(3, -4),
+                    HarnessInput::Key(KeyCode::KeyW),
+                    HarnessInput::Key(KeyCode::KeyA),
+                    HarnessInput::Key(KeyCode::KeyS),
+                    HarnessInput::Key(KeyCode::KeyD),
+                    HarnessInput::Key(KeyCode::KeyC),
+                    HarnessInput::Scroll(1.0),
+                    HarnessInput::Scroll(-1.0),
+                ],
             }))
         );
     }
@@ -324,7 +381,7 @@ mod tests {
                 ledger: false,
                 cursor: None,
                 target: None,
-                keys: vec![],
+                inputs: vec![],
             }))
         );
     }
@@ -338,6 +395,8 @@ mod tests {
         assert!(parse("--bogus 1").is_err());
         assert!(parse("--screenshot a.png --cursor 640").is_err());
         assert!(parse("--screenshot a.png --cursor 6x,4").is_err());
-        assert!(parse("--screenshot a.png --keys hx").is_err());
+        assert!(parse("--screenshot a.png --keys gh").is_err());
+        assert!(parse("--screenshot a.png --click 3").is_err());
+        assert!(parse("--screenshot a.png --click 3,4.5").is_err());
     }
 }

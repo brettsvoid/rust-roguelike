@@ -115,6 +115,7 @@ pub struct TileMarks {
     pub target: Handle<StandardMaterial>,
     pub area: Handle<StandardMaterial>,
     pub range: Handle<StandardMaterial>,
+    pub path: Handle<StandardMaterial>,
 }
 
 impl TileMarks {
@@ -167,6 +168,7 @@ fn setup_tile_marks(
         target: translucent(&mut materials, Color::srgba(0.0, 1.0, 1.0, 0.6)),
         area: translucent(&mut materials, Color::srgba(1.0, 0.5, 0.0, 0.4)),
         range: translucent(&mut materials, Color::srgba(0.7, 0.7, 0.7, 0.7)),
+        path: translucent(&mut materials, Color::srgba(1.0, 0.85, 0.3, 0.35)),
     };
     commands.spawn((
         HoverHighlight,
