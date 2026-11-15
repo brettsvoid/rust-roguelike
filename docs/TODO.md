@@ -259,7 +259,7 @@ and adds the `model` names to `raws/spawns.json`.
 - Done when: each item on the floor shows its model.
 
 ### A07 Effects
-- Status: todo
+- Status: in progress
 - Needs: F07
 - 3D replacements for the text particles: hit sparks, fireball, magic missile,
   healing, confusion, blood decals, flame for torches.
