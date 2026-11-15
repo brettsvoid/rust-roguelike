@@ -1,11 +1,11 @@
 //! The trade simulation: pure functions over `TownState`, no Bevy types.
 //!
-//! Each simulated day one caravan leaves town. It goes to whichever
-//! neighbouring town will take the most goods from the current stock, carries
-//! up to that town's demand of each sector, and comes back with gold for the
-//! treasury. Every gold of goods traded is a point of progress for its sector,
-//! and a sector levels up when its progress reaches the next threshold. There
-//! is no randomness, so a town replays identically.
+//! Each simulated day one caravan leaves town for every neighbouring town. In
+//! table order, each carries up to that town's demand of each sector from
+//! what stock is left, and comes back with gold for the treasury. Every gold
+//! of goods traded is a point of progress for its sector, and a sector levels
+//! up when its progress reaches the next threshold. There is no randomness,
+//! so a town replays identically.
 
 use super::town::{NewsEntry, Sector, TownState};
 
@@ -135,7 +135,7 @@ pub fn simulate(town: &mut TownState, days: u32) -> Vec<NewsEntry> {
     let mut news = Vec::new();
     for _ in 0..days {
         town.day += 1;
-        send_caravan(town, &mut news);
+        send_caravans(town, &mut news);
     }
     town.news.extend(news.iter().cloned());
     let excess = town.news.len().saturating_sub(NEWS_KEEP);
@@ -143,45 +143,54 @@ pub fn simulate(town: &mut TownState, days: u32) -> Vec<NewsEntry> {
     news
 }
 
-fn send_caravan(town: &mut TownState, news: &mut Vec<NewsEntry>) {
-    let cargo_for = |n: &Neighbour| -> Vec<(Sector, i32)> {
-        n.demand
-            .iter()
-            .map(|&(s, want)| (s, want.min(town.sectors[&s].stock)))
-            .filter(|&(_, q)| q > 0)
-            .collect()
-    };
-    let total = |cargo: &[(Sector, i32)]| cargo.iter().map(|(_, q)| q).sum::<i32>();
-    // min_by_key keeps the first of equals, so ties go to the earlier town.
-    let Some((neighbour, cargo)) = NEIGHBOURS
-        .iter()
-        .map(|n| (n, cargo_for(n)))
-        .min_by_key(|(_, cargo)| -total(cargo))
-        .filter(|(_, cargo)| !cargo.is_empty())
-    else {
+/// One caravan goes to every neighbour, in table order, and each takes up to
+/// its demand from what is left. Every stocked sector with a buyer trades
+/// every day, so none can starve. The day's trade is one line of news.
+fn send_caravans(town: &mut TownState, news: &mut Vec<NewsEntry>) {
+    let mut traded: Vec<(Sector, i32)> = Vec::new();
+    let mut visited = Vec::new();
+    for n in &NEIGHBOURS {
+        let mut went = false;
+        for &(sector, want) in n.demand {
+            let state = town.sectors.get_mut(&sector).unwrap();
+            let q = want.min(state.stock);
+            if q <= 0 {
+                continue;
+            }
+            state.stock -= q;
+            state.progress += q;
+            went = true;
+            match traded.iter_mut().find(|(s, _)| *s == sector) {
+                Some((_, total)) => *total += q,
+                None => traded.push((sector, q)),
+            }
+        }
+        if went {
+            visited.push(n.name.to_string());
+        }
+    }
+    if traded.is_empty() {
         return;
-    };
+    }
 
-    let earned = total(&cargo) * TRADE_RETURN_PCT / 100;
+    let earned = traded.iter().map(|(_, q)| q).sum::<i32>() * TRADE_RETURN_PCT / 100;
     town.treasury += earned;
-    let carried: Vec<_> = cargo
+    let carried: Vec<_> = traded
         .iter()
-        .map(|&(s, q)| format!("{q} gold of {}", s.goods()))
+        .map(|&(s, q)| format!("{} {q}", s.goods()))
         .collect();
     let day = town.day;
     news.push(NewsEntry {
         day,
         text: format!(
-            "A caravan took {} to {} and came back with {earned} gold.",
-            join_and(&carried),
-            neighbour.name
+            "Caravans to {} sold {} for {earned} gold.",
+            join_and(&visited),
+            carried.join(", ")
         ),
     });
 
-    for (sector, q) in cargo {
+    for (sector, _) in traded {
         let state = town.sectors.get_mut(&sector).unwrap();
-        state.stock -= q;
-        state.progress += q;
         while let Some(&needed) = LEVEL_THRESHOLDS.get(state.level as usize - 1) {
             if state.progress < needed {
                 break;
@@ -190,12 +199,7 @@ fn send_caravan(town: &mut TownState, news: &mut Vec<NewsEntry>) {
             state.level += 1;
             news.push(NewsEntry {
                 day,
-                text: format!(
-                    "{} grew to level {} thanks to the trade with {}.",
-                    sector.name(),
-                    state.level,
-                    neighbour.name
-                ),
+                text: format!("{} grew to level {}.", sector.name(), state.level),
             });
         }
     }
@@ -260,8 +264,8 @@ mod tests {
     fn days_of_trade_move_stock_into_treasury_and_progress() {
         // (stock, days, stock after, progress after, treasury after)
         let cases = [
-            (100, 1, 60, 40, 24),
-            (100, 2, 20, 80, 48),
+            (100, 1, 45, 55, 33),
+            (100, 2, 0, 100, 60),
             (100, 3, 0, 100, 60),
             (100, 9, 0, 100, 60),
         ];
@@ -278,7 +282,7 @@ mod tests {
     }
 
     #[test]
-    fn the_caravan_goes_where_demand_is_and_the_news_says_so() {
+    fn every_neighbour_trades_daily_and_the_news_says_so() {
         let mut town = town_with(&[(Smithing, 100)]);
         let news = simulate(&mut town, 3);
         assert_eq!(
@@ -286,15 +290,11 @@ mod tests {
             [
                 (
                     1,
-                    "A caravan took 40 gold of arms and armour to Eastmarch and came back with 24 gold."
+                    "Caravans to Eastmarch and Thornwick sold arms and armour 55 for 33 gold."
                 ),
                 (
                     2,
-                    "A caravan took 40 gold of arms and armour to Eastmarch and came back with 24 gold."
-                ),
-                (
-                    3,
-                    "A caravan took 20 gold of arms and armour to Eastmarch and came back with 12 gold."
+                    "Caravans to Eastmarch and Thornwick sold arms and armour 45 for 27 gold."
                 ),
             ]
         );
@@ -305,14 +305,14 @@ mod tests {
             texts(&simulate(&mut town, 1)),
             [(
                 1,
-                "A caravan took 30 gold of scrolls and charms and 15 gold of arms and armour to Thornwick and came back with 27 gold."
+                "Caravans to Eastmarch, Greyvale Abbey and Thornwick sold arms and armour 20, food 5, relics 5, scrolls and charms 40 for 42 gold."
             )]
         );
         assert_eq!(
             texts(&simulate(&mut town, 1)),
             [(
                 2,
-                "A caravan took 20 gold of scrolls and charms and 5 gold of arms and armour to Thornwick and came back with 15 gold."
+                "Caravans to Greyvale Abbey sold scrolls and charms 10 for 6 gold."
             )]
         );
     }
@@ -327,9 +327,7 @@ mod tests {
             let news = simulate(&mut town, 1);
             let s = &town.sectors[&Smithing];
             assert_eq!((s.level, s.progress), (level, after), "from {before}");
-            let levelled = news
-                .iter()
-                .any(|n| n.text == "Smithing grew to level 2 thanks to the trade with Eastmarch.");
+            let levelled = news.iter().any(|n| n.text == "Smithing grew to level 2.");
             assert_eq!(levelled, level == 2, "from {before}");
         }
     }
@@ -403,12 +401,57 @@ mod tests {
 
     #[test]
     fn the_news_log_keeps_only_the_newest_entries() {
-        let mut town = town_with(&[(Smithing, 40 * (NEWS_KEEP as i32 + 5))]);
+        let mut town = town_with(&[(Smithing, 55 * (NEWS_KEEP as i32 + 5))]);
         // Past the last level, so each day writes exactly one line.
         town.sectors.get_mut(&Smithing).unwrap().level = 5;
         simulate(&mut town, NEWS_KEEP as u32 + 5);
         assert_eq!(town.news.len(), NEWS_KEEP);
         assert_eq!(town.news[0].day, 6);
+    }
+
+    /// E09: faith sat untraded for nine days behind a bigger smithing stock.
+    #[test]
+    fn a_big_sector_does_not_starve_a_small_one() {
+        let mut town = town_with(&[(Smithing, 600), (Faith, 300)]);
+        simulate(&mut town, 9);
+        let got = |s: Sector| {
+            let st = &town.sectors[&s];
+            (st.level, st.progress, st.stock)
+        };
+        // Smithing 55 a day (Eastmarch 40, Thornwick 15), faith 30 a day.
+        assert_eq!(got(Smithing), (2, 245, 105));
+        assert_eq!(got(Faith), (2, 20, 30));
+    }
+
+    #[test]
+    fn no_stocked_sector_with_a_buyer_starves_over_three_days() {
+        // Every subset of sectors, stocked from small to large amounts.
+        for mask in 1..(1u32 << Sector::ALL.len()) {
+            for scale in [1, 7, 60, 400] {
+                let stock: Vec<_> = Sector::ALL
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| mask & (1 << i) != 0)
+                    .map(|(i, &s)| (s, scale * (i as i32 + 1)))
+                    .collect();
+                let mut town = town_with(&stock);
+                for _ in 0..12 {
+                    let before = town.clone();
+                    simulate(&mut town, 3);
+                    for s in Sector::ALL {
+                        let bought = NEIGHBOURS.iter().any(|n| n.demand.iter().any(|d| d.0 == s));
+                        if before.sectors[&s].stock > 0 && bought {
+                            let (b, a) = (&before.sectors[&s], &town.sectors[&s]);
+                            assert!(
+                                (a.level, a.progress) > (b.level, b.progress),
+                                "{s:?} starved from day {} with {stock:?}",
+                                before.day
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// The loot the tuning assumes one run sells: 250 gold of base value.
@@ -434,47 +477,31 @@ mod tests {
             [
                 (
                     6,
-                    "A caravan took 40 gold of arms and armour and 10 gold of food to Eastmarch and came back with 30 gold."
+                    "Caravans to Eastmarch, Saltmere, Greyvale Abbey and Thornwick sold arms and armour 55, food 10, potions 35, scrolls and charms 40 for 84 gold."
                 ),
                 (
                     7,
-                    "A caravan took 30 gold of scrolls and charms and 15 gold of arms and armour to Thornwick and came back with 27 gold."
+                    "Caravans to Eastmarch, Saltmere and Thornwick sold arms and armour 55, potions 15 for 42 gold."
                 ),
                 (
                     8,
-                    "A caravan took 40 gold of arms and armour to Eastmarch and came back with 24 gold."
-                ),
-                (
-                    9,
-                    "A caravan took 40 gold of arms and armour to Eastmarch and came back with 24 gold."
-                ),
-                (
-                    10,
-                    "A caravan took 25 gold of potions to Saltmere and came back with 15 gold."
+                    "Caravans to Eastmarch sold arms and armour 40 for 24 gold."
                 ),
                 (
                     11,
-                    "A caravan took 40 gold of arms and armour and 10 gold of food to Eastmarch and came back with 30 gold."
+                    "Caravans to Eastmarch, Saltmere, Greyvale Abbey and Thornwick sold arms and armour 55, food 10, potions 35, scrolls and charms 40 for 84 gold."
                 ),
                 (
                     12,
-                    "A caravan took 30 gold of scrolls and charms and 15 gold of arms and armour to Thornwick and came back with 27 gold."
+                    "Caravans to Eastmarch, Saltmere and Thornwick sold arms and armour 55, potions 15 for 42 gold."
+                ),
+                (
+                    12,
+                    "Smithing grew to level 2."
                 ),
                 (
                     13,
-                    "A caravan took 40 gold of arms and armour to Eastmarch and came back with 24 gold."
-                ),
-                (
-                    14,
-                    "A caravan took 40 gold of arms and armour to Eastmarch and came back with 24 gold."
-                ),
-                (
-                    14,
-                    "Smithing grew to level 2 thanks to the trade with Eastmarch."
-                ),
-                (
-                    15,
-                    "A caravan took 20 gold of scrolls and charms and 15 gold of arms and armour to Thornwick and came back with 21 gold."
+                    "Caravans to Eastmarch sold arms and armour 40 for 24 gold."
                 ),
             ]
         );
