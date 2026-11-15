@@ -309,7 +309,7 @@ and adds the `model` names to `raws/spawns.json`.
   walks freely, drops into combat on contact and returns to explore after.
 
 ### C03 Action points and movement range
-- Status: in progress
+- Status: done
 - Needs: C02
 - Each unit has 2 action points per round and a `movement` stat. Actions:
   move (1 AP), dash (2 AP), attack (ends the unit's turn), use item (1 AP),
@@ -322,7 +322,7 @@ and adds the `model` names to `raws/spawns.json`.
   matches where a unit can go.
 
 ### C04 Hit chance, ranged attacks and criticals
-- Status: todo
+- Status: in progress
 - Needs: C03
 - Replace the deterministic melee in `combat.rs`. A pure `hit_chance`
   function from attacker aim, target defence, range, cover and height.
