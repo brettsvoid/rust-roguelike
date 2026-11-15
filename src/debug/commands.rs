@@ -4,7 +4,9 @@ use crate::combat::CombatStats;
 use crate::economy::town::{Sector, TownState};
 use crate::economy::trade;
 use crate::economy::Purse;
+use crate::components::{Item, Name};
 use crate::effects::{EffectKind, Effects};
+use crate::levels::HEART_OF_THE_ABYSS;
 use crate::map::{Map, Position, MAP_HEIGHT, MAP_WIDTH};
 use crate::monsters::Monster;
 use crate::party::PartyMember;
@@ -43,7 +45,7 @@ pub fn execute_command(
 }
 
 fn cmd_help() -> String {
-    "Commands: spawn <item>, effect <spark|fireball|missile|heal|confusion|blood>, teleport <x> <y>, gold <n>, godmode, reveal, nofog, heal, kill_all, town sell <sector> <value>, town days <n>, town level <sector> <n>".to_string()
+    "Commands: spawn <item> (portal, heart, ...), effect <spark|fireball|missile|heal|confusion|blood>, teleport <x> <y>, gold <n>, godmode, reveal, nofog, heal, kill_all, town sell <sector> <value>, town days <n>, town level <sector> <n>".to_string()
 }
 
 fn cmd_godmode(god_mode: &mut GodMode) -> String {
@@ -184,6 +186,12 @@ fn cmd_spawn(
         "rations" | "food" => Some("Rations"),
         "magic_map" | "map" => Some("Scroll of Magic Mapping"),
         "gold" => Some("Gold"),
+        "portal" | "town_portal" => Some("Town Portal"),
+        "heart" => {
+            // Not in the raws yet: a bare named item, enough to test the portal rule.
+            commands.spawn((Item, Name { name: HEART_OF_THE_ABYSS.to_string() }, Position { x, y }));
+            return format!("Spawned {HEART_OF_THE_ABYSS} at ({x}, {y})");
+        }
         _ => None,
     };
 

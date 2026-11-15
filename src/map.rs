@@ -97,6 +97,13 @@ pub enum TileType {
     DeepWater,
     WoodFloor,
     Bridge,
+    /// Back to town, on dungeon depth 1.
+    UpStairs,
+}
+
+/// Down or up stairs: stepping on and taking them changes level.
+pub fn is_stairs(tt: TileType) -> bool {
+    matches!(tt, TileType::DownStairs | TileType::UpStairs)
 }
 
 /// Check if a tile type is walkable
@@ -105,6 +112,7 @@ pub fn tile_walkable(tt: TileType) -> bool {
         tt,
         TileType::Floor
             | TileType::DownStairs
+            | TileType::UpStairs
             | TileType::Road
             | TileType::Grass
             | TileType::ShallowWater
@@ -196,6 +204,7 @@ impl Map {
                     | TileType::Bridge
                     | TileType::ShallowWater
                     | TileType::DownStairs
+                    | TileType::UpStairs
             )
         };
         // Cardinal directions

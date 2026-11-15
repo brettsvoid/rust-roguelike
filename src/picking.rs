@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
 use bevy::window::PrimaryWindow;
 
-use crate::map::{Map, TileType};
+use crate::map::{is_stairs, Map};
 use crate::RunState;
 
 pub struct PickingPlugin;
@@ -142,7 +142,7 @@ impl TileMarks {
 
 fn mark_transform(map: &Map, (x, y): (i32, i32), area: Rect, lift: f32) -> Transform {
     // Sit on top of the stairs block (0.2 tall, see `map_render`), else on the floor.
-    let floor = if map.tiles[map.xy_idx(x, y)] == TileType::DownStairs { 0.2 } else { 0.0 };
+    let floor = if is_stairs(map.tiles[map.xy_idx(x, y)]) { 0.2 } else { 0.0 };
     let centre = area.center();
     Transform::from_xyz(x as f32 + centre.x, floor + 0.01 + lift, y as f32 + centre.y)
         .with_scale(Vec3::new(area.width(), 1.0, area.height()))

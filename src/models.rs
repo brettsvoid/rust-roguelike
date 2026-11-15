@@ -98,6 +98,7 @@ pub fn tile_model_name(tile: TileType, wall_mask: u8) -> String {
         TileType::ShallowWater => "shallow_water",
         TileType::DeepWater => "deep_water",
         TileType::DownStairs => "down_stairs",
+        TileType::UpStairs => "up_stairs",
     };
     format!("tile_{name}")
 }

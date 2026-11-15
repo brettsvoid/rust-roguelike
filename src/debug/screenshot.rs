@@ -10,15 +10,17 @@
 //! "spawn fireball" --target "Fireball Scroll"`). `--keys`, `--click` and `--shop` queue
 //! input in the order given, fed through the real input systems one at a time
 //! while the game waits for input: `--keys` presses keys (`g`, `.`, `i` for the
-//! inventory, `n` for Tab to select the next hero, `e` to end the party phase
-//! in combat, `w` `a` `s` `d` to pan, `c` to recentre, `+` and `-` scroll the
+//! inventory, `t` for the town ledger, `n` for Tab to select the next hero, `e`
+//! to end the party phase in combat, `w` `a` `s` `d` to pan, `c` to recentre, `+` and `-` scroll the
 //! wheel to zoom in and out); `--click X,Y` left-clicks grid cell X,Y as if the mouse hovered it (a click on another
 //! hero selects them), and the next input waits until the walk it starts ends;
 //! `--shop VENDOR` clicks that vendor (e.g. `blacksmith`), so the active hero
 //! walks beside them and their shop opens (the vendor's tile must be explored,
 //! so pair it with `--reveal-map`). Inputs are also fed while a shop is open:
 //! `n` (Tab) switches buy and sell, the letters `a` to `j` trade that line and
-//! `!` (Escape) closes it.
+//! `!` (Escape) closes it. Inputs are fed into the inventory too: `i` then `a`
+//! uses the first item, e.g. `--console "spawn portal" --keys gia` reads a Town
+//! Portal (`spawn heart` drops a stand-in Heart of the Abyss to test the refusal).
 //! Every visual change is verified with it.
 
 use std::path::PathBuf;
@@ -38,6 +40,7 @@ use crate::combat::CombatStats;
 use crate::components::{Name, Ranged};
 use crate::debug::{DebugState, GodMode};
 use crate::economy::town::{TownState, Vendor};
+use crate::gamelog::GameLog;
 use crate::levels;
 use crate::map::{Map, Position};
 use crate::models::AvailableModels;
@@ -46,7 +49,7 @@ use crate::picking::{self, FakeCursor, HoveredTile};
 use crate::party::{ActiveUnit, PartyMember};
 use crate::player::{self, WalkPath};
 use crate::resources::UiFont;
-use crate::ui::menus::shop;
+use crate::ui::menus::{inventory, shop};
 use crate::rng::GameRng;
 use crate::{RunState, TargetingInfo};
 
@@ -75,15 +78,21 @@ impl Plugin for ScreenshotPlugin {
                 Update,
                 (
                     feed_next_input
-                        .run_if(in_state(RunState::AwaitingInput).or_else(in_state(RunState::ShowShop)))
+                        .run_if(
+                            in_state(RunState::AwaitingInput)
+                                .or_else(in_state(RunState::ShowShop))
+                                .or_else(in_state(RunState::ShowInventory)),
+                        )
                         .after(picking::update_hovered_tile)
                         .before(shop::click_vendor)
                         .before(shop::handle_shop_input)
+                        .before(inventory::handle_inventory_input)
                         .before(player::handle_player_input),
                     // Models load async; starting only once they are in keeps the
                     // picture the same run to run.
                     start_game.run_if(in_state(RunState::MainMenu)).run_if(models_loaded),
                     (prepare_capture, enter_targeting).run_if(in_state(RunState::AwaitingInput)),
+                    reveal_each_level.run_if(in_state(RunState::AwaitingInput)).before(feed_next_input),
                     capture_after_frames.run_if(not(in_state(RunState::MainMenu))),
                 ),
             );
@@ -128,6 +137,7 @@ fn key_input(c: char) -> Option<HarnessInput> {
         'g' => KeyCode::KeyG,
         '.' => KeyCode::Period,
         'i' => KeyCode::KeyI,
+        't' => KeyCode::KeyT,
         'n' => KeyCode::Tab,
         'w' => KeyCode::KeyW,
         'a' => KeyCode::KeyA,
@@ -251,6 +261,18 @@ fn models_loaded(
     *frames_loaded > 2
 }
 
+/// `--reveal-map` holds on every level the party reaches, not just the first.
+fn reveal_each_level(
+    args: Res<ScreenshotArgs>,
+    map: Res<Map>,
+    mut seen: Local<Option<i32>>,
+    mut debug_state: ResMut<DebugState>,
+) {
+    if args.reveal_map && seen.replace(map.depth) != Some(map.depth) {
+        debug_state.reveal_map = true;
+    }
+}
+
 fn is_town_command(cmd: &str) -> bool {
     cmd.split_whitespace().next() == Some("town")
 }
@@ -320,8 +342,10 @@ fn feed_next_input(
     mut mouse: ResMut<ButtonInput<MouseButton>>,
     mut hovered: ResMut<HoveredTile>,
     vendors: Query<(&Position, &Name), With<Bystander>>,
+    debug_state: Res<DebugState>,
 ) {
-    if walk.is_active() {
+    // A pending reveal would leave a click's target unexplored.
+    if walk.is_active() || debug_state.reveal_map {
         return;
     }
     let Some(input) = args.inputs.get(*next) else {
@@ -366,10 +390,14 @@ fn feed_next_input(
 }
 
 /// Counts frames after the game starts, then captures the window once.
-fn capture_after_frames(mut commands: Commands, args: Res<ScreenshotArgs>, mut frame: Local<u32>) {
+/// Saves the PNG and logs the game log, so a run can be checked by its state too.
+fn capture_after_frames(mut commands: Commands, args: Res<ScreenshotArgs>, log: Res<GameLog>, mut frame: Local<u32>) {
     *frame += 1;
     if *frame != args.frames {
         return;
+    }
+    for line in &log.entries {
+        info!("log> {line}");
     }
     let mut save = save_to_disk(args.path.clone());
     commands.spawn(Screenshot::primary_window()).observe(

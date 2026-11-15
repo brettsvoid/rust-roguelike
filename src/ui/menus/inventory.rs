@@ -108,7 +108,7 @@ fn despawn_inventory_menu(
     }
 }
 
-fn handle_inventory_input(
+pub fn handle_inventory_input(
     mut commands: Commands,
     mut evr_kbd: MessageReader<KeyboardInput>,
     mut next_state: ResMut<NextState<RunState>>,

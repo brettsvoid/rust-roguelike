@@ -11,7 +11,7 @@ use crate::components::{
     AreaOfEffect, BlocksTile, BlocksVisibility, CausesConfusion, Consumable, DefenseBonus,
     Door, EntryTrigger, EquipmentSlot, Equippable, Hidden, InflictsDamage, Item, MagicMapper,
     MeleePowerBonus, Name, Poison, PoisonsOnHit, ProvidesFood, ProvidesHealing, Ranged,
-    RenderableBundle, SingleActivation, Targeting,
+    RenderableBundle, SingleActivation, Targeting, TownPortal,
 };
 use crate::lighting::LightSource;
 use crate::map::Position;
@@ -185,6 +185,9 @@ pub fn spawn_named_item(
                 }
                 "magic_mapping" => {
                     entity.insert(MagicMapper);
+                }
+                "town_portal" => {
+                    entity.insert(TownPortal);
                 }
                 _ => {}
             }

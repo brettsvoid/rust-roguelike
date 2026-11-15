@@ -16,7 +16,7 @@ use crate::{
     entity_render::{EntityShape, Renderable},
     game_flow::{HeroAction, Mode, TurnEnded},
     gamelog::GameLog,
-    map::{tile_walkable, xy_idx, Map, Position, TileType},
+    map::{is_stairs, tile_walkable, xy_idx, Map, Position, TileType},
     map_indexing,
     monsters::Monster,
     party::{follow, next_unit, ActiveUnit, PartyMember},
@@ -129,7 +129,7 @@ fn show_move_range(
 pub struct WalkPath {
     /// The cells still to step onto, nearest first.
     pub cells: VecDeque<(i32, i32)>,
-    /// The click was on the down stairs, so take them on arrival.
+    /// The click was on stairs, so take them on arrival.
     pub descend: bool,
     /// The click was on a vendor, so open their shop on arrival (`ui::menus::shop`).
     pub trade_with: Option<Vendor>,
@@ -431,10 +431,10 @@ pub(crate) fn handle_player_input(
                 player_acted = true;
             }
 
-            // Go down stairs
+            // Take the stairs
             KeyCode::Period => {
                 let idx = xy_idx(player_x, player_y);
-                if map.tiles[idx] == TileType::DownStairs {
+                if is_stairs(map.tiles[idx]) {
                     next_state.set_if_different(RunState::NextLevel);
                 } else {
                     gamelog.entries.push("There are no stairs here.".to_string());
@@ -463,7 +463,7 @@ pub(crate) fn handle_player_input(
                 if items.iter().any(|(_, pos)| (pos.x, pos.y) == target) {
                     player_acted = get_item(&mut commands, &mut gamelog, player_entity, player_x, player_y, &items);
                     action = Some(Action::UseItem);
-                } else if map.tiles[xy_idx(player_x, player_y)] == TileType::DownStairs {
+                } else if is_stairs(map.tiles[xy_idx(player_x, player_y)]) {
                     next_state.set_if_different(RunState::NextLevel);
                 }
             } else if matches!(*mode, Mode::Combat { .. }) {
@@ -490,12 +490,12 @@ pub(crate) fn handle_player_input(
             } else if let Some(path) = walk_path(&map, (player_x, player_y), target) {
                 step = walk_step((player_x, player_y), &path, false);
                 walk.cells = path;
-                walk.descend = map.tiles[xy_idx(target.0, target.1)] == TileType::DownStairs;
+                walk.descend = is_stairs(map.tiles[xy_idx(target.0, target.1)]);
             }
         }
     } else if !player_acted && walk.cells.is_empty() && walk.descend {
         *walk = WalkPath::default();
-        if map.tiles[xy_idx(player_x, player_y)] == TileType::DownStairs {
+        if is_stairs(map.tiles[xy_idx(player_x, player_y)]) {
             next_state.set_if_different(RunState::NextLevel);
         }
     } else if !player_acted && walk.is_active() {
@@ -580,6 +580,7 @@ pub(crate) fn handle_player_input(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::map::TileType;
 
     fn path(cells: &[(i32, i32)]) -> VecDeque<(i32, i32)> {
         cells.iter().copied().collect()

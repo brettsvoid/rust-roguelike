@@ -92,7 +92,8 @@ mod tests {
             [
                 ("Confusion Scroll", 3),
                 ("Health Potion", 3),
-                ("Magic Missile Scroll", 3)
+                ("Magic Missile Scroll", 3),
+                ("Town Portal", 3)
             ]
         );
         assert_eq!(
@@ -141,7 +142,8 @@ mod tests {
                 ("Fireball Scroll", 2),
                 ("Health Potion", 3),
                 ("Magic Missile Scroll", 3),
-                ("Scroll of Magic Mapping", 2)
+                ("Scroll of Magic Mapping", 2),
+                ("Town Portal", 3)
             ],
             "alchemy is still level 1, but arcana 2 stays with the alchemist"
         );

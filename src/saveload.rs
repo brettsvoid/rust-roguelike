@@ -10,10 +10,11 @@ use std::path::Path;
 use crate::combat::CombatStats;
 use crate::components::{
     AreaOfEffect, BlocksTile, CausesConfusion, Confusion, Consumable, EntryTrigger, Hidden,
-    HungerClock, HungerState, InBackpack, InflictsDamage, Item, MagicMapper, Name, ProvidesFood,
+    HungerClock, HungerState, InBackpack, InflictsDamage, Item, MagicMapper, Name, ProvidesFood, TownPortal,
     ProvidesHealing, Ranged, RenderableBundle, SingleActivation, Targeting,
 };
 use crate::economy::{Gold, Purse};
+use crate::levels::Delve;
 use crate::entity_render::{EntityShape, Renderable};
 use crate::game_flow::RunState;
 use crate::gamelog::GameLog;
@@ -86,7 +87,7 @@ pub type ItemSaveQuery<'w, 's> = Query<
         Option<&'static Targeting>,
         Option<&'static CausesConfusion>,
         // Nested: Bevy query tuples stop at 15 elements.
-        (Option<&'static MagicMapper>, Option<&'static Gold>),
+        (Option<&'static MagicMapper>, Option<&'static Gold>, Option<&'static TownPortal>),
     ),
     With<Item>,
 >;
@@ -114,6 +115,7 @@ pub fn save_on_quit(
     map: Res<Map>,
     game_log: Res<GameLog>,
     purse: Res<Purse>,
+    delve: Res<Delve>,
     active: Res<ActiveUnit>,
     party_query: PartySaveQuery,
     monster_query: MonsterSaveQuery,
@@ -126,7 +128,7 @@ pub fn save_on_quit(
             let party_alive = party_query.iter().any(|(_, _, _, _, stats, ..)| stats.hp > 0);
 
             if party_alive {
-                save_game(map, game_log, purse, active, party_query, monster_query, item_query, trap_query);
+                save_game(map, game_log, purse, delve, active, party_query, monster_query, item_query, trap_query);
             }
         }
         exit.write(AppExit::Success);
@@ -151,6 +153,8 @@ pub struct SaveData {
     pub game_log: Vec<String>,
     #[serde(default)]
     pub gold: i32,
+    /// The deepest depth reached and the levels entered since leaving town.
+    pub delve: Delve,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -239,6 +243,8 @@ pub struct ItemProperties {
     #[serde(default)]
     pub magic_mapper: bool,
     #[serde(default)]
+    pub town_portal: bool,
+    #[serde(default)]
     pub gold: Option<i32>,
 }
 
@@ -270,6 +276,7 @@ pub fn save_game(
     map: Res<Map>,
     game_log: Res<GameLog>,
     purse: Res<Purse>,
+    delve: Res<Delve>,
     active: Res<ActiveUnit>,
     party_query: PartySaveQuery,
     monster_query: MonsterSaveQuery,
@@ -341,7 +348,7 @@ pub fn save_game(
                 aoe,
                 targeting,
                 causes_confusion,
-                (magic_mapper, gold),
+                (magic_mapper, gold, town_portal),
             )| {
                 let location = if let Some(backpack) = in_backpack {
                     if let Some(slot) = slot_of(backpack.owner) {
@@ -383,6 +390,7 @@ pub fn save_game(
                         }),
                         causes_confusion: causes_confusion.map(|c| c.turns),
                         magic_mapper: magic_mapper.is_some(),
+                        town_portal: town_portal.is_some(),
                         gold: gold.map(|g| g.amount),
                     },
                 }
@@ -431,6 +439,7 @@ pub fn save_game(
         traps,
         game_log: game_log.entries.clone(),
         gold: purse.gold,
+        delve: delve.clone(),
     };
 
     match serde_json::to_string_pretty(&save_data) {
@@ -529,6 +538,7 @@ fn restore_game(
     commands.insert_resource(Purse {
         gold: save_data.gold,
     });
+    commands.insert_resource(save_data.delve);
 
     let text_font = TextFont {
         font: font.0.clone().into(),
@@ -673,6 +683,9 @@ fn restore_game(
         if item.properties.magic_mapper {
             entity_commands.insert(MagicMapper);
         }
+        if item.properties.town_portal {
+            entity_commands.insert(TownPortal);
+        }
         if let Some(amount) = item.properties.gold {
             entity_commands.insert(Gold { amount });
         }
@@ -711,6 +724,7 @@ pub fn save_game(
     _map: Res<Map>,
     _game_log: Res<GameLog>,
     _purse: Res<Purse>,
+    _delve: Res<Delve>,
     _active: Res<ActiveUnit>,
     _party_query: PartySaveQuery,
     _monster_query: MonsterSaveQuery,
@@ -811,6 +825,7 @@ mod tests {
             traps: Vec::new(),
             game_log: Vec::new(),
             gold: 42,
+            delve: Delve { deepest: 3, levels_visited: 2 },
         }
     }
 
@@ -834,6 +849,7 @@ mod tests {
         assert_eq!(party, vec![(0, "Aldric", 0, 30), (2, "Corin", 3, 28)]);
         assert_eq!(loaded.active, 2);
         assert!(matches!(loaded.items[1].location, ItemLocation::InBackpack { slot: 2 }));
+        assert_eq!(loaded.delve, Delve { deepest: 3, levels_visited: 2 });
     }
 
     #[test]
@@ -887,6 +903,7 @@ mod tests {
             .find(|(_, member)| member.slot == 2)
             .map(|(entity, _)| entity);
         assert_eq!(world.resource::<ActiveUnit>().0, corin);
+        assert_eq!(*world.resource::<Delve>(), Delve { deepest: 3, levels_visited: 2 });
         let owners: Vec<Entity> = world.query::<&InBackpack>().iter(world).map(|b| b.owner).collect();
         assert_eq!(owners, corin.into_iter().collect::<Vec<_>>());
     }

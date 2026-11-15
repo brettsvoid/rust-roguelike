@@ -56,6 +56,7 @@ pub fn tile_style(tile: TileType) -> (TileShape, Color) {
         TileType::ShallowWater => (TileShape::Water, Color::srgb(0.2, 0.5, 0.6)),
         TileType::DeepWater => (TileShape::Water, Color::srgb(0.1, 0.2, 0.5)),
         TileType::DownStairs => (TileShape::Stairs, Color::srgb(0.2, 0.8, 0.8)),
+        TileType::UpStairs => (TileShape::Stairs, Color::srgb(0.9, 0.7, 0.2)),
     }
 }
 
@@ -206,6 +207,7 @@ pub fn tile_glyph(tile: TileType) -> (&'static str, Color) {
         TileType::Floor | TileType::WoodFloor => (".", Color::srgb(0.5, 0.5, 0.5)),
         TileType::Wall => ("#", Color::srgb(0.0, 1.0, 0.0)),
         TileType::DownStairs => (">", Color::srgb(0.0, 1.0, 1.0)),
+        TileType::UpStairs => ("<", Color::srgb(1.0, 0.8, 0.0)),
         TileType::Road => ("≡", Color::srgb(0.5, 0.5, 0.5)),
         TileType::Grass => ("\"", Color::srgb(0.0, 0.8, 0.0)),
         TileType::ShallowWater => ("~", Color::srgb(0.0, 0.8, 0.8)),

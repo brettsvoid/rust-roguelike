@@ -81,7 +81,7 @@ mod tests {
                 [2, 1, 2, 1, 1],
                 [1, 1, 1, 1, 1],
                 [2, 1, 1, 1, 2],
-                [2, 2, 2, 2, 2],
+                [3, 2, 2, 2, 2],
             ]
         );
     }
@@ -113,12 +113,12 @@ mod tests {
     }
 
     /// Loot is tiered by depth. Depth 0 is the town, the dungeon is 1 to 12.
-    /// Gold, health potions and rations are staples found at every depth.
+    /// Gold, health potions, rations and Town Portals are staples found at every depth.
     #[test]
     fn deeper_levels_roll_higher_tier_loot() {
         use std::collections::BTreeSet;
         let raws = shipped_raws();
-        let staples = ["Gold", "Health Potion", "Rations"];
+        let staples = ["Gold", "Health Potion", "Rations", "Town Portal"];
         let tiers_at = |depth: i32| -> BTreeSet<i32> {
             raws.spawn_table
                 .iter()

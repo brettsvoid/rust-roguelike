@@ -172,6 +172,10 @@ pub struct ProvidesFood;
 #[derive(Component, Debug)]
 pub struct MagicMapper;
 
+/// A Town Portal scroll: reading it takes the party back to town.
+#[derive(Component, Debug)]
+pub struct TownPortal;
+
 // Trap system
 #[derive(Component, Debug)]
 pub struct Hidden;

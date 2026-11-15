@@ -100,6 +100,21 @@
       }
     },
     {
+      "name": "Town Portal",
+      "base_value": 35,
+      "tier": 1,
+      "sector": "arcana",
+      "renderable": {
+        "glyph": ")",
+        "fg": "#FFD700",
+        "bg": "#000000",
+        "order": 0
+      },
+      "consumable": {
+        "effects": { "town_portal": "" }
+      }
+    },
+    {
       "name": "Scroll of Magic Mapping",
       "base_value": 50,
       "tier": 2,
@@ -1436,6 +1451,7 @@
     { "name": "Magic Missile Scroll", "weight": 2, "min_depth": 0, "max_depth": 5 },
     { "name": "Fireball Scroll", "weight": 2, "min_depth": 2, "max_depth": 7 },
     { "name": "Confusion Scroll", "weight": 2, "min_depth": 0, "max_depth": 5 },
+    { "name": "Town Portal", "weight": 2, "min_depth": 1, "max_depth": 100 },
     { "name": "Scroll of Magic Mapping", "weight": 2, "min_depth": 2, "max_depth": 7 },
     { "name": "Dagger", "weight": 3, "min_depth": 0, "max_depth": 5 },
     { "name": "Longsword", "weight": 1, "min_depth": 2, "max_depth": 7 },

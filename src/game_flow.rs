@@ -174,6 +174,8 @@ impl Plugin for GameFlowPlugin {
             .init_resource::<MagicMapReveal>()
             .init_resource::<TurnEnded>()
             .init_resource::<HeroAction>()
+            .init_resource::<levels::PendingPortal>()
+            .init_resource::<levels::Delve>()
             // PreRun: one frame of setup, then hand control to the party
             .add_systems(OnEnter(RunState::PreRun), |mut mode: ResMut<Mode>| *mode = Mode::Explore)
             .add_systems(
@@ -186,6 +188,7 @@ impl Plugin for GameFlowPlugin {
                 (
                     traps::trap_trigger_system,
                     inventory::item_collection_system,
+                    levels::use_town_portal,
                     inventory::item_use_system,
                     inventory::item_drop_system,
                     inventory::item_remove_system,
@@ -221,7 +224,7 @@ impl Plugin for GameFlowPlugin {
             // NextLevel: tear down the old level and build the next one
             .add_systems(
                 Update,
-                levels::go_next_level.run_if(in_state(RunState::NextLevel)),
+                levels::change_level.run_if(in_state(RunState::NextLevel)),
             )
             // MagicMapReveal: uncover the map one row per frame
             .add_systems(
@@ -288,6 +291,7 @@ fn after_party_action(
     mut hero_action: ResMut<HeroAction>,
     mut pending_magic_map: ResMut<PendingMagicMap>,
     mut reveal: ResMut<MagicMapReveal>,
+    portal: Res<levels::PendingPortal>,
     party: PartySight,
     hostiles: HostileSight,
 ) {
@@ -297,7 +301,9 @@ fn after_party_action(
         _ => Step::EndTurn,
     };
     let next = take_step(step, &mut mode, &mut next_state, &mut active, &mut walk, &party, &hostiles);
-    if next != RunState::GameOver && std::mem::take(&mut pending_magic_map.0) {
+    if next != RunState::GameOver && portal.0 {
+        next_state.set_if_different(RunState::NextLevel);
+    } else if next != RunState::GameOver && std::mem::take(&mut pending_magic_map.0) {
         *reveal = MagicMapReveal { row: 0, then: next };
         next_state.set_if_different(RunState::MagicMapReveal);
     }
