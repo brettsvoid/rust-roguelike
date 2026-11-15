@@ -6,7 +6,7 @@ use crate::combat::CombatStats;
 use crate::economy::town::TownState;
 use crate::map::Position;
 use crate::monsters::Monster;
-use crate::player::Player;
+use crate::party::{ActiveUnit, PartyMember};
 use crate::resources::UiFont;
 
 use super::commands::execute_command;
@@ -129,7 +129,8 @@ pub fn handle_console_input(
     mut god_mode: ResMut<GodMode>,
     mut evr_kbd: MessageReader<KeyboardInput>,
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut player_query: Query<(Entity, &mut Position, &mut CombatStats), With<Player>>,
+    active: Res<ActiveUnit>,
+    mut party: Query<(Entity, &mut Position, &mut CombatStats), With<PartyMember>>,
     monster_query: Query<Entity, With<Monster>>,
     mut town: ResMut<TownState>,
 ) {
@@ -202,7 +203,8 @@ pub fn handle_console_input(
                         &mut commands,
                         &mut debug_state,
                         &mut god_mode,
-                        &mut player_query,
+                        &mut party,
+                        active.0,
                         &monster_query,
                         &mut town,
                     );

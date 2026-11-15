@@ -1,13 +1,13 @@
-//! Wall occlusion: keeps the player and the floor in view under the
+//! Wall occlusion: keeps the party and the floor in view under the
 //! isometric camera.
 //!
 //! The camera looks from the +x, +z side, so a wall hides the tiles up to two
 //! steps towards -x, -z behind it. Any wall that would hide a visible floor
-//! tile or the player is cut down to a low stub (`walls_to_cut`).
+//! tile or a party member is cut down to a low stub (`walls_to_cut`).
 //!
 //! Town buildings (closed `WoodFloor` rooms) get a flat roof. A roof hides
-//! while the player is inside its building or behind it; while it shows, its
-//! walls stay full height so it never floats.
+//! while a party member is inside its building or behind it; while it shows,
+//! its walls stay full height so it never floats.
 
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
@@ -15,7 +15,7 @@ use bevy::transform::TransformSystems;
 
 use crate::map::{Map, Position, Revealed, RevealedState, TileType};
 use crate::map_render::{TileMesh, WALL_HEIGHT};
-use crate::player::Player;
+use crate::party::PartyMember;
 
 /// How tall a cut wall stays, in world units.
 const STUB_HEIGHT: f32 = 0.25;
@@ -52,8 +52,8 @@ struct Buildings {
 #[derive(Component)]
 struct Roof(usize);
 
-/// The walls that would hide a visible non-wall tile or the player, by tile index.
-pub fn walls_to_cut(map: &Map, player: (i32, i32)) -> Vec<bool> {
+/// The walls that would hide a visible non-wall tile or a party member, by tile index.
+pub fn walls_to_cut(map: &Map, party: &[(i32, i32)]) -> Vec<bool> {
     let mut cut = vec![false; map.tiles.len()];
     let mut mark = |(x, y): (i32, i32)| {
         for (dx, dy) in OCCLUDER_OFFSETS {
@@ -71,7 +71,9 @@ pub fn walls_to_cut(map: &Map, player: (i32, i32)) -> Vec<bool> {
             mark((idx as i32 % map.width, idx as i32 / map.width));
         }
     }
-    mark(player);
+    for &member in party {
+        mark(member);
+    }
     cut
 }
 
@@ -175,14 +177,12 @@ fn spawn_roofs(
 fn apply_occlusion(
     map: Res<Map>,
     buildings: Res<Buildings>,
-    player: Query<&Position, With<Player>>,
+    party: Query<&Position, With<PartyMember>>,
     mut tiles: Query<(&TileMesh, &Position, &Revealed, &mut Transform)>,
     mut roofs: Query<(&Roof, &mut Visibility)>,
 ) {
-    let Ok(&Position { x: px, y: py }) = player.single() else {
-        return;
-    };
-    if buildings.of_tile.len() != map.tiles.len() {
+    let party: Vec<(i32, i32)> = party.iter().map(|pos| (pos.x, pos.y)).collect();
+    if party.is_empty() || buildings.of_tile.len() != map.tiles.len() {
         return;
     }
     let building_at = |x: i32, y: i32| {
@@ -191,17 +191,19 @@ fn apply_occlusion(
             .flatten()
     };
 
-    // A roof shows once any of its building is seen, unless the player is inside or behind it.
+    // A roof shows once any of its building is seen, unless a member is inside or behind it.
     let mut roof_shown = vec![false; buildings.count];
     for (TileMesh(_), pos, revealed, _) in &tiles {
         if let Some(b) = building_at(pos.x, pos.y) {
             roof_shown[b] |= !matches!(revealed.0, RevealedState::Hidden);
         }
     }
-    let over_player = std::iter::once((0, 0))
-        .chain(OCCLUDER_OFFSETS)
-        .filter_map(|(dx, dy)| building_at(px + dx, py + dy));
-    for b in over_player {
+    let over_party = party.iter().flat_map(|&(px, py)| {
+        std::iter::once((0, 0))
+            .chain(OCCLUDER_OFFSETS)
+            .filter_map(move |(dx, dy)| building_at(px + dx, py + dy))
+    });
+    for b in over_party {
         roof_shown[b] = false;
     }
     for (Roof(b), mut visibility) in &mut roofs {
@@ -209,7 +211,7 @@ fn apply_occlusion(
         visibility.set_if_neq(want);
     }
 
-    let cut = walls_to_cut(&map, (px, py));
+    let cut = walls_to_cut(&map, &party);
     for (TileMesh(tile), pos, _, mut transform) in &mut tiles {
         if *tile != TileType::Wall {
             continue;
@@ -244,8 +246,8 @@ mod tests {
         map
     }
 
-    fn cut_cells(map: &Map, player: (i32, i32)) -> Vec<(i32, i32)> {
-        walls_to_cut(map, player)
+    fn cut_cells(map: &Map, party: &[(i32, i32)]) -> Vec<(i32, i32)> {
+        walls_to_cut(map, party)
             .iter()
             .enumerate()
             .filter(|(_, c)| **c)
@@ -257,17 +259,18 @@ mod tests {
     fn only_the_near_walls_of_a_room_are_cut() {
         // The camera sits at +x, +z: the south (y = 6) and east (x = 6) walls
         // face it, the north and west walls stay full height.
-        let cut = cut_cells(&room(), (3, 3));
+        let cut = cut_cells(&room(), &[(3, 3)]);
         let mut near: Vec<_> = (1..7).map(|x| (x, 6)).chain((1..6).map(|y| (6, y))).collect();
         near.sort_by_key(|&(x, y)| (y, x));
         assert_eq!(cut, near);
     }
 
     #[test]
-    fn the_player_alone_cuts_the_walls_that_hide_it() {
+    fn each_member_alone_cuts_the_walls_that_hide_it() {
         let mut map = room();
         map.visible_tiles = vec![false; 49];
-        assert_eq!(cut_cells(&map, (5, 5)), vec![(6, 5), (5, 6), (6, 6)]);
+        assert_eq!(cut_cells(&map, &[(5, 5)]), vec![(6, 5), (5, 6), (6, 6)]);
+        assert_eq!(cut_cells(&map, &[(5, 1), (5, 5)]), vec![(6, 1), (6, 2), (6, 3), (6, 5), (5, 6), (6, 6)]);
     }
 
     #[test]

@@ -3,12 +3,11 @@ use bevy::prelude::*;
 use crate::{
     combat::{CombatStats, WantsToMelee},
     components::{Confusion, Name},
-    distance::DistanceAlg,
     gamelog::GameLog,
     map::{Map, Position, TileType, MAP_HEIGHT, MAP_WIDTH},
     particle::ParticleBuilder,
     pathfinding,
-    player::Player,
+    party::PartyMember,
     viewshed::Viewshed,
     RunState,
 };
@@ -40,6 +39,22 @@ fn update_blocked_tiles(mut map: ResMut<Map>, monster_query: Query<&Position, Wi
     }
 }
 
+/// The member a monster at `from` goes for: the nearest one it can see or is
+/// next to, by Chebyshev distance. `party` is in slot order, so a tie goes to
+/// the lower slot.
+pub fn monster_target<T: Copy>(
+    from: (i32, i32),
+    party: &[(T, (i32, i32))],
+    sees: impl Fn((i32, i32)) -> bool,
+) -> Option<(T, (i32, i32))> {
+    let distance = |(x, y): (i32, i32)| (x - from.0).abs().max((y - from.1).abs());
+    party
+        .iter()
+        .copied()
+        .filter(|&(_, pos)| distance(pos) <= 1 || sees(pos))
+        .min_by_key(|&(_, pos)| distance(pos))
+}
+
 pub fn monster_ai(
     mut commands: Commands,
     mut map: ResMut<Map>,
@@ -47,12 +62,13 @@ pub fn monster_ai(
     mut particle_builder: ResMut<ParticleBuilder>,
     mut monster_query: Query<
         (Entity, &mut Position, &mut Viewshed, &Name, &CombatStats, Option<&mut Confusion>),
-        (With<Monster>, Without<Player>),
+        (With<Monster>, Without<PartyMember>),
     >,
-    player_query: Single<(Entity, &Position), With<Player>>,
+    party_query: Query<(Entity, &PartyMember, &Position)>,
 ) {
-    let (player_entity, player_pos) = player_query.into_inner();
-    let player_idx = map.xy_idx(player_pos.x, player_pos.y);
+    let mut party: Vec<_> = party_query.iter().collect();
+    party.sort_by_key(|(_, member, _)| member.slot);
+    let party: Vec<(Entity, (i32, i32))> = party.into_iter().map(|(e, _, pos)| (e, (pos.x, pos.y))).collect();
 
     for (entity, mut pos, mut viewshed, name, stats, confusion) in &mut monster_query {
         if stats.hp <= 0 {
@@ -80,40 +96,61 @@ pub fn monster_ai(
             continue; // Skip normal AI while confused
         }
 
-        let distance = DistanceAlg::Chebyshev.distance2d(
-            Vec2::new(pos.x as f32, pos.y as f32),
-            Vec2::new(player_pos.x as f32, player_pos.y as f32),
-        );
-        if distance < 1.5 {
-            commands.entity(entity).insert(WantsToMelee {
-                target: player_entity,
-            });
+        let Some((target, (tx, ty))) =
+            monster_target((pos.x, pos.y), &party, |tile| viewshed.visible_tiles.contains(&tile))
+        else {
+            continue;
+        };
+        if (tx - pos.x).abs() <= 1 && (ty - pos.y).abs() <= 1 {
+            commands.entity(entity).insert(WantsToMelee { target });
             continue;
         }
 
-        // Check if player is visible
-        if viewshed
-            .visible_tiles
-            .contains(&(player_pos.x, player_pos.y))
-        {
-            let monster_idx = map.xy_idx(pos.x, pos.y);
-
-            // Find path to player (ignoring other entities so monsters keep chasing)
-            if let Some(path) = pathfinding::a_star_ignoring_entities(&map, monster_idx, player_idx) {
-                // Move one step toward player (path[0] is current position)
-                if path.len() > 1 {
-                    let next_idx = path[1];
-                    // Only move if destination is not blocked
-                    if !map.blocked_tiles[next_idx] {
-                        // Unblock old position, block new position
-                        map.blocked_tiles[monster_idx] = false;
-                        map.blocked_tiles[next_idx] = true;
-                        pos.x = (next_idx % map.width as usize) as i32;
-                        pos.y = (next_idx / map.width as usize) as i32;
-                        viewshed.dirty = true;
-                    }
+        let monster_idx = map.xy_idx(pos.x, pos.y);
+        let target_idx = map.xy_idx(tx, ty);
+        // Find path to the target (ignoring other entities so monsters keep chasing)
+        if let Some(path) = pathfinding::a_star_ignoring_entities(&map, monster_idx, target_idx) {
+            // Move one step toward the target (path[0] is current position)
+            if path.len() > 1 {
+                let next_idx = path[1];
+                let next = ((next_idx % map.width as usize) as i32, (next_idx / map.width as usize) as i32);
+                // Only move if destination is not blocked, by the map or another member
+                if !map.blocked_tiles[next_idx] && !party.iter().any(|&(_, p)| p == next) {
+                    // Unblock old position, block new position
+                    map.blocked_tiles[monster_idx] = false;
+                    map.blocked_tiles[next_idx] = true;
+                    (pos.x, pos.y) = next;
+                    viewshed.dirty = true;
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_monster_goes_for_the_nearest_member_it_can_see() {
+        let party = [('a', (10, 0)), ('b', (4, 0)), ('c', (2, 0))];
+        let sees_all = |_| true;
+        assert_eq!(monster_target((0, 0), &party, sees_all), Some(('c', (2, 0))));
+        // The nearest is out of sight, so the next nearest it can see.
+        let not_c = |tile| tile != (2, 0);
+        assert_eq!(monster_target((0, 0), &party, not_c), Some(('b', (4, 0))));
+        assert_eq!(monster_target((0, 0), &party, |_| false), None);
+    }
+
+    #[test]
+    fn a_member_next_to_a_monster_is_a_target_even_unseen() {
+        let party = [('a', (1, 1)), ('b', (0, 3))];
+        assert_eq!(monster_target((0, 0), &party, |_| false), Some(('a', (1, 1))));
+    }
+
+    #[test]
+    fn a_tie_goes_to_the_lower_slot() {
+        let party = [('a', (0, 3)), ('b', (3, 3))];
+        assert_eq!(monster_target((0, 0), &party, |_| true), Some(('a', (0, 3))));
     }
 }

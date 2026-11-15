@@ -7,13 +7,13 @@ use crate::distance::DistanceAlg;
 use crate::map::{Map, Position, TileType};
 use crate::monsters::Monster;
 use crate::picking::{tile_edge, update_hovered_tile, BlocksPicking, HoveredTile, TileMarks, FULL_TILE};
-use crate::player::Player;
+use crate::party::{ActiveUnit, PartyMember};
 use crate::resources::UiFont;
 use crate::RunState;
 
 use super::components::{RangeIndicator, TargetBorder, TargetHighlight, TargetingMenu};
 
-/// What the player is currently aiming: set when a ranged item is selected
+/// What the active unit is currently aiming: set when a ranged item is selected
 /// from the inventory, read while the targeting overlay is up.
 #[derive(Resource, Default)]
 pub struct TargetingInfo {
@@ -98,7 +98,8 @@ fn spawn_target_borders(
     marks: Res<TileMarks>,
     map: Res<Map>,
     targeting_info: Res<TargetingInfo>,
-    player_query: Query<&Position, With<Player>>,
+    active: Res<ActiveUnit>,
+    party: Query<&Position, With<PartyMember>>,
     monster_query: Query<&Position, With<Monster>>,
     targeting_query: Query<&Targeting>,
 ) {
@@ -111,7 +112,7 @@ fn spawn_target_borders(
         return;
     }
 
-    let Ok(player_pos) = player_query.single() else {
+    let Some(player_pos) = active.0.and_then(|unit| party.get(unit).ok()) else {
         return;
     };
 
@@ -143,9 +144,10 @@ fn spawn_range_indicator(
     marks: Res<TileMarks>,
     map: Res<Map>,
     targeting_info: Res<TargetingInfo>,
-    player_query: Query<&Position, With<Player>>,
+    active: Res<ActiveUnit>,
+    party: Query<&Position, With<PartyMember>>,
 ) {
-    let Ok(player_pos) = player_query.single() else {
+    let Some(player_pos) = active.0.and_then(|unit| party.get(unit).ok()) else {
         return;
     };
     let range = targeting_info.range;
@@ -181,7 +183,8 @@ fn update_target_highlight(
     hovered: Res<HoveredTile>,
     map: Res<Map>,
     targeting_info: Res<TargetingInfo>,
-    player_query: Query<&Position, With<Player>>,
+    active: Res<ActiveUnit>,
+    party: Query<&Position, With<PartyMember>>,
     monster_query: Query<&Position, With<Monster>>,
     highlight_query: Query<Entity, With<TargetHighlight>>,
     aoe_query: Query<&AreaOfEffect>,
@@ -191,7 +194,7 @@ fn update_target_highlight(
         commands.entity(entity).despawn();
     }
 
-    let Ok(player_pos) = player_query.single() else {
+    let Some(player_pos) = active.0.and_then(|unit| party.get(unit).ok()) else {
         return;
     };
     let Some((map_x, map_y)) = valid_target(&hovered, &map, player_pos, &targeting_info) else {
@@ -251,7 +254,8 @@ fn handle_targeting(
     map: Res<Map>,
     targeting_info: Res<TargetingInfo>,
     mut next_state: ResMut<NextState<RunState>>,
-    player_query: Query<(Entity, &Position), With<Player>>,
+    active: Res<ActiveUnit>,
+    party: Query<&Position, With<PartyMember>>,
     monster_query: Query<&Position, With<Monster>>,
     targeting_query: Query<&Targeting>,
 ) {
@@ -266,7 +270,7 @@ fn handle_targeting(
     if !mouse_button.just_pressed(MouseButton::Left) {
         return;
     }
-    let Ok((player_entity, player_pos)) = player_query.single() else {
+    let Some((player_entity, player_pos)) = active.0.and_then(|unit| Some((unit, party.get(unit).ok()?))) else {
         return;
     };
     let Some((map_x, map_y)) = valid_target(&hovered, &map, player_pos, &targeting_info) else {

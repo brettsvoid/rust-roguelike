@@ -1,16 +1,17 @@
 use bevy::prelude::*;
 
 use crate::combat::CombatStats;
-use crate::components::{HungerClock, HungerState};
+use crate::components::{HungerClock, HungerState, Name};
 use crate::economy::Purse;
+use crate::entity_render::Renderable;
 use crate::gamelog::GameLog;
 use crate::map::Map;
+use crate::party::{ActiveUnit, PartyMember, PARTY_SIZE};
 use crate::picking::BlocksPicking;
-use crate::player::Player;
 use crate::resources::UiFont;
 use crate::RunState;
 
-use super::components::{DepthText, GameLogText, GoldText, HealthBar, HealthText, HungerText};
+use super::components::{DepthText, GameLogText, GoldText, PartyRow};
 
 pub struct HudPlugin;
 
@@ -25,10 +26,9 @@ impl Plugin for HudPlugin {
         app.add_systems(Startup, setup_hud).add_systems(
             Update,
             (
-                update_health_bar,
+                update_party_rows,
                 update_depth,
                 update_gold,
-                update_hunger_display,
                 update_game_log,
             )
                 .run_if(in_gameplay),
@@ -54,39 +54,26 @@ fn setup_hud(mut commands: Commands, font: Res<UiFont>) {
             BlocksPicking,
         ))
         .with_children(|parent| {
-            // HP label and value
-            parent.spawn((
-                Text::new("HP: 30 / 30"),
-                TextFont {
-                    font: font.0.clone().into(),
-                    font_size: FontSize::Px(16.0),
-                    ..default()
-                },
-                TextColor(Color::srgb(1.0, 1.0, 0.0)), // Yellow
-                HealthText,
-            ));
-
-            // Health bar container (background)
+            // One row per hero, in slot order
             parent
-                .spawn((
-                    Node {
-                        width: Val::Px(200.0),
-                        height: Val::Px(16.0),
-                        ..default()
-                    },
-                    BackgroundColor(Color::srgb(0.3, 0.0, 0.0)), // Dark red background
-                ))
-                .with_children(|bar_parent| {
-                    // Health bar fill
-                    bar_parent.spawn((
-                        Node {
-                            width: Val::Percent(100.0),
-                            height: Val::Percent(100.0),
-                            ..default()
-                        },
-                        BackgroundColor(Color::srgb(1.0, 0.0, 0.0)), // Red fill
-                        HealthBar,
-                    ));
+                .spawn(Node {
+                    flex_direction: FlexDirection::Column,
+                    // The game log grows into the rest; the rows keep their width.
+                    flex_shrink: 0.0,
+                    ..default()
+                })
+                .with_children(|rows| {
+                    for slot in 0..PARTY_SIZE {
+                        rows.spawn((
+                            Text::new(""),
+                            TextFont {
+                                font: font.0.clone().into(),
+                                font_size: FontSize::Px(16.0),
+                                ..default()
+                            },
+                            PartyRow(slot),
+                        ));
+                    }
                 });
 
             // Depth display
@@ -99,6 +86,7 @@ fn setup_hud(mut commands: Commands, font: Res<UiFont>) {
                 },
                 TextColor(Color::srgb(1.0, 1.0, 0.0)), // Yellow
                 DepthText,
+                Node { flex_shrink: 0.0, ..default() },
             ));
 
             parent.spawn((
@@ -110,18 +98,7 @@ fn setup_hud(mut commands: Commands, font: Res<UiFont>) {
                 },
                 TextColor(Color::srgb(1.0, 0.84, 0.0)), // Gold
                 GoldText,
-            ));
-
-            // Hunger display
-            parent.spawn((
-                Text::new(""),
-                TextFont {
-                    font: font.0.clone().into(),
-                    font_size: FontSize::Px(16.0),
-                    ..default()
-                },
-                TextColor(Color::srgb(0.0, 1.0, 0.0)), // Green (will be updated)
-                HungerText,
+                Node { flex_shrink: 0.0, ..default() },
             ));
 
             // Game log container
@@ -149,22 +126,36 @@ fn setup_hud(mut commands: Commands, font: Res<UiFont>) {
         });
 }
 
-fn update_health_bar(
-    player_query: Query<&CombatStats, With<Player>>,
-    mut health_text_query: Query<&mut Text, With<HealthText>>,
-    mut health_bar_query: Query<&mut Node, With<HealthBar>>,
+/// Each row shows its hero's hit points and hunger in the hero's colour; a
+/// `>` marks the active unit. A fallen hero's row is blank.
+fn update_party_rows(
+    active: Res<ActiveUnit>,
+    party: Query<(Entity, &PartyMember, &Name, &CombatStats, &HungerClock, &Renderable)>,
+    mut rows: Query<(&PartyRow, &mut Text, &mut TextColor)>,
 ) {
-    if let Ok(stats) = player_query.single() {
-        // Update text
-        if let Ok(mut text) = health_text_query.single_mut() {
-            **text = format!("HP: {} / {}", stats.hp, stats.max_hp);
-        }
+    for (PartyRow(slot), mut text, mut colour) in &mut rows {
+        let Some((entity, _, name, stats, hunger, renderable)) = party.iter().find(|m| m.1.slot == *slot) else {
+            text.clear();
+            continue;
+        };
+        let marker = if active.0 == Some(entity) { '>' } else { ' ' };
+        **text = format!(
+            "{marker} {:<7} HP {:>2}/{:<2} {}",
+            name.name,
+            stats.hp,
+            stats.max_hp,
+            hunger_label(hunger.state)
+        );
+        colour.0 = renderable.fg;
+    }
+}
 
-        // Update bar width
-        if let Ok(mut node) = health_bar_query.single_mut() {
-            let percent = (stats.hp as f32 / stats.max_hp as f32) * 100.0;
-            node.width = Val::Percent(percent.max(0.0));
-        }
+fn hunger_label(state: HungerState) -> &'static str {
+    match state {
+        HungerState::WellFed => "Well Fed",
+        HungerState::Normal => "",
+        HungerState::Hungry => "Hungry",
+        HungerState::Starving => "Starving!",
     }
 }
 
@@ -177,33 +168,6 @@ fn update_depth(map: Res<Map>, mut depth_text_query: Query<&mut Text, With<Depth
 fn update_gold(purse: Res<Purse>, mut gold_text_query: Query<&mut Text, With<GoldText>>) {
     if let Ok(mut text) = gold_text_query.single_mut() {
         **text = format!("Gold: {}", purse.gold);
-    }
-}
-
-fn update_hunger_display(
-    player_query: Query<&HungerClock, With<Player>>,
-    mut hunger_text_query: Query<(&mut Text, &mut TextColor), With<HungerText>>,
-) {
-    if let Ok(hunger) = player_query.single() {
-        if let Ok((mut text, mut color)) = hunger_text_query.single_mut() {
-            match hunger.state {
-                HungerState::WellFed => {
-                    **text = "Well Fed".to_string();
-                    color.0 = Color::srgb(0.0, 1.0, 0.0); // Green
-                }
-                HungerState::Normal => {
-                    **text = "".to_string(); // Don't display when normal
-                }
-                HungerState::Hungry => {
-                    **text = "Hungry".to_string();
-                    color.0 = Color::srgb(1.0, 0.65, 0.0); // Orange
-                }
-                HungerState::Starving => {
-                    **text = "Starving!".to_string();
-                    color.0 = Color::srgb(1.0, 0.0, 0.0); // Red
-                }
-            }
-        }
     }
 }
 

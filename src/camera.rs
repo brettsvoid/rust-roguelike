@@ -7,15 +7,16 @@ use bevy::render::view::NoIndirectDrawing;
 
 use crate::debug::DebugMode;
 use crate::map::{grid_to_world, Map, Position};
-use crate::player::Player;
+use crate::party::{ActiveUnit, PartyMember};
 use crate::RunState;
 
 // Screen dimensions in tiles (viewport)
 pub const SCREEN_WIDTH: i32 = 80;
 pub const SCREEN_HEIGHT: i32 = 43;
 
-/// The grid cell the view centres on. It follows the player until panned,
-/// and goes back to following when the player moves or the view is recentred.
+/// The grid cell the view centres on. It follows the active unit until panned,
+/// and goes back to following when that unit moves, another is selected or
+/// the view is recentred.
 #[derive(Resource, Default)]
 pub struct Camera {
     pub x: i32,
@@ -128,14 +129,14 @@ pub(crate) fn iso_camera_transform(target: Vec3) -> Transform {
     Transform::from_translation(target + offset).looking_at(target, Vec3::Y)
 }
 
-fn update_camera(player_query: Query<Ref<Position>, With<Player>>, mut camera: ResMut<Camera>) {
-    if let Ok(player_pos) = player_query.single() {
-        if player_pos.is_changed() {
+fn update_camera(active: Res<ActiveUnit>, party: Query<Ref<Position>, With<PartyMember>>, mut camera: ResMut<Camera>) {
+    if let Some(unit_pos) = active.0.and_then(|unit| party.get(unit).ok()) {
+        if unit_pos.is_changed() || active.is_changed() {
             camera.panned = false;
         }
         if !camera.panned {
-            camera.x = player_pos.x;
-            camera.y = player_pos.y;
+            camera.x = unit_pos.x;
+            camera.y = unit_pos.y;
         }
     }
 }
@@ -152,7 +153,7 @@ fn pan_step(key: KeyCode) -> Option<IVec2> {
     }
 }
 
-/// WASD pans one step per press and per key repeat; C recentres on the player.
+/// WASD pans one step per press and per key repeat; C recentres on the active unit.
 fn pan_camera(
     mut evr_kbd: MessageReader<KeyboardInput>,
     debug_mode: Res<DebugMode>,

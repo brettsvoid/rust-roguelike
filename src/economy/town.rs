@@ -438,7 +438,8 @@ mod tests {
         use crate::game_flow::RunState;
         use crate::gamelog::GameLog;
         use crate::map::Map;
-        use crate::player::Player;
+        use crate::components::Name;
+        use crate::party::{ActiveUnit, PartyMember};
         use crate::resources::UiFont;
         use crate::rng::GameRng;
 
@@ -461,8 +462,10 @@ mod tests {
         });
         world.init_resource::<NextState<RunState>>();
         world.insert_resource(UiFont(Handle::default()));
+        world.init_resource::<ActiveUnit>();
         world.spawn((
-            Player,
+            PartyMember { slot: 0 },
+            Name { name: "Aldric".into() },
             CombatStats {
                 max_hp: 30,
                 hp: 0,
@@ -474,7 +477,7 @@ mod tests {
         assert!(world
             .resource::<GameLog>()
             .entries
-            .contains(&"You are dead".to_string()));
+            .contains(&"Your whole party is dead".to_string()));
 
         // A new game starts.
         crate::raws::load_raws();

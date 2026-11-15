@@ -5,7 +5,7 @@ use crate::components::{HungerClock, Item};
 use crate::map::{Map, Position, Revealed, RevealedState, Tile, TileType, GRID_PX};
 use crate::monsters::Monster;
 use crate::picking::HoveredTile;
-use crate::player::Player;
+use crate::party::{ActiveUnit, PartyMember};
 use crate::resources::UiFont;
 use crate::viewshed::Viewshed;
 use crate::RunState;
@@ -63,7 +63,7 @@ pub fn update_fov_overlay(
     mut commands: Commands,
     debug: Res<DebugMode>,
     window: Query<&Window>,
-    player_query: Query<&Viewshed, With<Player>>,
+    party: Query<&Viewshed, With<PartyMember>>,
     overlay_query: Query<Entity, With<FovOverlay>>,
 ) {
     // Despawn existing overlays
@@ -79,15 +79,12 @@ pub fn update_fov_overlay(
         return;
     };
 
-    let Ok(viewshed) = player_query.single() else {
-        return;
-    };
 
     let half_width = window.width() / 2.0;
     let half_height = window.height() / 2.0;
 
     // Spawn overlay for each visible tile
-    for &(x, y) in &viewshed.visible_tiles {
+    for &(x, y) in party.iter().flat_map(|v| v.visible_tiles.iter()) {
         let screen_x = (x as f32) * GRID_PX.x + (GRID_PX.x / 2.0) - half_width;
         let screen_y = (y as f32) * -GRID_PX.y - (GRID_PX.y / 2.0) + half_height;
 
@@ -189,7 +186,8 @@ pub fn update_state_inspector(
     state: Res<State<RunState>>,
     map: Res<Map>,
     font: Res<UiFont>,
-    player_query: Query<(&Position, &CombatStats, &HungerClock), With<Player>>,
+    active: Res<ActiveUnit>,
+    party: Query<(&Position, &CombatStats, &HungerClock), With<PartyMember>>,
     monster_query: Query<Entity, With<Monster>>,
     item_query: Query<Entity, With<Item>>,
     inspector_query: Query<Entity, With<StateInspector>>,
@@ -206,7 +204,7 @@ pub fn update_state_inspector(
     let state_name = format!("{:?}", state.get());
     let depth = map.depth;
 
-    let (player_info, hp_info, hunger_info) = if let Ok((pos, stats, hunger)) = player_query.single() {
+    let (player_info, hp_info, hunger_info) = if let Some((pos, stats, hunger)) = active.0.and_then(|unit| party.get(unit).ok()) {
         (
             format!("({}, {})", pos.x, pos.y),
             format!("{}/{}", stats.hp, stats.max_hp),
@@ -263,9 +261,9 @@ pub fn update_state_inspector(
                 TextColor(Color::WHITE),
             ));
 
-            // Player
+            // Active unit
             parent.spawn((
-                Text::new(format!("Player: {} HP {}", player_info, hp_info)),
+                Text::new(format!("Active: {} HP {}", player_info, hp_info)),
                 text_font.clone(),
                 TextColor(Color::WHITE),
             ));

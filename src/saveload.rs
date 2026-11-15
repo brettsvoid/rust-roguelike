@@ -20,7 +20,7 @@ use crate::gamelog::GameLog;
 use crate::map::{tile_walkable, Map, Position, Tile, TileType, FONT_SIZE};
 use crate::map_render::{spawn_map_tiles, TileReveal};
 use crate::monsters::Monster;
-use crate::player::Player;
+use crate::party::{ActiveUnit, PartyMember};
 use crate::resources::UiFont;
 use crate::viewshed::Viewshed;
 
@@ -37,18 +37,19 @@ const SAVE_FILE: &str = "savegame.test-never-written.json";
 // component that should survive a save/load, extend the matching query here
 // and the (de)serialization code below.
 
-pub type PlayerSaveQuery<'w, 's> = Query<
+pub type PartySaveQuery<'w, 's> = Query<
     'w,
     's,
     (
         Entity,
+        &'static PartyMember,
         &'static Position,
         &'static Name,
         &'static CombatStats,
         &'static Viewshed,
         &'static HungerClock,
+        &'static Renderable,
     ),
-    With<Player>,
 >;
 
 pub type MonsterSaveQuery<'w, 's> = Query<
@@ -103,7 +104,7 @@ pub type TrapSaveQuery<'w, 's> = Query<
     With<EntryTrigger>,
 >;
 
-/// Q key: save the game (if a run is in progress and the player is alive)
+/// Q key: save the game (if a run is in progress and a hero is alive)
 /// and exit. Registered as a system in main.rs.
 pub fn save_on_quit(
     keyboard: Res<ButtonInput<KeyCode>>,
@@ -112,21 +113,19 @@ pub fn save_on_quit(
     map: Res<Map>,
     game_log: Res<GameLog>,
     purse: Res<Purse>,
-    player_query: PlayerSaveQuery,
+    active: Res<ActiveUnit>,
+    party_query: PartySaveQuery,
     monster_query: MonsterSaveQuery,
     item_query: ItemSaveQuery,
     trap_query: TrapSaveQuery,
 ) {
     if keyboard.just_released(KeyCode::KeyQ) {
-        // Only save if we're in-game (not in MainMenu) and player is alive
+        // Only save if we're in-game (not in MainMenu) and a hero is alive
         if *state.get() != RunState::MainMenu {
-            let player_alive = player_query
-                .single()
-                .map(|(_, _, _, stats, _, _)| stats.hp > 0)
-                .unwrap_or(false);
+            let party_alive = party_query.iter().any(|(_, _, _, _, stats, ..)| stats.hp > 0);
 
-            if player_alive {
-                save_game(map, game_log, purse, player_query, monster_query, item_query, trap_query);
+            if party_alive {
+                save_game(map, game_log, purse, active, party_query, monster_query, item_query, trap_query);
             }
         }
         exit.write(AppExit::Success);
@@ -140,7 +139,10 @@ pub fn save_on_quit(
 #[derive(Serialize, Deserialize)]
 pub struct SaveData {
     pub map: SerializedMap,
-    pub player: SerializedPlayer,
+    /// The heroes still alive, in slot order.
+    pub party: Vec<SerializedMember>,
+    /// The slot of the active unit.
+    pub active: usize,
     pub monsters: Vec<SerializedMonster>,
     pub items: Vec<SerializedItem>,
     #[serde(default)]
@@ -162,10 +164,12 @@ pub struct SerializedMap {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct SerializedPlayer {
+pub struct SerializedMember {
+    pub slot: usize,
     pub x: i32,
     pub y: i32,
     pub name: String,
+    pub color: SerializedColor,
     pub max_hp: i32,
     pub hp: i32,
     pub defense: i32,
@@ -209,7 +213,8 @@ pub struct SerializedItem {
 #[derive(Serialize, Deserialize)]
 pub enum ItemLocation {
     OnGround { x: i32, y: i32 },
-    InPlayerBackpack,
+    /// In the backpack of the hero in this slot.
+    InBackpack { slot: usize },
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -256,31 +261,36 @@ pub fn save_game(
     map: Res<Map>,
     game_log: Res<GameLog>,
     purse: Res<Purse>,
-    player_query: PlayerSaveQuery,
+    active: Res<ActiveUnit>,
+    party_query: PartySaveQuery,
     monster_query: MonsterSaveQuery,
     item_query: ItemSaveQuery,
     trap_query: TrapSaveQuery,
 ) {
-    let Ok((player_entity, player_pos, player_name, player_stats, player_viewshed, player_hunger)) =
-        player_query.single()
-    else {
-        warn!("Cannot save: no player found");
+    let mut party: Vec<SerializedMember> = party_query
+        .iter()
+        .map(|(_, member, pos, name, stats, viewshed, hunger, renderable)| SerializedMember {
+            slot: member.slot,
+            x: pos.x,
+            y: pos.y,
+            name: name.name.clone(),
+            color: serialize_color(renderable.fg),
+            max_hp: stats.max_hp,
+            hp: stats.hp,
+            defense: stats.defense,
+            power: stats.power,
+            viewshed_range: viewshed.range,
+            hunger_state: hunger.state,
+            hunger_duration: hunger.duration,
+        })
+        .collect();
+    if party.is_empty() {
+        warn!("Cannot save: no party found");
         return;
-    };
-
-    // Serialize player
-    let player = SerializedPlayer {
-        x: player_pos.x,
-        y: player_pos.y,
-        name: player_name.name.clone(),
-        max_hp: player_stats.max_hp,
-        hp: player_stats.hp,
-        defense: player_stats.defense,
-        power: player_stats.power,
-        viewshed_range: player_viewshed.range,
-        hunger_state: player_hunger.state,
-        hunger_duration: player_hunger.duration,
-    };
+    }
+    party.sort_by_key(|member| member.slot);
+    let slot_of = |entity: Entity| party_query.get(entity).ok().map(|(_, member, ..)| member.slot);
+    let active = active.0.and_then(slot_of).unwrap_or(party[0].slot);
 
     // Serialize monsters
     let monsters: Vec<SerializedMonster> = monster_query
@@ -323,8 +333,8 @@ pub fn save_game(
                 (magic_mapper, gold),
             )| {
                 let location = if let Some(backpack) = in_backpack {
-                    if backpack.owner == player_entity {
-                        ItemLocation::InPlayerBackpack
+                    if let Some(slot) = slot_of(backpack.owner) {
+                        ItemLocation::InBackpack { slot }
                     } else {
                         // Shouldn't happen in this game, but handle it
                         ItemLocation::OnGround {
@@ -403,7 +413,8 @@ pub fn save_game(
 
     let save_data = SaveData {
         map: serialized_map,
-        player,
+        party,
+        active,
         monsters,
         items,
         traps,
@@ -425,6 +436,15 @@ pub fn save_game(
     }
 }
 
+fn serialize_color(color: Color) -> SerializedColor {
+    let srgba = color.to_srgba();
+    SerializedColor {
+        r: srgba.red,
+        g: srgba.green,
+        b: srgba.blue,
+    }
+}
+
 // ============================================================================
 // Load System
 // ============================================================================
@@ -442,7 +462,7 @@ pub fn delete_save_file() {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_game(
     commands: &mut Commands,
-    entities_to_despawn: &Query<Entity, Or<(With<Player>, With<Monster>, With<Item>, With<Tile>, With<EntryTrigger>)>>,
+    entities_to_despawn: &Query<Entity, Or<(With<PartyMember>, With<Monster>, With<Item>, With<Tile>, With<EntryTrigger>)>>,
     map: &mut Map,
     game_log: &mut GameLog,
     font: &UiFont,
@@ -470,7 +490,7 @@ pub fn load_game(
 #[cfg(not(target_arch = "wasm32"))]
 fn restore_game(
     commands: &mut Commands,
-    entities_to_despawn: &Query<Entity, Or<(With<Player>, With<Monster>, With<Item>, With<Tile>, With<EntryTrigger>)>>,
+    entities_to_despawn: &Query<Entity, Or<(With<PartyMember>, With<Monster>, With<Item>, With<Tile>, With<EntryTrigger>)>>,
     map: &mut Map,
     game_log: &mut GameLog,
     font: &UiFont,
@@ -508,39 +528,43 @@ fn restore_game(
     // Spawn map tiles, keeping explored areas dimly visible
     spawn_map_tiles(commands, map, &text_font, TileReveal::FromSave);
 
-    // Spawn player
-    let player_entity = commands
-        .spawn((
-            Player,
-            Name {
-                name: save_data.player.name,
-            },
-            Position {
-                x: save_data.player.x,
-                y: save_data.player.y,
-            },
-            CombatStats {
-                max_hp: save_data.player.max_hp,
-                hp: save_data.player.hp,
-                defense: save_data.player.defense,
-                power: save_data.player.power,
-            },
-            Viewshed {
-                range: save_data.player.viewshed_range,
-                visible_tiles: Vec::new(),
-                dirty: true,
-            },
-            HungerClock {
-                state: save_data.player.hunger_state,
-                duration: save_data.player.hunger_duration,
-            },
-            RenderableBundle::new(
-                "☺",
-                palettes::basic::YELLOW.into(),
-                EntityShape::Creature,
-            ),
-        ))
-        .id();
+    // Spawn the party
+    let mut party = Vec::new();
+    for member in save_data.party {
+        let entity = commands
+            .spawn((
+                PartyMember { slot: member.slot },
+                Name { name: member.name },
+                Position {
+                    x: member.x,
+                    y: member.y,
+                },
+                CombatStats {
+                    max_hp: member.max_hp,
+                    hp: member.hp,
+                    defense: member.defense,
+                    power: member.power,
+                },
+                Viewshed {
+                    range: member.viewshed_range,
+                    visible_tiles: Vec::new(),
+                    dirty: true,
+                },
+                HungerClock {
+                    state: member.hunger_state,
+                    duration: member.hunger_duration,
+                },
+                RenderableBundle::new(
+                    "☺",
+                    Color::srgb(member.color.r, member.color.g, member.color.b),
+                    EntityShape::Creature,
+                ),
+            ))
+            .id();
+        party.push((member.slot, entity));
+    }
+    let member_in = |slot: usize| party.iter().find(|m| m.0 == slot).map(|m| m.1);
+    commands.insert_resource(ActiveUnit(member_in(save_data.active).or(party.first().map(|m| m.1))));
 
     // Spawn monsters
     for monster in save_data.monsters {
@@ -583,7 +607,7 @@ fn restore_game(
         let color = Color::srgb(item.color.r, item.color.g, item.color.b);
         let mut entity_commands = commands.spawn((
             Item,
-            Name { name: item.name },
+            Name { name: item.name.clone() },
             RenderableBundle::new(
                 &item.glyph,
                 color,
@@ -596,12 +620,12 @@ fn restore_game(
             ItemLocation::OnGround { x, y } => {
                 entity_commands.insert(Position { x, y });
             }
-            ItemLocation::InPlayerBackpack => {
-                entity_commands.insert(InBackpack {
-                    owner: player_entity,
-                });
-                entity_commands.insert(Visibility::Hidden);
-            }
+            ItemLocation::InBackpack { slot } => match member_in(slot) {
+                Some(owner) => {
+                    entity_commands.insert((InBackpack { owner }, Visibility::Hidden));
+                }
+                None => warn!("Item {} belongs to no hero in slot {slot}", item.name),
+            },
         }
 
         // Add properties
@@ -674,7 +698,8 @@ pub fn save_game(
     _map: Res<Map>,
     _game_log: Res<GameLog>,
     _purse: Res<Purse>,
-    _player_query: PlayerSaveQuery,
+    _active: Res<ActiveUnit>,
+    _party_query: PartySaveQuery,
     _monster_query: MonsterSaveQuery,
     _item_query: ItemSaveQuery,
     _trap_query: TrapSaveQuery,
@@ -695,7 +720,7 @@ pub fn delete_save_file() {
 #[cfg(target_arch = "wasm32")]
 pub fn load_game(
     _commands: &mut Commands,
-    _entities_to_despawn: &Query<Entity, Or<(With<Player>, With<Monster>, With<Item>, With<Tile>, With<EntryTrigger>)>>,
+    _entities_to_despawn: &Query<Entity, Or<(With<PartyMember>, With<Monster>, With<Item>, With<Tile>, With<EntryTrigger>)>>,
     _map: &mut Map,
     _game_log: &mut GameLog,
     _font: &UiFont,
@@ -707,6 +732,23 @@ pub fn load_game(
 mod tests {
     use super::*;
 
+    fn member(slot: usize, name: &str, x: i32) -> SerializedMember {
+        SerializedMember {
+            slot,
+            x,
+            y: 0,
+            name: name.into(),
+            color: SerializedColor { r: 0.0, g: 1.0, b: 0.0 },
+            max_hp: 30,
+            hp: 30 - slot as i32,
+            defense: 2,
+            power: 5,
+            viewshed_range: 8,
+            hunger_state: HungerState::Normal,
+            hunger_duration: 20,
+        }
+    }
+
     fn save_with_gold() -> SaveData {
         SaveData {
             map: SerializedMap {
@@ -717,18 +759,8 @@ mod tests {
                 depth: 2,
                 bloodstains: Vec::new(),
             },
-            player: SerializedPlayer {
-                x: 0,
-                y: 0,
-                name: "Player".into(),
-                max_hp: 30,
-                hp: 30,
-                defense: 2,
-                power: 5,
-                viewshed_range: 8,
-                hunger_state: HungerState::Normal,
-                hunger_duration: 20,
-            },
+            party: vec![member(0, "Aldric", 0), member(2, "Corin", 3)],
+            active: 2,
             monsters: vec![SerializedMonster {
                 x: 1,
                 y: 1,
@@ -742,16 +774,25 @@ mod tests {
                 confusion_turns: None,
                 gold: Some(6),
             }],
-            items: vec![SerializedItem {
-                name: "Gold".into(),
-                glyph: "$".into(),
-                color: SerializedColor { r: 1.0, g: 0.84, b: 0.0 },
-                location: ItemLocation::OnGround { x: 2, y: 2 },
-                properties: ItemProperties {
-                    gold: Some(17),
-                    ..default()
+            items: vec![
+                SerializedItem {
+                    name: "Gold".into(),
+                    glyph: "$".into(),
+                    color: SerializedColor { r: 1.0, g: 0.84, b: 0.0 },
+                    location: ItemLocation::OnGround { x: 2, y: 2 },
+                    properties: ItemProperties {
+                        gold: Some(17),
+                        ..default()
+                    },
                 },
-            }],
+                SerializedItem {
+                    name: "Dagger".into(),
+                    glyph: "/".into(),
+                    color: SerializedColor { r: 0.0, g: 1.0, b: 1.0 },
+                    location: ItemLocation::InBackpack { slot: 2 },
+                    properties: ItemProperties::default(),
+                },
+            ],
             traps: Vec::new(),
             game_log: Vec::new(),
             gold: 42,
@@ -766,6 +807,18 @@ mod tests {
         assert_eq!(loaded.gold, 42);
         assert_eq!(loaded.monsters[0].gold, Some(6));
         assert_eq!(loaded.items[0].properties.gold, Some(17));
+    }
+
+    #[test]
+    fn the_whole_party_survives_a_save_round_trip() {
+        let json = serde_json::to_string(&save_with_gold()).unwrap();
+        let loaded: SaveData = serde_json::from_str(&json).unwrap();
+
+        let party: Vec<(usize, &str, i32, i32)> =
+            loaded.party.iter().map(|m| (m.slot, m.name.as_str(), m.x, m.hp)).collect();
+        assert_eq!(party, vec![(0, "Aldric", 0, 30), (2, "Corin", 3, 28)]);
+        assert_eq!(loaded.active, 2);
+        assert!(matches!(loaded.items[1].location, ItemLocation::InBackpack { slot: 2 }));
     }
 
     #[test]
@@ -785,7 +838,7 @@ mod tests {
                 |mut commands: Commands,
                  existing: Query<
                     Entity,
-                    Or<(With<Player>, With<Monster>, With<Item>, With<Tile>, With<EntryTrigger>)>,
+                    Or<(With<PartyMember>, With<Monster>, With<Item>, With<Tile>, With<EntryTrigger>)>,
                 >| {
                     let font = UiFont(Handle::default());
                     let (mut map, mut log) = (Map::default(), GameLog::default());
@@ -797,7 +850,7 @@ mod tests {
 
         let world = app.world_mut();
         let mut bodies: Vec<(String, Vec3, bool)> = world
-            .query_filtered::<(&Name, &Transform, Has<Mesh3d>), With<EntityShape>>()
+            .query_filtered::<(&Name, &Transform, Has<Mesh3d>), (With<EntityShape>, With<Position>)>()
             .iter(world)
             .map(|(name, transform, mesh)| (name.name.clone(), transform.translation, mesh))
             .collect();
@@ -805,11 +858,22 @@ mod tests {
         assert_eq!(
             bodies,
             vec![
+                ("Aldric".into(), Vec3::new(0.0, 0.7, 0.0), true),
+                ("Corin".into(), Vec3::new(3.0, 0.7, 0.0), true),
                 ("Goblin".into(), Vec3::new(1.0, 0.7, 1.0), true),
                 ("Gold".into(), Vec3::new(2.0, 0.15, 2.0), true),
-                ("Player".into(), Vec3::new(0.0, 0.7, 0.0), true),
             ]
         );
+
+        // The active unit and the dagger's owner are the restored Corin.
+        let corin = world
+            .query::<(Entity, &PartyMember)>()
+            .iter(world)
+            .find(|(_, member)| member.slot == 2)
+            .map(|(entity, _)| entity);
+        assert_eq!(world.resource::<ActiveUnit>().0, corin);
+        let owners: Vec<Entity> = world.query::<&InBackpack>().iter(world).map(|b| b.owner).collect();
+        assert_eq!(owners, corin.into_iter().collect::<Vec<_>>());
     }
 
     #[test]

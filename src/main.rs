@@ -31,6 +31,7 @@ mod models;
 mod monsters;
 mod occlusion;
 mod particle;
+mod party;
 mod pathfinding;
 mod picking;
 mod player;
@@ -90,6 +91,7 @@ fn main() {
             resources::ResourcesPlugin,
             game_flow::GameFlowPlugin,
             mapgen_viz::MapGenVizPlugin,
+            party::PartyPlugin,
             player::PlayerPlugin,
             viewshed::ViewshedPlugin,
             map::MapPlugin,

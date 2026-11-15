@@ -3,7 +3,7 @@ use bevy::input::ButtonState;
 use bevy::prelude::*;
 
 use crate::components::{Equipped, InBackpack, Item, Name, Ranged, WantsToDropItem, WantsToRemoveItem, WantsToUseItem};
-use crate::player::Player;
+use crate::party::ActiveUnit;
 use crate::resources::UiFont;
 use crate::ui::TargetingInfo;
 use crate::RunState;
@@ -63,12 +63,13 @@ fn spawn_inventory_menu(
     mut commands: Commands,
     font: Res<UiFont>,
     mut menu_page: ResMut<MenuPage>,
-    player_query: Query<Entity, With<Player>>,
+    active: Res<ActiveUnit>,
+    names: Query<&Name>,
     backpack_query: Query<(&InBackpack, &Name), With<Item>>,
 ) {
     menu_page.0 = 0;
 
-    let Ok(player_entity) = player_query.single() else {
+    let Some(player_entity) = active.0 else {
         return;
     };
 
@@ -78,7 +79,7 @@ fn spawn_inventory_menu(
         .map(|(_, name)| name.name.clone())
         .collect();
 
-    let menu = ModalMenuBuilder::new("Inventory")
+    let menu = ModalMenuBuilder::new(titled("Inventory", names.get(player_entity).ok()))
         .items_with_index(items.iter().map(|s| s.as_str()))
         .paginated()
         .empty_message("Your inventory is empty.")
@@ -113,13 +114,13 @@ fn handle_inventory_input(
     mut next_state: ResMut<NextState<RunState>>,
     mut targeting_info: ResMut<TargetingInfo>,
     mut menu_page: ResMut<MenuPage>,
-    player_query: Query<Entity, With<Player>>,
+    active: Res<ActiveUnit>,
     backpack_query: Query<(Entity, &InBackpack), With<Item>>,
     ranged_query: Query<&Ranged>,
     menu_query: Query<&ModalMenu, With<InventoryMenuMarker>>,
     mut text_query: Query<&mut Text, With<ModalMenuText>>,
 ) {
-    let Ok(player_entity) = player_query.single() else {
+    let Some(player_entity) = active.0 else {
         return;
     };
 
@@ -181,12 +182,13 @@ fn spawn_drop_menu(
     mut commands: Commands,
     font: Res<UiFont>,
     mut menu_page: ResMut<MenuPage>,
-    player_query: Query<Entity, With<Player>>,
+    active: Res<ActiveUnit>,
+    names: Query<&Name>,
     backpack_query: Query<(&InBackpack, &Name), With<Item>>,
 ) {
     menu_page.0 = 0;
 
-    let Ok(player_entity) = player_query.single() else {
+    let Some(player_entity) = active.0 else {
         return;
     };
 
@@ -196,7 +198,7 @@ fn spawn_drop_menu(
         .map(|(_, name)| name.name.clone())
         .collect();
 
-    let menu = ModalMenuBuilder::new("Drop which item?")
+    let menu = ModalMenuBuilder::new(titled("Drop which item?", names.get(player_entity).ok()))
         .items_with_index(items.iter().map(|s| s.as_str()))
         .paginated()
         .empty_message("Nothing to drop.")
@@ -230,12 +232,12 @@ fn handle_drop_input(
     mut evr_kbd: MessageReader<KeyboardInput>,
     mut next_state: ResMut<NextState<RunState>>,
     mut menu_page: ResMut<MenuPage>,
-    player_query: Query<Entity, With<Player>>,
+    active: Res<ActiveUnit>,
     backpack_query: Query<(Entity, &InBackpack), With<Item>>,
     menu_query: Query<&ModalMenu, With<DropMenuMarker>>,
     mut text_query: Query<&mut Text, With<ModalMenuText>>,
 ) {
-    let Ok(player_entity) = player_query.single() else {
+    let Some(player_entity) = active.0 else {
         return;
     };
 
@@ -288,12 +290,13 @@ fn spawn_remove_menu(
     mut commands: Commands,
     font: Res<UiFont>,
     mut menu_page: ResMut<MenuPage>,
-    player_query: Query<Entity, With<Player>>,
+    active: Res<ActiveUnit>,
+    names: Query<&Name>,
     equipped_query: Query<(&Equipped, &Name), With<Item>>,
 ) {
     menu_page.0 = 0;
 
-    let Ok(player_entity) = player_query.single() else {
+    let Some(player_entity) = active.0 else {
         return;
     };
 
@@ -303,7 +306,7 @@ fn spawn_remove_menu(
         .map(|(_, name)| name.name.clone())
         .collect();
 
-    let menu = ModalMenuBuilder::new("Remove which item?")
+    let menu = ModalMenuBuilder::new(titled("Remove which item?", names.get(player_entity).ok()))
         .items_with_index(items.iter().map(|s| s.as_str()))
         .paginated()
         .empty_message("No equipment to remove.")
@@ -337,12 +340,12 @@ fn handle_remove_input(
     mut evr_kbd: MessageReader<KeyboardInput>,
     mut next_state: ResMut<NextState<RunState>>,
     mut menu_page: ResMut<MenuPage>,
-    player_query: Query<Entity, With<Player>>,
+    active: Res<ActiveUnit>,
     equipped_query: Query<(Entity, &Equipped), With<Item>>,
     menu_query: Query<&ModalMenu, With<RemoveMenuMarker>>,
     mut text_query: Query<&mut Text, With<ModalMenuText>>,
 ) {
-    let Ok(player_entity) = player_query.single() else {
+    let Some(player_entity) = active.0 else {
         return;
     };
 
@@ -390,6 +393,14 @@ fn handle_remove_input(
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+/// A menu title naming the unit it acts for.
+fn titled(title: &str, unit: Option<&Name>) -> String {
+    match unit {
+        Some(name) => format!("{}: {title}", name.name),
+        None => title.to_string(),
+    }
+}
 
 fn spawn_menu_ui(commands: &mut Commands, font: &UiFont, menu: &ModalMenu, menu_page: &MenuPage) {
     let text_content = build_menu_text(menu, menu_page);

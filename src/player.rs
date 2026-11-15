@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 
 use bevy::{
-    ecs::system::ParamSet,
     input::{keyboard::KeyboardInput, ButtonState},
     prelude::*,
 };
@@ -15,27 +14,25 @@ use crate::{
     gamelog::GameLog,
     map::{tile_walkable, xy_idx, Map, Position, TileType},
     monsters::Monster,
+    party::{next_unit, ActiveUnit, PartyMember},
     pathfinding::a_star_explored,
     picking::{self, HoveredTile, TileMarks, FULL_TILE},
     viewshed::Viewshed,
     RunState,
 };
 
-#[derive(Component, Debug)]
-pub struct Player;
-
-/// Result of attempting to move the player
+/// Result of attempting to move the active unit
 enum MoveResult {
-    /// Player moved to the new position
+    /// The unit moved to the new position
     Moved { new_x: i32, new_y: i32 },
-    /// Player attacked a target
+    /// The unit attacked a target
     Attacked {
         #[allow(dead_code)]
         target: Entity,
     },
-    /// Player swapped positions with a bystander
-    SwappedWithBystander { bystander: Entity, new_x: i32, new_y: i32 },
-    /// Player opened a door (doesn't move)
+    /// The unit swapped places with a bystander or another member
+    Swapped { other: Entity, new_x: i32, new_y: i32 },
+    /// The unit opened a door (doesn't move)
     OpenedDoor,
     /// Movement was blocked
     Blocked,
@@ -86,7 +83,7 @@ fn walk_path(map: &Map, from: (i32, i32), to: (i32, i32)) -> Option<VecDeque<(i3
 }
 
 /// This turn's step of a walk, or `None` to stop: the walk is over, a hostile
-/// is in view, or the next cell is no longer beside the player.
+/// is in view, or the next cell is no longer beside the walking unit.
 fn walk_step(from: (i32, i32), path: &VecDeque<(i32, i32)>, hostile_in_view: bool) -> Option<(i32, i32)> {
     let &(x, y) = path.front()?;
     let step = (x - from.0, y - from.1);
@@ -97,14 +94,15 @@ fn walk_step(from: (i32, i32), path: &VecDeque<(i32, i32)>, hostile_in_view: boo
 struct PathPreview;
 
 /// Marks the walk a click on the hovered tile would take. Redrawn only when
-/// the player or the hovered tile changes.
+/// the active unit or the hovered tile changes.
 fn show_path_preview(
     mut commands: Commands,
     state: Res<State<RunState>>,
     hovered: Res<HoveredTile>,
     map: Res<Map>,
     marks: Res<TileMarks>,
-    player: Query<&Position, With<Player>>,
+    active: Res<ActiveUnit>,
+    party: Query<&Position, With<PartyMember>>,
     previews: Query<Entity, With<PathPreview>>,
     mut shown: Local<Option<((i32, i32), (i32, i32), bool)>>,
 ) {
@@ -113,9 +111,9 @@ fn show_path_preview(
         state.get(),
         RunState::AwaitingInput | RunState::PlayerTurn | RunState::MonsterTurn
     );
-    let wanted = player
-        .single()
-        .ok()
+    let wanted = active
+        .0
+        .and_then(|unit| party.get(unit).ok())
         .map(|p| (p.x, p.y))
         .zip(hovered.tile)
         .filter(|_| in_turn)
@@ -146,9 +144,9 @@ fn try_move_player(
     player_y: i32,
     delta_x: i32,
     delta_y: i32,
-    combat_stats: &Query<&CombatStats, Without<Player>>,
-    doors: &mut Query<(Entity, &mut Door, &mut Renderable), Without<Player>>,
-    bystanders: &Query<Entity, (With<Bystander>, Without<Player>)>,
+    combat_stats: &Query<&CombatStats, Without<PartyMember>>,
+    doors: &mut Query<(Entity, &mut Door, &mut Renderable), Without<PartyMember>>,
+    swappable: &Query<&mut Position, Or<(With<Bystander>, With<PartyMember>)>>,
 ) -> MoveResult {
     let dest_x = player_x + delta_x;
     let dest_y = player_y + delta_y;
@@ -160,11 +158,11 @@ fn try_move_player(
 
     let destination_idx = xy_idx(dest_x, dest_y);
 
-    // Check for bystanders - swap positions instead of attacking
+    // Bystanders and other members swap places instead of being attacked
     for potential_target in map.tile_content[destination_idx].iter() {
-        if bystanders.get(*potential_target).is_ok() {
-            return MoveResult::SwappedWithBystander {
-                bystander: *potential_target,
+        if swappable.contains(*potential_target) {
+            return MoveResult::Swapped {
+                other: *potential_target,
                 new_x: dest_x,
                 new_y: dest_y,
             };
@@ -212,7 +210,7 @@ fn get_item(
     player_entity: Entity,
     player_x: i32,
     player_y: i32,
-    items: &Query<(Entity, &Position), (With<Item>, Without<Player>, Without<Bystander>)>,
+    items: &Query<(Entity, &Position), (With<Item>, Without<PartyMember>, Without<Bystander>)>,
 ) -> bool {
     for (item_entity, item_pos) in items {
         if item_pos.x == player_x && item_pos.y == player_y {
@@ -236,36 +234,36 @@ pub(crate) fn handle_player_input(
     map: Res<Map>,
     debug_mode: Res<DebugMode>,
     mut gamelog: ResMut<GameLog>,
-    mut player_query: Query<(Entity, &Viewshed, &mut CombatStats, &HungerClock), With<Player>>,
+    mut active: ResMut<ActiveUnit>,
+    mut party: Query<(Entity, &PartyMember, &mut CombatStats, &HungerClock, &Viewshed)>,
     mut next_state: ResMut<NextState<RunState>>,
-    other_combat_stats: Query<&CombatStats, Without<Player>>,
-    items: Query<(Entity, &Position), (With<Item>, Without<Player>, Without<Bystander>)>,
-    monsters: Query<&Position, (With<Monster>, Without<Player>, Without<Bystander>)>,
-    mut doors: Query<(Entity, &mut Door, &mut Renderable), Without<Player>>,
-    bystanders: Query<Entity, (With<Bystander>, Without<Player>)>,
-    // ParamSet to handle conflicting Position queries
-    mut position_set: ParamSet<(
-        Query<&mut Position, With<Player>>,
-        Query<&mut Position, (With<Bystander>, Without<Player>)>,
-    )>,
+    other_combat_stats: Query<&CombatStats, Without<PartyMember>>,
+    items: Query<(Entity, &Position), (With<Item>, Without<PartyMember>, Without<Bystander>)>,
+    monsters: Query<&Position, (With<Monster>, Without<PartyMember>, Without<Bystander>)>,
+    mut doors: Query<(Entity, &mut Door, &mut Renderable), Without<PartyMember>>,
+    mut positions: Query<&mut Position, Or<(With<Bystander>, With<PartyMember>)>>,
 ) {
     // Don't process player input if debug console is open
     if debug_mode.show_console {
         return;
     }
 
-    let Ok((player_entity, viewshed, mut player_stats, hunger)) = player_query.single_mut() else {
+    let Some(player_entity) = active.0 else {
         return;
     };
-
-    // Get player position
-    let (player_x, player_y) = {
-        let player_pos_query = position_set.p0();
-        let Ok(pos) = player_pos_query.single() else {
-            return;
-        };
-        (pos.x, pos.y)
+    let Ok(&Position { x: player_x, y: player_y }) = positions.get(player_entity) else {
+        return;
     };
+    let roster: Vec<(usize, Entity, bool)> =
+        party.iter().map(|(entity, member, stats, ..)| (member.slot, entity, stats.hp > 0)).collect();
+    // Seen by any member: `Map::visible_tiles` would count every tile under no-fog.
+    let hostile_in_view = monsters
+        .iter()
+        .any(|pos| party.iter().any(|(.., viewshed)| viewshed.visible_tiles.contains(&(pos.x, pos.y))));
+    let Ok((_, _, mut player_stats, hunger, _)) = party.get_mut(player_entity) else {
+        return;
+    };
+    let mut select = None;
 
     let mut player_acted = false;
     let mut move_result: Option<MoveResult> = None;
@@ -287,18 +285,8 @@ pub(crate) fn handle_player_input(
         match &ev.key_code {
             // Skip turn / wait
             KeyCode::Space => {
-                // Check if any monsters are visible
-                let mut can_heal = true;
-                for monster_pos in monsters.iter() {
-                    if viewshed.visible_tiles.contains(&(monster_pos.x, monster_pos.y)) {
-                        can_heal = false;
-                        break;
-                    }
-                }
-                // Can't heal while starving
-                if hunger.state == HungerState::Starving {
-                    can_heal = false;
-                }
+                // No healing with a hostile in view or while starving
+                let can_heal = !hostile_in_view && hunger.state != HungerState::Starving;
                 // Heal 1 HP if no monsters visible and not starving
                 if can_heal && player_stats.hp < player_stats.max_hp {
                     player_stats.hp = (player_stats.hp + 1).min(player_stats.max_hp);
@@ -338,6 +326,11 @@ pub(crate) fn handle_player_input(
                 }
             }
 
+            // Select the next living member
+            KeyCode::Tab => {
+                select = next_unit(&roster, Some(player_entity));
+            }
+
             // Go down stairs
             KeyCode::Period => {
                 let idx = xy_idx(player_x, player_y);
@@ -351,10 +344,19 @@ pub(crate) fn handle_player_input(
         }
     }
 
-    // Left click: on the player picks up or descends, anywhere else walks there.
-    // A walk carries on one step per turn while it has steps left.
+    // Left click: on another member selects them, on the active unit picks up
+    // or descends, anywhere else walks there. A walk carries on one step per
+    // turn while it has steps left.
+    let clicked = hovered.tile.filter(|_| !player_acted && mouse.just_pressed(MouseButton::Left));
+    let clicked_member = clicked.and_then(|target| {
+        roster.iter().find(|&&(_, entity, alive)| {
+            alive && entity != player_entity && positions.get(entity).is_ok_and(|p| (p.x, p.y) == target)
+        })
+    });
     let mut step = None;
-    if !player_acted && mouse.just_pressed(MouseButton::Left) {
+    if let Some(&(_, member, _)) = clicked_member {
+        select = Some(member);
+    } else if !player_acted && mouse.just_pressed(MouseButton::Left) {
         if let Some(target) = hovered.tile {
             *walk = WalkPath::default();
             if target == (player_x, player_y) {
@@ -375,9 +377,6 @@ pub(crate) fn handle_player_input(
             next_state.set_if_different(RunState::NextLevel);
         }
     } else if !player_acted && walk.is_active() {
-        let hostile_in_view = monsters
-            .iter()
-            .any(|pos| viewshed.visible_tiles.contains(&(pos.x, pos.y)));
         step = walk_step((player_x, player_y), &walk.cells, hostile_in_view);
         if step.is_none() {
             *walk = WalkPath::default();
@@ -386,10 +385,10 @@ pub(crate) fn handle_player_input(
     if let Some((dx, dy)) = step {
         let result = try_move_player(
             &mut commands, &mut gamelog, &map, player_entity, player_x, player_y,
-            dx, dy, &other_combat_stats, &mut doors, &bystanders,
+            dx, dy, &other_combat_stats, &mut doors, &positions,
         );
         match result {
-            MoveResult::Moved { .. } | MoveResult::SwappedWithBystander { .. } => {
+            MoveResult::Moved { .. } | MoveResult::Swapped { .. } => {
                 walk.cells.pop_front();
             }
             // Walk through the door next turn.
@@ -401,37 +400,27 @@ pub(crate) fn handle_player_input(
     }
 
     // Process movement results and update positions
-    if let Some(result) = move_result {
-        match result {
-            MoveResult::Moved { new_x, new_y } => {
-                let mut player_pos_query = position_set.p0();
-                if let Ok(mut pos) = player_pos_query.single_mut() {
-                    pos.x = new_x;
-                    pos.y = new_y;
-                }
-            }
-            MoveResult::SwappedWithBystander { bystander, new_x, new_y } => {
-                // First update bystander position to player's old position
-                {
-                    let mut bystander_pos_query = position_set.p1();
-                    if let Ok(mut bystander_pos) = bystander_pos_query.get_mut(bystander) {
-                        bystander_pos.x = player_x;
-                        bystander_pos.y = player_y;
-                    }
-                }
-                // Then update player position
-                {
-                    let mut player_pos_query = position_set.p0();
-                    if let Ok(mut pos) = player_pos_query.single_mut() {
-                        pos.x = new_x;
-                        pos.y = new_y;
-                    }
-                }
-            }
-            MoveResult::Attacked { .. } | MoveResult::OpenedDoor | MoveResult::Blocked => {
-                // No position change needed
+    match move_result {
+        Some(MoveResult::Moved { new_x, new_y }) => {
+            if let Ok(mut pos) = positions.get_mut(player_entity) {
+                (pos.x, pos.y) = (new_x, new_y);
             }
         }
+        Some(MoveResult::Swapped { other, new_x, new_y }) => {
+            if let Ok(mut pos) = positions.get_mut(other) {
+                (pos.x, pos.y) = (player_x, player_y);
+            }
+            if let Ok(mut pos) = positions.get_mut(player_entity) {
+                (pos.x, pos.y) = (new_x, new_y);
+            }
+        }
+        _ => {}
+    }
+
+    // Selecting a unit is free: no turn passes, and its walk starts afresh.
+    if let Some(unit) = select.filter(|&unit| unit != player_entity) {
+        *walk = WalkPath::default();
+        active.0 = Some(unit);
     }
 
     if player_acted {

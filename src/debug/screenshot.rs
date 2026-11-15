@@ -8,11 +8,12 @@
 //! pixels); `--target` enters targeting with the named item (e.g. `--console
 //! "spawn fireball" --target "Fireball Scroll"`). `--keys` and `--click` queue
 //! input in the order given, fed through the real input systems one at a time
-//! while the game waits for input: `--keys` presses keys (`g`, `.`, `w` `a` `s`
-//! `d` to pan, `c` to recentre, `+` and `-` scroll the wheel to zoom in and
-//! out); `--click X,Y` left-clicks grid cell X,Y as if the mouse hovered it,
-//! and the next input waits until the walk it starts ends. Every visual change
-//! is verified with it.
+//! while the game waits for input: `--keys` presses keys (`g`, `.`, `i` for the
+//! inventory, `n` for Tab to select the next hero, `w` `a` `s` `d` to pan, `c`
+//! to recentre, `+` and `-` scroll the wheel to zoom in and out); `--click X,Y`
+//! left-clicks grid cell X,Y as if the mouse hovered it (a click on another
+//! hero selects them), and the next input waits until the walk it starts ends.
+//! Every visual change is verified with it.
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -35,7 +36,8 @@ use crate::map::{Map, Position};
 use crate::models::AvailableModels;
 use crate::monsters::Monster;
 use crate::picking::{self, FakeCursor, HoveredTile};
-use crate::player::{self, Player, WalkPath};
+use crate::party::{ActiveUnit, PartyMember};
+use crate::player::{self, WalkPath};
 use crate::resources::UiFont;
 use crate::rng::GameRng;
 use crate::{RunState, TargetingInfo};
@@ -107,6 +109,8 @@ fn key_input(c: char) -> Option<HarnessInput> {
         '-' => return Some(HarnessInput::Scroll(-1.0)),
         'g' => KeyCode::KeyG,
         '.' => KeyCode::Period,
+        'i' => KeyCode::KeyI,
+        'n' => KeyCode::Tab,
         'w' => KeyCode::KeyW,
         'a' => KeyCode::KeyA,
         's' => KeyCode::KeyS,
@@ -240,7 +244,8 @@ fn prepare_capture(
     mut done: Local<bool>,
     mut debug_state: ResMut<DebugState>,
     mut god_mode: ResMut<GodMode>,
-    mut player_query: Query<(Entity, &mut Position, &mut CombatStats), With<Player>>,
+    active: Res<ActiveUnit>,
+    mut party: Query<(Entity, &mut Position, &mut CombatStats), With<PartyMember>>,
     monster_query: Query<Entity, With<Monster>>,
     mut town: ResMut<TownState>,
     mut next_state: ResMut<NextState<RunState>>,
@@ -254,7 +259,8 @@ fn prepare_capture(
             &mut commands,
             &mut debug_state,
             &mut god_mode,
-            &mut player_query,
+            &mut party,
+            active.0,
             &monster_query,
             &mut town,
         );
@@ -361,7 +367,7 @@ mod tests {
     #[test]
     fn all_flags() {
         assert_eq!(
-            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger --keys g. --click 3,-4 --keys wasdc+-"),
+            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger --keys g.in --click 3,-4 --keys wasdc+-"),
             Ok(Some(ScreenshotArgs {
                 path: PathBuf::from("a.png"),
                 seed: 7,
@@ -375,6 +381,8 @@ mod tests {
                 inputs: vec![
                     HarnessInput::Key(KeyCode::KeyG),
                     HarnessInput::Key(KeyCode::Period),
+                    HarnessInput::Key(KeyCode::KeyI),
+                    HarnessInput::Key(KeyCode::Tab),
                     HarnessInput::Click(3, -4),
                     HarnessInput::Key(KeyCode::KeyW),
                     HarnessInput::Key(KeyCode::KeyA),

@@ -3,7 +3,7 @@
 use bevy::prelude::*;
 
 use crate::combat::CombatStats;
-use crate::components::{EntryTrigger, InBackpack, Item};
+use crate::components::{EntryTrigger, Item};
 use crate::economy::town::TownState;
 use crate::economy::Purse;
 use crate::game_flow::RunState;
@@ -12,13 +12,13 @@ use crate::map::{Map, Position, Tile, FONT_SIZE};
 use crate::map_builders;
 use crate::map_render::{spawn_map_tiles, TileReveal};
 use crate::monsters::Monster;
-use crate::player::Player;
+use crate::party::{self, ActiveUnit, PartyMember};
 use crate::resources::UiFont;
 use crate::rng::GameRng;
 use crate::spawner;
 use crate::viewshed::Viewshed;
 
-/// Build the starting map and spawn the player plus initial entities.
+/// Build the starting map and spawn the party plus initial entities.
 /// Called from the main menu when starting a new game (depth 1), and by the
 /// screenshot harness at any depth.
 pub fn spawn_new_game(
@@ -42,15 +42,16 @@ pub fn spawn_new_game(
 
     spawn_map_tiles(commands, map, &text_font, TileReveal::Hidden);
 
-    let (player_x, player_y) = builder.get_starting_position();
-    spawner::spawn_player(commands, player_x, player_y);
+    let tiles = party::spawn_tiles(map, builder.get_starting_position(), party::PARTY_SIZE);
+    let party = spawner::spawn_party(commands, &tiles);
+    commands.insert_resource(ActiveUnit(party.first().copied()));
     commands.insert_resource(Purse::default());
 
     builder.spawn_entities(commands, rng);
 }
 
-/// Tear down the current level and build the next one, keeping the player
-/// and whatever they carry.
+/// Tear down the current level and build the next one, keeping the party
+/// and whatever it carries.
 pub fn go_next_level(
     mut commands: Commands,
     mut map: ResMut<Map>,
@@ -59,28 +60,15 @@ pub fn go_next_level(
     font: Res<UiFont>,
     mut rng: ResMut<GameRng>,
     town: Res<TownState>,
-    mut player_query: Query<(Entity, &mut CombatStats), With<Player>>,
-    backpack_query: Query<(Entity, &InBackpack)>,
+    mut party_query: Query<(Entity, &PartyMember, &mut CombatStats, &mut Viewshed)>,
+    // Items on the ground go with the level; carried ones have no `Position`.
     entities_to_delete: Query<
         Entity,
-        Or<(With<Monster>, With<Tile>, With<Item>, With<EntryTrigger>)>,
+        Or<(With<Monster>, With<Tile>, (With<Item>, With<Position>), With<EntryTrigger>)>,
     >,
 ) {
-    // Get player entity and items in their backpack
-    let Ok((player_entity, mut player_stats)) = player_query.single_mut() else {
-        return;
-    };
-    let player_items: Vec<Entity> = backpack_query
-        .iter()
-        .filter(|(_, backpack)| backpack.owner == player_entity)
-        .map(|(entity, _)| entity)
-        .collect();
-
-    // Delete all entities except player and their backpack items
     for entity in &entities_to_delete {
-        if entity != player_entity && !player_items.contains(&entity) {
-            commands.entity(entity).despawn();
-        }
+        commands.entity(entity).despawn();
     }
 
     // Generate new map with increased depth using level-appropriate builder
@@ -100,23 +88,16 @@ pub fn go_next_level(
     // Spawn monsters and items via builder
     builder.spawn_entities(&mut commands, &mut rng);
 
-    // Move player to starting position
-    let (player_x, player_y) = builder.get_starting_position();
-    commands.entity(player_entity).insert(Position {
-        x: player_x,
-        y: player_y,
-    });
-
-    // Heal player (restore up to 50% of max HP)
-    let heal_amount = player_stats.max_hp / 2;
-    player_stats.hp = (player_stats.hp + heal_amount).min(player_stats.max_hp);
-
-    // Mark player's viewshed as dirty to recalculate visibility
-    commands.entity(player_entity).insert(Viewshed {
-        range: 8,
-        visible_tiles: Vec::new(),
-        dirty: true,
-    });
+    // Stand the party round the start, in slot order, each healed by half
+    let mut members: Vec<_> = party_query.iter_mut().collect();
+    members.sort_by_key(|(_, member, _, _)| member.slot);
+    let tiles = party::spawn_tiles(&map, builder.get_starting_position(), members.len());
+    for ((entity, _, mut stats, mut viewshed), (x, y)) in members.into_iter().zip(tiles) {
+        commands.entity(entity).insert(Position { x, y });
+        stats.hp = (stats.hp + stats.max_hp / 2).min(stats.max_hp);
+        viewshed.visible_tiles.clear();
+        viewshed.dirty = true;
+    }
 
     gamelog.entries.push(format!(
         "You descend to level {}. You feel slightly rejuvenated.",

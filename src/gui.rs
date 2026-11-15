@@ -10,7 +10,7 @@ use crate::map::{Map, Tile};
 use crate::map_builders;
 use crate::mapgen_viz::{self, MapGenBuilderName, MapGenHistory, SelectedBuilder};
 use crate::monsters::Monster;
-use crate::player::Player;
+use crate::party::PartyMember;
 use crate::resources::{MenuBackground, UiFont};
 use crate::rng::GameRng;
 use crate::saveload;
@@ -49,7 +49,7 @@ fn reset_menu_page(mut menu_page: ResMut<MenuPage>) {
 
 fn cleanup_game_entities(
     mut commands: Commands,
-    entities: Query<Entity, Or<(With<Player>, With<Monster>, With<Item>, With<Tile>)>>,
+    entities: Query<Entity, Or<(With<PartyMember>, With<Monster>, With<Item>, With<Tile>)>>,
     mut map: ResMut<Map>,
     mut game_log: ResMut<GameLog>,
 ) {
@@ -126,7 +126,7 @@ fn handle_main_menu_input(
     mut next_state: ResMut<NextState<RunState>>,
     mut exit: MessageWriter<AppExit>,
     // Resources needed for loading/new game
-    entities_to_despawn: Query<Entity, Or<(With<Player>, With<Monster>, With<Item>, With<Tile>, With<EntryTrigger>)>>,
+    entities_to_despawn: Query<Entity, Or<(With<PartyMember>, With<Monster>, With<Item>, With<Tile>, With<EntryTrigger>)>>,
     mut map: ResMut<Map>,
     mut game_log: ResMut<GameLog>,
     mut rng: ResMut<crate::rng::GameRng>,

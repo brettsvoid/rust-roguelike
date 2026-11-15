@@ -1,4 +1,4 @@
-use bevy::{color::palettes, prelude::*};
+use bevy::prelude::*;
 use rand::RngExt;
 
 use crate::{
@@ -6,7 +6,7 @@ use crate::{
     components::{HungerClock, HungerState, Name, RenderableBundle},
     entity_render::EntityShape,
     map::{Position, MAP_WIDTH},
-    player::Player,
+    party::{PartyMember, HEROES},
     raws::{get_spawn_table_for_depth, spawn_named_entity, RAWS},
     rng::GameRng,
     shapes::Rect,
@@ -16,12 +16,12 @@ use crate::{
 const MAX_MONSTERS: i32 = 4;
 const MAX_ITEMS: i32 = 2;
 
-pub fn spawn_player(commands: &mut Commands, x: i32, y: i32) {
-    commands.spawn((
-        Player,
-        Name {
-            name: "Player".to_string(),
-        },
+/// A fresh hero for `slot` at `(x, y)`, with the starting stats.
+pub fn party_member(slot: usize, x: i32, y: i32) -> impl Bundle {
+    let (name, colour) = HEROES[slot];
+    (
+        PartyMember { slot },
+        Name { name: name.to_string() },
         Position { x, y },
         CombatStats {
             max_hp: 30,
@@ -37,12 +37,17 @@ pub fn spawn_player(commands: &mut Commands, x: i32, y: i32) {
             state: HungerState::WellFed,
             duration: 200,
         },
-        RenderableBundle::new(
-            "☺",
-            palettes::basic::YELLOW.into(),
-            EntityShape::Creature,
-        ),
-    ));
+        RenderableBundle::new("☺", colour.into(), EntityShape::Creature),
+    )
+}
+
+/// Spawns one hero per tile, in slot order, and returns them.
+pub fn spawn_party(commands: &mut Commands, tiles: &[(i32, i32)]) -> Vec<Entity> {
+    tiles
+        .iter()
+        .enumerate()
+        .map(|(slot, &(x, y))| commands.spawn(party_member(slot, x, y)).id())
+        .collect()
 }
 
 pub fn spawn_room(

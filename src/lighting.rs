@@ -2,10 +2,10 @@
 //! evening sun over the town.
 //!
 //! Anything with a `LightSource` (props with a raws `light` entry, and the
-//! player's torch) gets a child `PointLight` and, unless it is the player, a
+//! hero's torch) gets a child `PointLight` and, unless it is a hero, a
 //! small glowing flame that blooms. Lights flicker on `Time`, which the
 //! screenshot harness steps by a fixed amount per frame, so screenshots stay
-//! byte-identical. Only the `MAX_SHADOW_LIGHTS` lights nearest the player
+//! byte-identical. Only the `MAX_SHADOW_LIGHTS` lights nearest the active hero
 //! cast shadows. `apply_environment` sets the ambient light, fog and sun for
 //! the current depth.
 
@@ -17,7 +17,7 @@ use bevy::prelude::*;
 
 use crate::entity_render::EntityShape;
 use crate::map::{Map, Position, TileType};
-use crate::player::Player;
+use crate::party::{ActiveUnit, PartyMember};
 
 /// A light carried by an entity. Set from the raws `light` entry for props.
 #[derive(Component, Clone, Debug)]
@@ -31,7 +31,7 @@ pub struct LightSource {
     pub height: f32,
 }
 
-/// The torch every player carries.
+/// The torch every hero carries.
 const PLAYER_TORCH: LightSource = LightSource {
     colour: Color::srgb(1.0, 0.62, 0.32),
     radius: 9.0,
@@ -40,11 +40,11 @@ const PLAYER_TORCH: LightSource = LightSource {
 };
 
 /// The torch is held out towards the camera (which looks from +x, +z), so
-/// the side of the player we see is lit and its shadow falls behind it.
+/// the side of the hero we see is lit and its shadow falls behind it.
 const PLAYER_TORCH_OFFSET: Vec2 = Vec2::new(0.4, 0.4);
 
 /// Point lights are cube shadow maps (six passes each), so only the nearest
-/// few to the player cast shadows.
+/// few to the active hero cast shadows.
 const MAX_SHADOW_LIGHTS: usize = 4;
 
 /// Lumens per square tile of radius, so a light is about equally bright at
@@ -58,7 +58,7 @@ pub struct LightingPlugin;
 
 impl Plugin for LightingPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(give_player_torch).add_systems(
+        app.add_observer(give_hero_torch).add_systems(
             Update,
             (apply_environment, attach_lights, flicker_lights, cap_shadow_casters).chain(),
         );
@@ -75,7 +75,7 @@ struct Flicker {
 #[derive(Component)]
 struct Sun;
 
-fn give_player_torch(add: On<Add<Player>>, mut commands: Commands) {
+fn give_hero_torch(add: On<Add<PartyMember>>, mut commands: Commands) {
     commands.entity(add.entity).insert(PLAYER_TORCH);
 }
 
@@ -98,13 +98,13 @@ fn wall_offset(map: &Map, pos: Position) -> Vec2 {
 fn attach_lights(
     mut commands: Commands,
     map: Res<Map>,
-    sources: Query<(Entity, &LightSource, &Position, &EntityShape, Has<Player>), Added<LightSource>>,
+    sources: Query<(Entity, &LightSource, &Position, &EntityShape, Has<PartyMember>), Added<LightSource>>,
     mut flame_mesh: Local<Option<Handle<Mesh>>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    for (entity, source, &pos, shape, is_player) in &sources {
-        let offset = if is_player { PLAYER_TORCH_OFFSET } else { wall_offset(&map, pos) };
+    for (entity, source, &pos, shape, is_hero) in &sources {
+        let offset = if is_hero { PLAYER_TORCH_OFFSET } else { wall_offset(&map, pos) };
         // Children sit relative to the body, which is lifted off the floor.
         let local = Vec3::new(offset.x, source.height - shape.lift(), offset.y);
         // A fixed phase per tile so neighbouring flames don't pulse together.
@@ -128,7 +128,7 @@ fn attach_lights(
                 phase,
             },
         ));
-        if is_player {
+        if is_hero {
             continue;
         }
         let mesh = flame_mesh
@@ -164,15 +164,16 @@ fn flicker_lights(time: Res<Time>, mut lights: Query<(&mut PointLight, &Flicker)
     }
 }
 
-/// Lets only the lights nearest the player cast shadows.
+/// Lets only the lights nearest the active hero cast shadows.
 fn cap_shadow_casters(
-    player: Option<Single<&GlobalTransform, With<Player>>>,
+    active: Res<ActiveUnit>,
+    transforms: Query<&GlobalTransform>,
     mut lights: Query<(Entity, &GlobalTransform, &mut PointLight)>,
 ) {
-    let Some(player) = player else {
+    let Some(Ok(active)) = active.0.map(|e| transforms.get(e)) else {
         return;
     };
-    let centre = player.translation();
+    let centre = active.translation();
     let mut by_distance: Vec<(f32, Entity)> = lights
         .iter()
         .map(|(e, t, _)| (t.translation().distance_squared(centre), e))

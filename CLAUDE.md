@@ -25,10 +25,14 @@ cargo run -- --screenshot out.png --seed 42 --depth 3 --reveal-map --frames 60
 cargo run -- --screenshot out.png --depth 3 --reveal-map --cursor 720,430 \
   --console "spawn fireball" --target "Fireball Scroll"
 # --click X,Y left-clicks grid cell X,Y (repeatable; the next input waits for the
-# walk to end). --keys presses keys through the real input: g . (pick up, descend),
+# walk to end; a click on another hero selects them). --keys presses keys through the
+# real input: g . (pick up, descend), i (inventory), n (Tab: select the next hero),
 # w a s d (pan), c (recentre), + and - (scroll to zoom). They run in the order given,
 # e.g. walk five tiles east so explored-but-unseen tiles show:
 cargo run -- --screenshot fog.png --seed 42 --depth 3 --click 45,20 --frames 120
+# Select the third hero (Tab twice) and walk them; at seed 42 depth 3 the party
+# stands on (40,21) (41,21) (39,21) (40,22):
+cargo run -- --screenshot tab.png --seed 42 --depth 3 --keys nn --click 43,25 --frames 150
 ```
 
 Verify every visible change with a harness screenshot that you look at.
@@ -46,17 +50,19 @@ for that overhaul. Key points:
 - **Presentation**: Isometric true 3D, dark torch-lit dungeons, stylised low-poly models
 - **Party and combat**: A party of 4 heroes (default), XCOM-style combat (action points, hit chances, cover, overwatch). Free click-to-move exploration drops into turn mode on contact
 - **Living town**: Loot sold in town is traded with neighbouring towns, sectors level up and stock better gear. The town persists across permadeath
-- **Controls**: Left click walks to an explored tile (one tile per turn, stopping when a hostile
-  comes into view), attacks an adjacent hostile, walks to the down stairs and takes them, and on
-  the player's own tile picks up an item. WASD pans the camera, the scroll wheel zooms, C
-  recentres. G picks up, I inventory, X drops (D pans), R removes equipment, `.` descends, Space
-  waits, T opens the ledger in town, Q saves and quits
+- **Controls**: Left click walks the active hero to an explored tile (one tile per turn, stopping
+  when a hostile comes into view), attacks an adjacent hostile, walks to the down stairs and takes
+  them, and on the hero's own tile picks up an item. A click on another hero, or Tab, selects
+  them (no turn passes). WASD pans the camera, the scroll wheel zooms, C recentres. G picks up,
+  I inventory, X drops (D pans), R removes equipment, `.` descends, Space waits, T opens the
+  ledger in town, Q saves and quits
 - **Mechanics**: Hunger/survival, items/equipment
 
 The Architecture section below describes the code as it is now. The current
 build is mid-conversion: the map and entities are grey-box 3D primitives on
-an isometric camera, single player, with click-to-move and no party or
-tactical combat yet.
+an isometric camera, with a party of four heroes. Only the active hero moves
+and acts (one step per turn); the others stand still. No followers, explore
+mode or tactical combat yet.
 
 ## Architecture
 
@@ -68,16 +74,21 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
 
 - **GameFlowPlugin** (`game_flow.rs`) - The `RunState` turn state machine and turn scheduling
 - **ResourcesPlugin** (`resources.rs`) - Loads shared resources like fonts
-- **PlayerPlugin** (`player.rs`) - Player input: keys, left click to walk/attack/pick up/descend, the
+- **PartyPlugin** (`party.rs`) - The party: `PartyMember { slot }` on every hero, the `ActiveUnit`
+  resource (the hero the input drives), `HEROES` (names and colours), and the pure rules
+  `spawn_tiles`, `next_unit` (Tab, skipping the dead) and `party_wiped`
+- **PlayerPlugin** (`player.rs`) - Input for the active hero: keys, Tab and a click on a hero to
+  select, left click to walk/attack/pick up/descend, the
   `WalkPath` resource (the cells of a click walk still to take, and whether to take the stairs on
   arrival) and the hover path preview
 - **ViewshedPlugin** (`viewshed.rs`) - Field of view calculation using Bresenham line algorithm
 - **MapPlugin** (`map.rs`) - Map data, fog of war, position-to-screen translation, `grid_to_world`
 - **CameraPlugin** (`camera.rs`) - The logical `Camera` follow target, WASD pan, scroll zoom, the isometric 3D camera and the 2D overlay camera
 - **PickingPlugin** (`picking.rs`) - Cursor to grid cell via the `Camera3d` ray on the floor plane, the `HoveredTile` resource, the hover highlight and `TileMarks` (flat unlit quads for tile overlays)
-- **OcclusionPlugin** (`occlusion.rs`) - Cuts walls down to stubs and hides town roofs so the player and the visible floor stay in view (see Coordinate System)
+- **OcclusionPlugin** (`occlusion.rs`) - Cuts walls down to stubs and hides town roofs so the party and the visible floor stay in view (see Coordinate System)
 - **MapGenVizPlugin** (`mapgen_viz.rs`) - The map generation visualizer (main menu tool)
-- **MonstersPlugin** (`monsters.rs`) - Monster spawning and AI
+- **MonstersPlugin** (`monsters.rs`) - Monster spawning and AI. `monster_target` picks the nearest
+  hero a monster sees or stands next to
 - **GuiPlugin** (`gui.rs`) - Main menu and builder-select menu (other UI lives in `ui/`)
 - **LightingPlugin** (`lighting.rs`) - `LightSource` point lights, flicker, the shadow caster cap,
   and the per-depth ambient light, fog, bloom and town sun (see Lighting)
@@ -107,7 +118,7 @@ The game uses a turn-based `RunState` enum (defined in `game_flow.rs`, re-export
 - `MonsterTurn` - Processing monster AI
 - `ShowInventory` / `ShowDropItem` / `ShowTargeting` - UI overlay states
 
-Each player step (a click walk takes one per turn) triggers the `PlayerTurn` → `MonsterTurn` →
+Each step of the active hero (a click walk takes one per turn) triggers the `PlayerTurn` → `MonsterTurn` →
 `AwaitingInput` cycle.
 
 ### Models
@@ -149,7 +160,10 @@ of the same logic. The build should stay at zero warnings.
 
 - `saveload.rs` - Serializes game state to `savegame.json` using serde
 - Saves on quit (Q key), loads on Continue from main menu
-- Permadeath: save file deleted on load and on player death
+- The save holds the whole party (`SaveData::party`, in slot order), the active hero's slot, and
+  each backpack item's owner by slot
+- Permadeath: save file deleted on load and when the last hero dies. A fallen hero leaves play
+  and drops what they carried; the selection moves to the next living hero
 - WASM: save/load disabled (no filesystem access)
 - Town state (`economy/town.rs`) lives in its own `town.json`, loaded at startup
   and saved whenever `TownState` changes. Permadeath never deletes it. A bad or
@@ -162,8 +176,8 @@ of the same logic. The build should stay at zero warnings.
 - 3D: `map::grid_to_world` is the only grid-to-world mapping. Grid `(x, y)` is the tile centre at
   world `(x, 0, y)`, one tile is one world unit, the floor is `y = 0`, walls are 2 units tall
 - The 3D camera is orthographic, yaw 45 degrees, pitch 35 degrees, and follows the logical
-  `Camera` resource. That resource follows the player until WASD sets `panned`; the player moving
-  or C clears it. Move that resource to move the view. Zoom is the projection's `viewport_height`
+  `Camera` resource. That resource follows the active hero until WASD sets `panned`; that hero
+  moving, selecting another, or C clears it. Move that resource to move the view. Zoom is the projection's `viewport_height`
 - Camera layering: the `Camera3d` (order 0) draws the world and clears the screen; the `Camera2d`
   (order 1, `IsDefaultUiCamera`) draws UI and any `Text2d` on top. The 3D camera is HDR and the
   2D one is not, so each has its own texture: the 2D camera clears to transparent and Bevy
@@ -176,9 +190,9 @@ of the same logic. The build should stay at zero warnings.
   such systems `.after(picking::update_hovered_tile)`. Don't convert the cursor any other way
 - Occlusion: the camera looks from the +x, +z side, so a wall hides tiles up to two steps
   towards -x, -z. `occlusion::walls_to_cut` lists every wall that would hide a visible non-wall
-  tile or the player; those are drawn as a 0.25-unit stub (the wall `Transform` is scaled, the
+  tile or any hero; those are drawn as a 0.25-unit stub (the wall `Transform` is scaled, the
   mesh is shared). Town buildings (closed `WoodFloor` rooms) get a flat roof slab at wall height.
-  A roof hides while the player is inside the building or behind it; while it shows, its walls
+  A roof hides while any hero is inside the building or behind it; while it shows, its walls
   stay full height
 - Click-to-move paths (`pathfinding::a_star_explored`) only cross explored tiles
 - Tile overlays (hover, path preview, targeting range, area, target) are `TileMarks::mark` quads
@@ -193,7 +207,9 @@ of the same logic. The build should stay at zero warnings.
 - Tiles: `Revealed` is `Hidden` (not drawn), `Explored` (dim, desaturated, unlit material, so
   remembered tiles stay readable in the dark) or `Visible` (lit material);
   `update_tile_mesh_visibility` applies it
-- Entities other than the player are shown only on tiles in `Map::visible_tiles`
+- Vision is the union of every living hero's `Viewshed`: it fills `Map::visible_tiles` and the
+  revealed tiles
+- Entities other than heroes are shown only on tiles in `Map::visible_tiles`
   (`update_renderable_visibility`); `Hidden` (unfound traps) always hides
 - Debug `reveal_map` marks every tile explored; `no_fog` (and the harness's `--reveal-map`)
   treats every revealed tile as visible, so entities show too
@@ -202,16 +218,16 @@ of the same logic. The build should stay at zero warnings.
 
 - The dungeon has near-black ambient light, set per camera (`AmbientLight` on the `Camera3d`).
   Light comes from `LightSource` (colour, radius in tiles, flicker depth, flame height) entities.
-  Props get one from the raws `light` entry (Candle, Lamp Post, Wall Torch); the player gets
-  `PLAYER_TORCH` from an observer on `Player`
+  Props get one from the raws `light` entry (Candle, Lamp Post, Wall Torch); every hero gets
+  `PLAYER_TORCH` from an observer on `PartyMember`
 - `attach_lights` gives each `LightSource` a child `PointLight` (always visible, so light spills
-  past the fog of war) and, except for the player, an emissive flame mesh that blooms. A light on
+  past the fog of war) and, except for heroes, an emissive flame mesh that blooms. A light on
   a wall tile hangs just off the wall face on the open side. Intensity scales with radius squared
 - Flicker runs on `Time`. The harness sets `TimeUpdateStrategy::ManualDuration` (1/60 s per frame),
   so screenshots stay byte-identical. Don't drive visuals from wall-clock time any other way.
   The harness also compiles shaders synchronously, so frame N is the same picture on any machine
 - `FRAME_TIME_LOG=1 cargo run --release` turns vsync off and logs frame times, for performance checks
-- Only the `MAX_SHADOW_LIGHTS` point lights nearest the player cast shadows (cube maps are six
+- Only the `MAX_SHADOW_LIGHTS` point lights nearest the active hero cast shadows (cube maps are six
   passes each); the rest light through walls within their radius
 - `apply_environment` switches on `Map::depth`: depth 1 (the town) gets a low warm directional sun
   with shadows and brighter ambient; dungeons get near-black ambient. Both get HDR, bloom,
@@ -222,6 +238,7 @@ of the same logic. The build should stay at zero warnings.
 ### Key Resources
 
 - `Map` - Contains tile data, rooms, and visibility state
+- `ActiveUnit` - The hero the player commands (`None` outside a run)
 - `UiFont` - Shared font handle for all text rendering
 - `HoveredTile` - The grid cell under the mouse this frame (see Coordinate System)
 

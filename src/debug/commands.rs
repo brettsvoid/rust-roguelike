@@ -5,7 +5,7 @@ use crate::economy::town::{Sector, TownState};
 use crate::economy::trade;
 use crate::map::{Position, MAP_HEIGHT, MAP_WIDTH};
 use crate::monsters::Monster;
-use crate::player::Player;
+use crate::party::PartyMember;
 
 use super::resources::{DebugState, GodMode};
 
@@ -15,7 +15,8 @@ pub fn execute_command(
     commands: &mut Commands,
     debug_state: &mut DebugState,
     god_mode: &mut GodMode,
-    player_query: &mut Query<(Entity, &mut Position, &mut CombatStats), With<Player>>,
+    party: &mut Query<(Entity, &mut Position, &mut CombatStats), With<PartyMember>>,
+    active: Option<Entity>,
     monster_query: &Query<Entity, With<Monster>>,
     town: &mut ResMut<TownState>,
 ) -> String {
@@ -27,10 +28,10 @@ pub fn execute_command(
         Some("godmode") => cmd_godmode(god_mode),
         Some("reveal") => cmd_reveal(debug_state),
         Some("nofog") => cmd_nofog(debug_state),
-        Some("heal") => cmd_heal(player_query),
+        Some("heal") => cmd_heal(party),
         Some("kill_all") => cmd_kill_all(commands, monster_query),
-        Some("teleport") => cmd_teleport(&parts, player_query),
-        Some("spawn") => cmd_spawn(&parts, commands, player_query),
+        Some("teleport") => cmd_teleport(&parts, party, active),
+        Some("spawn") => cmd_spawn(&parts, commands, party, active),
         Some("town") => cmd_town(&parts, town),
         Some(cmd) => format!("Unknown command: {}", cmd),
         None => String::new(),
@@ -95,15 +96,12 @@ pub(super) fn cmd_town(parts: &[&str], town: &mut ResMut<TownState>) -> String {
     }
 }
 
-fn cmd_heal(
-    player_query: &mut Query<(Entity, &mut Position, &mut CombatStats), With<Player>>,
-) -> String {
-    if let Ok((_, _, mut stats)) = player_query.single_mut() {
+/// Heals the whole party.
+fn cmd_heal(party: &mut Query<(Entity, &mut Position, &mut CombatStats), With<PartyMember>>) -> String {
+    for (_, _, mut stats) in party.iter_mut() {
         stats.hp = stats.max_hp;
-        format!("Healed to {}/{}", stats.hp, stats.max_hp)
-    } else {
-        "No player found".to_string()
     }
+    format!("Healed {} heroes", party.iter().count())
 }
 
 fn cmd_kill_all(commands: &mut Commands, monster_query: &Query<Entity, With<Monster>>) -> String {
@@ -116,7 +114,8 @@ fn cmd_kill_all(commands: &mut Commands, monster_query: &Query<Entity, With<Mons
 
 fn cmd_teleport(
     parts: &[&str],
-    player_query: &mut Query<(Entity, &mut Position, &mut CombatStats), With<Player>>,
+    party: &mut Query<(Entity, &mut Position, &mut CombatStats), With<PartyMember>>,
+    active: Option<Entity>,
 ) -> String {
     if parts.len() < 3 {
         return "Usage: teleport <x> <y>".to_string();
@@ -126,12 +125,12 @@ fn cmd_teleport(
     match (x, y) {
         (Ok(x), Ok(y)) => {
             if x >= 0 && x < MAP_WIDTH as i32 && y >= 0 && y < MAP_HEIGHT as i32 {
-                if let Ok((_, mut pos, _)) = player_query.single_mut() {
+                if let Some((_, mut pos, _)) = active.and_then(|unit| party.get_mut(unit).ok()) {
                     pos.x = x;
                     pos.y = y;
                     format!("Teleported to ({}, {})", x, y)
                 } else {
-                    "No player found".to_string()
+                    "No active unit".to_string()
                 }
             } else {
                 "Position out of bounds".to_string()
@@ -144,15 +143,16 @@ fn cmd_teleport(
 fn cmd_spawn(
     parts: &[&str],
     commands: &mut Commands,
-    player_query: &mut Query<(Entity, &mut Position, &mut CombatStats), With<Player>>,
+    party: &mut Query<(Entity, &mut Position, &mut CombatStats), With<PartyMember>>,
+    active: Option<Entity>,
 ) -> String {
     if parts.len() < 2 {
         return "Usage: spawn <item_name>".to_string();
     }
     let item_name = parts[1].to_lowercase();
 
-    let Ok((_, pos, _)) = player_query.single_mut() else {
-        return "No player found".to_string();
+    let Some((_, pos, _)) = active.and_then(|unit| party.get(unit).ok()) else {
+        return "No active unit".to_string();
     };
     let (x, y) = (pos.x, pos.y);
 

@@ -8,7 +8,7 @@ use crate::debug::DebugState;
 use crate::distance::DistanceAlg;
 use crate::entity_render::{attach_entity_mesh, entity_transform, EntityAssets, EntityShape, Renderable};
 use crate::map_render::{attach_tile_mesh, TileAssets, TileMesh};
-use crate::player::Player;
+use crate::party::PartyMember;
 use crate::viewshed::Viewshed;
 use crate::RunState;
 
@@ -414,17 +414,17 @@ pub fn xy_idx(x: i32, y: i32) -> usize {
 fn update_revealed_tiles(
     mut map: ResMut<Map>,
     debug_state: Res<DebugState>,
-    query: Query<&Viewshed, With<Player>>,
+    party: Query<&Viewshed, With<PartyMember>>,
     mut tiles_query: Query<(&Position, &mut Revealed), With<Tile>>,
 ) {
-    let Ok(viewshed) = query.single() else {
+    if party.is_empty() {
         return;
-    };
+    }
+    let in_sight: HashSet<(i32, i32)> = party.iter().flat_map(|v| v.visible_tiles.iter().copied()).collect();
 
     for (pos, mut revealed) in &mut tiles_query {
         let idx = map.xy_idx(pos.x, pos.y);
-        let point = (pos.x, pos.y);
-        if viewshed.visible_tiles.contains(&point) {
+        if in_sight.contains(&(pos.x, pos.y)) {
             map.revealed_tiles[idx] = true;
             revealed.0 = RevealedState::Visible;
         } else if debug_state.no_fog && map.revealed_tiles[idx] {
@@ -521,11 +521,11 @@ fn translate_glyphs(
 fn update_visible_tiles(
     mut map: ResMut<Map>,
     debug_state: Res<DebugState>,
-    player: Query<&Viewshed, With<Player>>,
+    party: Query<&Viewshed, With<PartyMember>>,
 ) {
-    let Ok(viewshed) = player.single() else {
+    if party.is_empty() {
         return;
-    };
+    }
     map.visible_tiles = vec![false; MAP_WIDTH * MAP_HEIGHT];
 
     if debug_state.no_fog {
@@ -536,8 +536,8 @@ fn update_visible_tiles(
             }
         }
     } else {
-        // Normal mode: only viewshed tiles are visible
-        for (pos_x, pos_y) in viewshed.visible_tiles.iter() {
+        // Normal mode: what any member sees is visible
+        for (pos_x, pos_y) in party.iter().flat_map(|v| v.visible_tiles.iter()) {
             let idx = map.xy_idx(*pos_x, *pos_y);
             map.visible_tiles[idx] = true;
         }
@@ -546,7 +546,7 @@ fn update_visible_tiles(
 
 fn update_renderable_visibility(
     map: Res<Map>,
-    mut query: Query<(&Position, &mut Visibility, Option<&Hidden>), (With<EntityShape>, Without<Player>)>,
+    mut query: Query<(&Position, &mut Visibility, Option<&Hidden>), (With<EntityShape>, Without<PartyMember>)>,
 ) {
     for (pos, mut visibility, hidden) in &mut query {
         // Hidden entities are always invisible

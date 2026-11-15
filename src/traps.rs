@@ -7,7 +7,7 @@ use crate::{
     gamelog::GameLog,
     map::{Map, Position},
     particle::ParticleBuilder,
-    player::Player,
+    party::PartyMember,
     rng::GameRng,
     viewshed::Viewshed,
 };
@@ -67,16 +67,12 @@ pub fn trap_trigger_system(
 pub fn reveal_hidden_system(
     mut commands: Commands,
     mut gamelog: ResMut<GameLog>,
-    player_query: Query<&Viewshed, With<Player>>,
+    party: Query<&Viewshed, With<PartyMember>>,
     hidden_query: Query<(Entity, &Position, &Name), With<Hidden>>,
     mut rng: ResMut<GameRng>,
 ) {
-    let Ok(viewshed) = player_query.single() else {
-        return;
-    };
-
     for (entity, pos, name) in &hidden_query {
-        if viewshed.visible_tiles.contains(&(pos.x, pos.y)) {
+        if party.iter().any(|v| v.visible_tiles.contains(&(pos.x, pos.y))) {
             // 1 in 24 chance to spot hidden entity
             if rng.0.random_range(1..=24) == 1 {
                 commands.entity(entity).remove::<Hidden>();

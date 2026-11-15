@@ -7,7 +7,7 @@
 use bevy::prelude::*;
 
 use crate::map::{self, Map, Position, Revealed, RevealedState, Tile};
-use crate::player::Player;
+use crate::party::{party_wiped, PartyMember};
 use crate::{combat, hunger, inventory, levels, monsters, traps};
 
 #[derive(States, Clone, Copy, Default, Eq, PartialEq, Debug, Hash)]
@@ -98,31 +98,27 @@ impl Plugin for GameFlowPlugin {
 
 fn transition_to_awaiting_input(
     mut next_state: ResMut<NextState<RunState>>,
-    player_query: Query<&combat::CombatStats, With<Player>>,
+    party: Query<&combat::CombatStats, With<PartyMember>>,
 ) {
-    // Don't transition if player is dead (GameOver state should take priority)
-    if let Ok(stats) = player_query.single() {
-        if stats.hp > 0 {
-            next_state.set_if_different(RunState::AwaitingInput);
-        }
+    // A wiped party stays on the game over screen.
+    if !party_wiped(party.iter().map(|stats| stats.hp)) {
+        next_state.set_if_different(RunState::AwaitingInput);
     }
 }
 
 fn transition_to_monster_turn(
     mut next_state: ResMut<NextState<RunState>>,
     mut pending_magic_map: ResMut<PendingMagicMap>,
-    player_query: Query<&combat::CombatStats, With<Player>>,
+    party: Query<&combat::CombatStats, With<PartyMember>>,
 ) {
-    // Don't transition if player is dead (GameOver state should take priority)
-    if let Ok(stats) = player_query.single() {
-        if stats.hp > 0 {
-            if pending_magic_map.0 {
-                pending_magic_map.0 = false;
-                next_state.set_if_different(RunState::MagicMapReveal);
-            } else {
-                next_state.set_if_different(RunState::MonsterTurn);
-            }
-        }
+    if party_wiped(party.iter().map(|stats| stats.hp)) {
+        return;
+    }
+    if pending_magic_map.0 {
+        pending_magic_map.0 = false;
+        next_state.set_if_different(RunState::MagicMapReveal);
+    } else {
+        next_state.set_if_different(RunState::MonsterTurn);
     }
 }
 
