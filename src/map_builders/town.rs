@@ -495,7 +495,13 @@ impl TownBuilder {
         }
 
         let (keeper, base) = furnishing(tag);
-        if let Some(keeper) = keeper {
+        // The player starts on the pub's centre tile, so its keeper takes a furniture spot.
+        let (centred, displaced) = if tag == BuildingTag::Pub {
+            (None, keeper)
+        } else {
+            (keeper, None)
+        };
+        if let Some(keeper) = centred {
             build_data.spawn_list.push((centre_idx, keeper.to_string()));
         }
         let extras = SECTOR_GROWTH
@@ -506,7 +512,7 @@ impl TownBuilder {
                 &extras[..(gained * 2).min(extras.len())]
             });
         let spots = interior.into_iter().filter(|&idx| idx != centre_idx);
-        for (idx, name) in spots.zip(base.iter().chain(extras)) {
+        for (idx, name) in spots.zip(displaced.iter().chain(base).chain(extras)) {
             build_data.spawn_list.push((idx, name.to_string()));
         }
     }
