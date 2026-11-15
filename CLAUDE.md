@@ -53,7 +53,7 @@ cargo run -- --screenshot combat.png --depth 2 --reveal-map --console godmode \
 # inventory: `.gia.` picks up a spawned bow and equips it (the leading and trailing `.` pad the
 # frame where the item spawns and the one where the inventory closes). Aldric shoots the goblin
 # two tiles away in round 2 ("hit for 8 (65%)" at seed 42):
-cargo run -- --screenshot bow.png --depth 3 --reveal-map --console godmode --console "spawn bow" \
+cargo run -- --screenshot bow.png --depth 2 --reveal-map --console godmode --console "spawn bow" \
   --keys .gia. --click 30,28 --click 35,26 --click 33,30 --keys ennn --click 33,28 --frames 40
 # --shop VENDOR clicks that vendor (blacksmith, alchemist, clothier, barkeep, priest,
 # enchanter): the active hero walks beside them and the shop opens. Inputs after it are
