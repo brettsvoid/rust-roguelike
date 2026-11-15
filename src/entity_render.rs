@@ -112,6 +112,7 @@ pub fn attach_entity_mesh(
         commands
             .entity(insert.entity)
             .remove::<(Mesh3d, MeshMaterial3d<StandardMaterial>)>()
+            .insert_if_new(Visibility::default())
             .with_child((ModelScene, scene, Transform::from_xyz(0.0, -shape.lift(), 0.0)));
         return;
     }

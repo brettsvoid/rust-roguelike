@@ -151,7 +151,10 @@ pub fn attach_tile_mesh(
     if let Some(scene) = models.scene(&tile_model_name(*tile, wall.map_or(0, |w| w.0))) {
         // A child back on the floor: the tile keeps the primitive's transform,
         // so the wall cut-away (`occlusion.rs`) squashes a model wall the same way.
-        entity.with_child((scene, Transform::from_xyz(0.0, -shape.lift(), 0.0)));
+        // No `Mesh3d` brings `Visibility` in here, and the scene child needs it on its parent.
+        entity
+            .insert_if_new(Visibility::default())
+            .with_child((scene, Transform::from_xyz(0.0, -shape.lift(), 0.0)));
         return;
     }
     let mesh = assets
