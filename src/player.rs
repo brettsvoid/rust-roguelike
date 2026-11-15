@@ -106,7 +106,7 @@ fn show_path_preview(
     marks: Res<TileMarks>,
     player: Query<&Position, With<Player>>,
     previews: Query<Entity, With<PathPreview>>,
-    mut shown: Local<Option<((i32, i32), (i32, i32))>>,
+    mut shown: Local<Option<((i32, i32), (i32, i32), bool)>>,
 ) {
     // Kept up through the turn states so a walk does not flicker.
     let in_turn = matches!(
@@ -118,7 +118,10 @@ fn show_path_preview(
         .ok()
         .map(|p| (p.x, p.y))
         .zip(hovered.tile)
-        .filter(|_| in_turn);
+        .filter(|_| in_turn)
+        // The field of view may reveal the hovered tile after this runs, so
+        // redraw when it does or the preview depends on system order.
+        .map(|(from, to)| (from, to, map.revealed_tiles[map.xy_idx(to.0, to.1)]));
     if wanted == *shown {
         return;
     }
@@ -126,7 +129,7 @@ fn show_path_preview(
     for preview in &previews {
         commands.entity(preview).despawn();
     }
-    let Some((from, to)) = wanted else {
+    let Some((from, to, _)) = wanted else {
         return;
     };
     for cell in walk_path(&map, from, to).unwrap_or_default() {

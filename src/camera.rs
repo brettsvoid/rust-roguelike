@@ -80,7 +80,7 @@ impl Plugin for CameraPlugin {
 }
 
 /// The 3D camera draws the world first and clears the screen. The 2D camera
-/// draws on top without clearing: it owns the UI and the remaining `Text2d`
+/// draws on top: it owns the UI and the remaining `Text2d`
 /// glyphs (the map visualiser).
 fn spawn_cameras(mut commands: Commands) {
     commands.spawn((
@@ -100,7 +100,10 @@ fn spawn_cameras(mut commands: Commands) {
         Camera2d,
         RenderCamera {
             order: 1,
-            clear_color: ClearColorConfig::None,
+            // The 3D camera is HDR, so this camera has its own texture, which
+            // Bevy alpha-blends over the world. Clearing it to transparent
+            // stops old frames (the main menu) showing through.
+            clear_color: ClearColorConfig::Custom(Color::NONE),
             ..default()
         },
         IsDefaultUiCamera,

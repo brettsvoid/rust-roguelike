@@ -165,7 +165,9 @@ of the same logic. The build should stay at zero warnings.
   `Camera` resource. That resource follows the player until WASD sets `panned`; the player moving
   or C clears it. Move that resource to move the view. Zoom is the projection's `viewport_height`
 - Camera layering: the `Camera3d` (order 0) draws the world and clears the screen; the `Camera2d`
-  (order 1, no clear, `IsDefaultUiCamera`) draws UI and any `Text2d` on top. Queries for the
+  (order 1, `IsDefaultUiCamera`) draws UI and any `Text2d` on top. The 3D camera is HDR and the
+  2D one is not, so each has its own texture: the 2D camera clears to transparent and Bevy
+  alpha-blends it over the world (with no clear, the main menu stays on screen). Queries for the
   render camera must filter `With<Camera2d>` or `With<Camera3d>`, since `single()` fails with two
 - Mouse: `picking::ray_to_tile` turns a ray into the grid cell it hits on `y = 0`, and
   `update_hovered_tile` writes `HoveredTile { cursor, tile }` each frame. `tile` is `None` off the
@@ -206,7 +208,9 @@ of the same logic. The build should stay at zero warnings.
   past the fog of war) and, except for the player, an emissive flame mesh that blooms. A light on
   a wall tile hangs just off the wall face on the open side. Intensity scales with radius squared
 - Flicker runs on `Time`. The harness sets `TimeUpdateStrategy::ManualDuration` (1/60 s per frame),
-  so screenshots stay byte-identical. Don't drive visuals from wall-clock time any other way
+  so screenshots stay byte-identical. Don't drive visuals from wall-clock time any other way.
+  The harness also compiles shaders synchronously, so frame N is the same picture on any machine
+- `FRAME_TIME_LOG=1 cargo run --release` turns vsync off and logs frame times, for performance checks
 - Only the `MAX_SHADOW_LIGHTS` point lights nearest the player cast shadows (cube maps are six
   passes each); the rest light through walls within their radius
 - `apply_environment` switches on `Map::depth`: depth 1 (the town) gets a low warm directional sun
