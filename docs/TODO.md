@@ -175,7 +175,7 @@ Settled questions (owner, 15 November 2026):
   time on a full 80 by 43 level stays under 16 ms in a release build.
 
 ### F08 Model pipeline
-- Status: in progress
+- Status: done
 - Needs: F03
 - Load `assets/models/<name>.glb` scenes by the raws `model` field for mobs,
   items and props, and by a `TileType` (plus wall bitmask from
@@ -284,7 +284,7 @@ and adds the `model` names to `raws/spawns.json`.
 ## C: Tactical combat (XCOM style, with a party)
 
 ### C01 Party model
-- Status: todo
+- Status: in progress
 - Needs: F05
 - Replace the single `Player` assumption. A `PartyMember` component, an
   `ActiveUnit` resource, a party of 4 spawned at new game, and a click or Tab
