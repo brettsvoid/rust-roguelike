@@ -3,6 +3,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use rand::RngExt;
 
+use crate::cover::{exposure, Exposure};
 use crate::components::{
     Confusion, DefenseBonus, Equipped, HungerClock, HungerState, InBackpack, Item, Name, Poison, PoisonsOnHit,
     Weapon,
@@ -43,15 +44,13 @@ pub const MAX_HIT: i32 = 95;
 pub const RANGE_PENALTY: i32 = 10;
 /// Aim gained per level the attacker stands above the target.
 pub const HEIGHT_BONUS: i32 = 10;
-/// The cover input until C05 works out real cover: none.
-pub const NO_COVER: i32 = 0;
 /// The height input while the map is flat: attacker and target level.
 pub const LEVEL_GROUND: i32 = 0;
 /// Magic missiles home in: added to the caster's aim.
 pub const SPELL_AIM_BONUS: i32 = 25;
 
 /// The chance in percent that an attack hits. `cover` is the aim it takes
-/// away (C05), `height` the levels the attacker stands above the target. A
+/// away (`cover::Exposure::aim_penalty`), `height` the levels the attacker stands above the target. A
 /// target beyond the weapon's range cannot be hit at all.
 pub fn hit_chance(aim: i32, defence: i32, distance: i32, weapon: &Weapon, cover: i32, height: i32) -> i32 {
     if distance > weapon.range {
@@ -95,11 +94,28 @@ pub fn in_reach(map: &Map, weapon: &Weapon, from: (i32, i32), to: (i32, i32)) ->
     }
 }
 
-/// The chance to hit a target at `to` with `defence`, or why it cannot be
-/// attacked. Cover and height are neutral until C05 and a map with height.
-pub fn aim_at(map: &Map, weapon: &Weapon, aim: i32, from: (i32, i32), defence: i32, to: (i32, i32)) -> Result<i32, Refusal> {
+/// The chance to hit a target at `to` with `defence` and how its cover
+/// stands against `from`, or why it cannot be attacked. Height is neutral
+/// until a map with height.
+pub fn aim_at(
+    map: &Map,
+    weapon: &Weapon,
+    aim: i32,
+    from: (i32, i32),
+    defence: i32,
+    to: (i32, i32),
+) -> Result<(i32, Exposure), Refusal> {
     let distance = in_reach(map, weapon, from, to)?;
-    Ok(hit_chance(aim, defence, distance, weapon, NO_COVER, LEVEL_GROUND))
+    let cover = exposure(map, to, from);
+    Ok((hit_chance(aim, defence, distance, weapon, cover.aim_penalty(), LEVEL_GROUND), cover))
+}
+
+/// The odds for the log: "45%", or "45%, half cover" when cover or a flank applied.
+pub fn odds(chance: i32, cover: Exposure) -> String {
+    match cover.note() {
+        Some(note) => format!("{chance}%, {note}"),
+        None => format!("{chance}%"),
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -173,8 +189,9 @@ impl SufferDamage {
     }
 }
 
-/// Resolves every `WantsToAttack`: rolls to hit, for a critical and for
-/// damage, and logs the outcome with the chance.
+/// Resolves every `WantsToAttack`: rolls to hit (less the target's cover),
+/// for a critical (more on a flank) and for damage, and logs the outcome
+/// with the chance and any cover.
 #[allow(clippy::too_many_arguments)]
 pub fn attack_system(
     mut commands: Commands,
@@ -198,8 +215,8 @@ pub fn attack_system(
         }
         let (from, to) = ((pos.x, pos.y), (target_pos.x, target_pos.y));
         let weapon = arms.weapon(entity);
-        let chance = match aim_at(&map, &weapon, stats.aim, from, target_stats.defence, to) {
-            Ok(chance) => chance,
+        let (chance, cover) = match aim_at(&map, &weapon, stats.aim, from, target_stats.defence, to) {
+            Ok(aimed) => aimed,
             Err(refusal) => {
                 log.entries.push(refusal.message(&target_name.name));
                 continue;
@@ -211,9 +228,10 @@ pub fn attack_system(
         }
         let verb = if ranged { "shoots" } else { "attacks" };
         let (attacker, target) = (&name.name, &target_name.name);
-        let outcome = roll_attack(&mut rng, chance, weapon.crit_chance);
+        let outcome = roll_attack(&mut rng, chance, weapon.crit_chance + cover.crit_bonus());
+        let odds = odds(chance, cover);
         if outcome == Outcome::Miss {
-            log.entries.push(format!("{attacker} {verb} {target}: miss ({chance}%)"));
+            log.entries.push(format!("{attacker} {verb} {target}: miss ({odds})"));
             continue;
         }
         let well_fed = hunger_query.get(entity).is_ok_and(|h| h.state == HungerState::WellFed);
@@ -222,7 +240,7 @@ pub fn attack_system(
         let crit = outcome == Outcome::Crit;
         let damage = roll_damage(&mut rng, weapon.damage, bonus, armour, crit);
         let what = if crit { "critical hit" } else { "hit" };
-        log.entries.push(format!("{attacker} {verb} {target}: {what} for {damage} ({chance}%)"));
+        log.entries.push(format!("{attacker} {verb} {target}: {what} for {damage} ({odds})"));
         if damage > 0 {
             SufferDamage::new_damage(&mut commands, wants.target, damage);
             if let Ok(PoisonsOnHit(poison)) = poisoners.get(entity) {
@@ -376,6 +394,9 @@ mod tests {
     const SWORD: Weapon = Weapon { damage: (3, 5), range: 1, optimal_range: 1, crit_chance: 10 };
     const BOW: Weapon = Weapon { damage: (1, 4), range: 8, optimal_range: 5, crit_chance: 10 };
 
+    const HALF: i32 = crate::cover::HALF_COVER_PENALTY;
+    const FULL: i32 = crate::cover::FULL_COVER_PENALTY;
+
     #[test]
     fn hit_chance_table() {
         // (aim, defence, distance, weapon, cover, height, expected)
@@ -388,13 +409,15 @@ mod tests {
             (65, 0, 6, BOW, 0, 0, 55),     // one tile past optimal
             (65, 0, 8, BOW, 0, 0, 35),     // maximum range
             (65, 0, 9, BOW, 0, 0, 0),      // beyond maximum range
-            (65, 0, 3, BOW, 20, 0, 45),    // half cover (C05 supplies the value)
-            (65, 0, 3, BOW, 40, 0, 25),    // full cover
+            (65, 0, 3, BOW, HALF, 0, 45),  // half cover
+            (65, 0, 3, BOW, FULL, 0, 25),  // full cover
+            (65, 0, 1, SWORD, FULL, 0, 25), // cover counts against melee too
+            (65, 0, 7, BOW, HALF, 0, 25),  // cover stacks with range falloff
             (65, 0, 3, BOW, 0, 1, 75),     // one level above the target
             (65, 0, 3, BOW, 0, -1, 55),    // one level below
             (65, 90, 1, SWORD, 0, 0, 5),   // the floor
             (150, 0, 1, SWORD, 0, 0, 95),  // the ceiling
-            (65, 30, 8, BOW, 40, 0, 5),    // penalties stack down to the floor
+            (65, 30, 8, BOW, FULL, 0, 5),  // penalties stack down to the floor
         ];
         for (aim, defence, distance, weapon, cover, height, expected) in cases {
             assert_eq!(
@@ -480,11 +503,30 @@ mod tests {
         assert_eq!(in_reach(&map, &BOW, (0, 1), (7, 1)), Ok(7));
         assert_eq!(in_reach(&map, &BOW, (0, 1), (9, 1)), Err(Refusal::OutOfRange));
         assert_eq!(in_reach(&map, &SWORD, (0, 1), (1, 0)), Ok(1), "diagonal melee reaches");
-        assert_eq!(aim_at(&map, &BOW, 65, (0, 1), 10, (7, 1)), Ok(35));
+        // Walls north and south, the shot from the west: flanked, no cover.
+        assert_eq!(aim_at(&map, &BOW, 65, (0, 1), 10, (7, 1)), Ok((35, Exposure::Flanked)));
         let idx = map.xy_idx(4, 1);
         map.tiles[idx] = crate::map::TileType::Wall;
         assert_eq!(in_reach(&map, &BOW, (0, 1), (7, 1)), Err(Refusal::NoLineOfSight));
         assert_eq!(in_reach(&map, &BOW, (0, 1), (3, 1)), Ok(3), "the wall is beyond the target");
+    }
+
+    #[test]
+    fn cover_comes_off_the_chance_and_shows_in_the_odds() {
+        use crate::cover::Cover;
+        let mut map = corridor();
+        // Open the row above, then put a table east of the target at (5, 1).
+        for x in 0..10 {
+            let idx = map.xy_idx(x, 0);
+            map.tiles[idx] = crate::map::TileType::Floor;
+        }
+        let table = map.xy_idx(6, 1);
+        map.prop_cover.insert(table, Cover::Half);
+        let (chance, cover) = aim_at(&map, &BOW, 65, (8, 1), 0, (5, 1)).unwrap();
+        assert_eq!((chance, odds(chance, cover)), (45, "45%, half cover".to_string()));
+        let (chance, cover) = aim_at(&map, &BOW, 65, (2, 1), 0, (5, 1)).unwrap();
+        assert_eq!((chance, odds(chance, cover)), (65, "65%, flanked".to_string()));
+        assert_eq!(odds(65, Exposure::Open), "65%");
     }
 
     #[test]

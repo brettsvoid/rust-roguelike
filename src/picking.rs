@@ -1,12 +1,14 @@
 //! Mouse picking: the cursor becomes a grid cell by casting a ray from the
 //! `Camera3d` onto the floor plane (`y = 0`). `update_hovered_tile` writes the
 //! result to `HoveredTile`, which every mouse consumer reads (tooltips,
-//! targeting, the debug tile info). `TileMarks` draws flat overlays on tiles.
+//! targeting, the debug tile info). `TileMarks` draws flat overlays on tiles
+//! and upright cover shields on their sides.
 
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
 use bevy::window::PrimaryWindow;
 
+use crate::cover::Cover;
 use crate::map::{is_stairs, Map};
 use crate::RunState;
 
@@ -119,6 +121,9 @@ pub struct TileMarks {
     /// The combat move range: tiles one AP away, and those only a dash reaches.
     pub move_one: Handle<StandardMaterial>,
     pub move_two: Handle<StandardMaterial>,
+    /// Cover shields: half cover low and amber, full cover tall and blue.
+    pub shield_half: Handle<StandardMaterial>,
+    pub shield_full: Handle<StandardMaterial>,
 }
 
 impl TileMarks {
@@ -140,6 +145,24 @@ impl TileMarks {
     }
 }
 
+impl TileMarks {
+    /// An upright shield on the `side` (a cardinal step) of tile `(x, y)`,
+    /// half as tall for half cover as for full.
+    pub fn shield(&self, map: &Map, (x, y): (i32, i32), side: (i32, i32), cover: Cover) -> impl Bundle {
+        let (material, height) = match cover {
+            Cover::Full => (&self.shield_full, 0.9),
+            _ => (&self.shield_half, 0.45),
+        };
+        let floor = mark_transform(map, (x, y), FULL_TILE, 0.0).translation.y;
+        // The quad lies in x-z; stand it up to face along the side, turning it for east and west.
+        let turn = if side.0 != 0 { std::f32::consts::FRAC_PI_2 } else { 0.0 };
+        let transform = Transform::from_xyz(x as f32 + side.0 as f32 * 0.42, floor + height / 2.0, y as f32 + side.1 as f32 * 0.42)
+            .with_rotation(Quat::from_rotation_y(turn) * Quat::from_rotation_x(std::f32::consts::FRAC_PI_2))
+            .with_scale(Vec3::new(0.8, 1.0, height));
+        (Mesh3d(self.quad.clone()), MeshMaterial3d(material.clone()), transform)
+    }
+}
+
 fn mark_transform(map: &Map, (x, y): (i32, i32), area: Rect, lift: f32) -> Transform {
     // Sit on top of the stairs block (0.2 tall, see `map_render`), else on the floor.
     let floor = if is_stairs(map.tiles[map.xy_idx(x, y)]) { 0.2 } else { 0.0 };
@@ -153,6 +176,18 @@ fn translucent(materials: &mut Assets<StandardMaterial>, color: Color) -> Handle
         base_color: color,
         unlit: true,
         alpha_mode: AlphaMode::Blend,
+        ..default()
+    })
+}
+
+/// Seen from both faces, so a shield shows whichever side the camera is on.
+fn double_sided(materials: &mut Assets<StandardMaterial>, color: Color) -> Handle<StandardMaterial> {
+    materials.add(StandardMaterial {
+        base_color: color,
+        unlit: true,
+        alpha_mode: AlphaMode::Blend,
+        double_sided: true,
+        cull_mode: None,
         ..default()
     })
 }
@@ -174,6 +209,8 @@ fn setup_tile_marks(
         path: translucent(&mut materials, Color::srgba(1.0, 0.85, 0.3, 0.35)),
         move_one: translucent(&mut materials, Color::srgba(0.2, 0.55, 1.0, 0.4)),
         move_two: translucent(&mut materials, Color::srgba(0.1, 1.0, 0.45, 0.25)),
+        shield_half: double_sided(&mut materials, Color::srgba(1.0, 0.75, 0.1, 0.8)),
+        shield_full: double_sided(&mut materials, Color::srgba(0.3, 0.7, 1.0, 0.8)),
     };
     commands.spawn((
         HoverHighlight,

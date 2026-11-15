@@ -11,6 +11,7 @@ mod bystander;
 mod camera;
 mod combat;
 mod components;
+mod cover;
 mod debug;
 mod distance;
 mod economy;

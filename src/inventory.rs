@@ -2,8 +2,8 @@ use bevy::prelude::*;
 
 use crate::{
     combat::{
-        chebyshev, hit_chance, roll_attack, roll_damage, spell_damage, CombatStats, Outcome, SufferDamage, DEFAULT_AIM,
-        LEVEL_GROUND, NO_COVER, SPELL_AIM_BONUS,
+        chebyshev, hit_chance, odds, roll_attack, roll_damage, spell_damage, CombatStats, Outcome, SufferDamage, DEFAULT_AIM,
+        LEVEL_GROUND, SPELL_AIM_BONUS,
     },
     components::{
         AreaOfEffect, CausesConfusion, Confusion, Consumable, Equippable, Equipped, HungerClock,
@@ -13,7 +13,8 @@ use crate::{
     distance::DistanceAlg,
     economy::{Gold, Purse},
     gamelog::GameLog,
-    map::Position,
+    cover::exposure,
+    map::{Map, Position},
     effects::{EffectKind, Effects},
     rng::GameRng,
     PendingMagicMap,
@@ -65,7 +66,7 @@ pub fn item_collection_system(
 pub fn item_use_system(
     mut commands: Commands,
     mut gamelog: ResMut<GameLog>,
-    (mut effects, mut rng): (ResMut<Effects>, ResMut<GameRng>),
+    (mut effects, mut rng, map): (ResMut<Effects>, ResMut<GameRng>, Res<Map>),
     mut pending_magic_map: ResMut<PendingMagicMap>,
     use_query: Query<(Entity, &WantsToUseItem, &Position)>,
     consumable_query: Query<&Consumable>,
@@ -188,16 +189,18 @@ pub fn item_use_system(
                             effects.play(EffectKind::MagicMissile { from }, pos.x, pos.y);
                             let defence = stats_query.get(target_entity).map_or(0, |s| s.defence);
                             let distance = chebyshev(from, (pos.x, pos.y));
-                            let chance = hit_chance(aim, defence, distance, &spell, NO_COVER, LEVEL_GROUND);
+                            let cover = exposure(&map, (pos.x, pos.y), from);
+                            let chance = hit_chance(aim, defence, distance, &spell, cover.aim_penalty(), LEVEL_GROUND);
+                            let odds = odds(chance, cover);
                             let (item, target) = (&item_name.name, &target_name.name);
                             if roll_attack(&mut rng, chance, spell.crit_chance) == Outcome::Miss {
-                                gamelog.entries.push(format!("{caster} casts {item} at {target}: miss ({chance}%)"));
+                                gamelog.entries.push(format!("{caster} casts {item} at {target}: miss ({odds})"));
                             } else {
                                 let amount = roll_damage(&mut rng, damage, 0, 0, false);
                                 SufferDamage::new_damage(&mut commands, target_entity, amount);
                                 gamelog
                                     .entries
-                                    .push(format!("{caster} casts {item} at {target}: hit for {amount} ({chance}%)"));
+                                    .push(format!("{caster} casts {item} at {target}: hit for {amount} ({odds})"));
                             }
                             break;
                         }

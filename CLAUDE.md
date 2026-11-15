@@ -74,6 +74,13 @@ cargo run -- --screenshot sell.png --reveal-map --console "spawn dagger" --keys 
 cargo run -- --screenshot loop.png --reveal-map --console "spawn dagger" \
   --console "spawn portal" --keys ggg --shop blacksmith --keys 'na!' --click 12,28 \
   --keys iat --frames 900
+# "place DX DY NAME" spawns any raws entry (prop, monster or item, exact name) at an offset
+# from the active hero (at the start, Aldric on 40,21 at depth 2). Stage cover: tables east of
+# Aldric, a goblin closes in and attacks ("Goblin attacks Aldric: miss (45%, half cover)"),
+# Aldric hits it from beside its table ("(45%, half cover)") and Brenna flanks it ("(65%, flanked)"):
+cargo run -- --screenshot cover.png --depth 2 --reveal-map --console godmode \
+  --console "place 5 0 Goblin" --console "place 1 0 Table" --console "place 1 -1 Table" \
+  --console "place 1 1 Table" --click 40,20 --keys e --click 41,21 --keys n --click 40,21 --click 41,21 --frames 120
 # "spawn heart" drops a stand-in Heart of the Abyss; carrying it, the portal is refused:
 cargo run -- --screenshot heart.png --depth 4 --console "spawn portal" \
   --console "spawn heart" --keys gggia --frames 300
@@ -101,7 +108,8 @@ for that overhaul. Key points:
   1 AP, green zone a 2 AP dash), on a hostile the party sees attacks it with the hero's weapon
   if it is in range and line of sight (otherwise logs why and spends nothing), and on an
   adjacent closed door opens it; anything else logs "Out of range.". Hovering a hostile in
-  combat shows the active hero's chance to hit it in the tooltip. A click on another hero, or Tab, selects them
+  combat shows the active hero's chance to hit it in the tooltip (with "half cover", "full
+  cover" or "flanked"); hovering a tile in the move range shows cover shields on its covered sides. A click on another hero, or Tab, selects them
   (no turn passes; in combat only heroes with AP left).
   WASD pans the camera, the scroll wheel zooms, C recentres. G picks up, I inventory, X drops
   (D pans), R removes equipment, `.` takes the stairs, Space waits (in combat it ends that hero's
@@ -112,7 +120,7 @@ The Architecture section below describes the code as it is now. The current
 build is mid-conversion: the map and entities are grey-box 3D primitives on
 an isometric camera, with a party of four heroes. Exploring, the active hero
 leads and the others follow; on contact the game drops into combat rounds where
-every unit spends 2 action points a round and attacks roll to hit (cover comes later).
+every unit spends 2 action points a round and attacks roll to hit, less the target's cover.
 
 ## Architecture
 
@@ -169,22 +177,33 @@ Non-plugin modules worth knowing:
   diagonals 1.45 like the pathfinder, giving each reachable tile its AP cost and path) and
   `confused_step`. Movement is `CombatStats::movement`, from the raws `stats.movement` for
   monsters (Giant Bat 6)
+- `cover.rs` - Cover and flanking, pure rules over the `Map`. `cover_at(map, cell)`: walls and
+  anything blocking sight (a closed door) are `Cover::Full`, else the prop's raws `cover` from
+  `Map::prop_cover` (rebuilt by `map_indexing_system` from the `Cover` component), else none.
+  Units give no cover. `cover_sides(map, cell)` lists the covered sides (N, S, E, W): the hover
+  shields. `exposure(map, target, attacker)` is the XCOM rule: a side counts when the attacker is
+  strictly beyond it (a diagonal attacker faces two), the best counting one wins (`Covered`); a
+  target with cover none of which counts is `Flanked`; none at all is `Open`. Cover applies to
+  melee and ranged alike. `Exposure::aim_penalty` (half 20, full 40) feeds `hit_chance`,
+  `crit_bonus` (+30 flanked) adds to the weapon's crit chance, `note` is the log text.
+  Raws props: `"cover": "none" | "half" | "full"` (doors leave it out)
 - `combat.rs` - Attacks, damage and death. The pure rules: `hit_chance(aim, defence, distance,
   weapon, cover, height)` is `aim - defence - cover - 10 per tile past the weapon's optimal range
   + 10 per level above the target`, clamped to 5..95, and 0 past the weapon's range. Callers pass
-  `NO_COVER` and `LEVEL_GROUND` until C05 and a map with height. `in_reach` checks range
+  `cover::Exposure::aim_penalty` and `LEVEL_GROUND` until a map with height. `in_reach` checks range
   (Chebyshev) and `viewshed::line_of_sight` (Bresenham, walls and `BlocksVisibility` block);
-  `aim_at` combines both. `roll_attack` rolls hit then crit, `roll_damage` rolls the weapon's
+  `aim_at` combines both with `cover::exposure` and returns the chance and the `Exposure`. `roll_attack` rolls hit then crit, `roll_damage` rolls the weapon's
   damage + power (+1 well fed), +half rounded up on a crit, less armour, never below 0. All
   rolls go through `GameRng`. `attack_system` resolves `WantsToAttack` (melee or ranged alike)
-  and logs "Aldric shoots Goblin #0: hit for 5 (55%)". `Arms` (a `SystemParam`) gives a unit's
+  and logs "Aldric shoots Goblin #0: hit for 5 (55%)", or "(35%, half cover)" / "(65%, flanked)"
+  when cover applied (`odds`). `Arms` (a `SystemParam`) gives a unit's
   equipped `Weapon` or `Weapon::NATURAL` (power -1..+1, range 1, 5% crit) and its worn armour.
   `CombatStats`: `armour` (raws and saves call it `defense`) cuts damage, `defence` cuts hit
   chance, `aim` defaults to `DEFAULT_AIM` (65)
 - Weapons in the raws: `weapon { slot, damage: [min, max], crit_chance, range (default 1),
   optimal_range (default range) }`; `slot` "ranged" (the Shortbow: range 8, optimal 5) takes
   the weapon hand like "melee". Damage scrolls roll `spell_damage` (a quarter either side of
-  their `damage`) and ignore armour; Magic Missile rolls to hit with aim +25 (`SPELL_AIM_BONUS`),
+  their `damage`) and ignore armour; Magic Missile rolls to hit with aim +25 (`SPELL_AIM_BONUS`) less cover,
   area scrolls hit everything in the radius, Confusion always lands
 - `levels.rs` - New-game setup and level changes (`change_level`, run in `RunState::NextLevel`).
   The town is depth 0 (`TOWN_DEPTH`), the dungeon depths 1 to 12. Down stairs go one level
@@ -315,7 +334,9 @@ of the same logic. The build should stay at zero warnings.
   stay full height
 - Click-to-move paths (`pathfinding::a_star_explored`) only cross explored tiles
 - Tile overlays (hover, path preview, combat move range, targeting range, area, target) are
-  `TileMarks::mark` quads just above the floor, never 2D sprites. The move range draws the one-AP
+  `TileMarks::mark` quads just above the floor, never 2D sprites. Cover shields are upright
+  `TileMarks::shield` quads on a tile's side (half low and amber, full tall and blue, unlit and
+  double-sided), drawn by `show_path_preview` on the hovered destination of a combat move. The move range draws the one-AP
   zone blue (`move_one`) and the two-AP zone green (`move_two`), inset so the grid shows
 - `translate_positions` moves a 3D entity (`EntityShape`) to `grid_to_world` plus its shape's lift
   whenever its `Position` changes. Tiles are placed once at spawn. Effects and bloodstains have

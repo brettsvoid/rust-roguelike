@@ -36,6 +36,7 @@ pub fn execute_command(
         Some("kill_all") => cmd_kill_all(commands, monster_query),
         Some("teleport") => cmd_teleport(&parts, party, active),
         Some("spawn") => cmd_spawn(&parts, commands, party, active),
+        Some("place") => cmd_place(&parts, commands, party, active),
         Some("effect") => cmd_effect(&parts, commands, party, active),
         Some("town") => cmd_town(&parts, town),
         Some("gold") => cmd_gold(&parts, commands),
@@ -45,7 +46,7 @@ pub fn execute_command(
 }
 
 fn cmd_help() -> String {
-    "Commands: spawn <item> (portal, heart, ...), effect <spark|fireball|missile|heal|confusion|blood>, teleport <x> <y>, gold <n>, godmode, reveal, nofog, heal, kill_all, town sell <sector> <value>, town days <n>, town level <sector> <n>".to_string()
+    "Commands: spawn <item> (portal, heart, ...), effect <spark|fireball|missile|heal|confusion|blood>, place <dx> <dy> <raws name>, teleport <x> <y>, gold <n>, godmode, reveal, nofog, heal, kill_all, town sell <sector> <value>, town days <n>, town level <sector> <n>".to_string()
 }
 
 fn cmd_godmode(god_mode: &mut GodMode) -> String {
@@ -206,6 +207,32 @@ fn cmd_spawn(
             }
         }
         None => format!("Unknown item: {}", item_name),
+    }
+}
+
+/// Spawns any raws entry (prop, monster or item, by its exact name, spaces
+/// allowed) at an offset from the active hero, to stage cover and fights.
+fn cmd_place(
+    parts: &[&str],
+    commands: &mut Commands,
+    party: &mut Query<(Entity, &mut Position, &mut CombatStats), With<PartyMember>>,
+    active: Option<Entity>,
+) -> String {
+    let usage = "Usage: place <dx> <dy> <raws name>";
+    let (Some(Ok(dx)), Some(Ok(dy))) = (parts.get(1).map(|n| n.parse::<i32>()), parts.get(2).map(|n| n.parse::<i32>()))
+    else {
+        return usage.to_string();
+    };
+    let name = parts.get(3..).unwrap_or_default().join(" ");
+    let Some((_, pos, _)) = active.and_then(|unit| party.get(unit).ok()) else {
+        return "No active unit".to_string();
+    };
+    let (x, y) = (pos.x + dx, pos.y + dy);
+    let raws = crate::raws::RAWS.lock().unwrap();
+    if crate::raws::spawn_named_entity(&raws, commands, &name, x, y, None) {
+        format!("Placed {name} at ({x}, {y})")
+    } else {
+        format!("{usage} (no raws entry {name:?})")
     }
 }
 

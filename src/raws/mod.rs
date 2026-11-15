@@ -46,6 +46,14 @@ mod tests {
     }
 
     #[test]
+    fn every_prop_but_doors_states_its_cover() {
+        for prop in shipped_raws().props {
+            // A closed door blocks sight, so `cover::cover_at` makes it a wall.
+            assert_eq!(prop.cover.is_some(), prop.door_open.is_none(), "{}", prop.name);
+        }
+    }
+
+    #[test]
     fn every_item_but_gold_belongs_to_a_sector() {
         let sectorless: Vec<_> = shipped_raws()
             .items

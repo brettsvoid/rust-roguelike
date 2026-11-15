@@ -26,7 +26,7 @@ impl Plugin for TooltipPlugin {
 }
 
 /// Names what is under the cursor. In combat a hostile the active hero can
-/// attack also shows the chance to hit it.
+/// attack also shows the chance to hit it, with its cover or a flank.
 #[allow(clippy::too_many_arguments)]
 fn update_tooltip(
     mut commands: Commands,
@@ -69,7 +69,10 @@ fn update_tooltip(
     for (pos, name, stats, monster) in &entities_query {
         if pos.x == map_x && pos.y == map_y {
             match stats.filter(|_| monster).and_then(|s| chance(pos, s.defence)) {
-                Some(chance) => tooltip_names.push(format!("{} ({chance}% to hit)", name.name)),
+                Some((chance, cover)) => match cover.note() {
+                    Some(note) => tooltip_names.push(format!("{} ({chance}% to hit, {note})", name.name)),
+                    None => tooltip_names.push(format!("{} ({chance}% to hit)", name.name)),
+                },
                 None => tooltip_names.push(name.name.clone()),
             }
         }

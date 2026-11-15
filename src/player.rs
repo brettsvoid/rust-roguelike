@@ -10,6 +10,7 @@ use rand::RngExt;
 use crate::{
     bystander::Bystander,
     combat::{in_reach, Arms, CombatStats, WantsToAttack},
+    cover::cover_sides,
     components::{BlocksTile, BlocksVisibility, Confusion, Door, HungerClock, HungerState, Item, Name, WantsToPickupItem},
     debug::DebugMode,
     economy::town::Vendor,
@@ -164,7 +165,8 @@ fn walk_step(from: (i32, i32), path: &VecDeque<(i32, i32)>, hostile_in_view: boo
 struct PathPreview;
 
 /// Marks the walk a click on the hovered tile would take; in combat, the
-/// path of the move within range. Redrawn only when the active unit, the
+/// path of the move within range and cover shields on the destination's
+/// covered sides (`cover::cover_sides`, the sides the attack rule reads). Redrawn only when the active unit, the
 /// hovered tile or the move range changes.
 #[allow(clippy::too_many_arguments)]
 fn show_path_preview(
@@ -208,6 +210,11 @@ fn show_path_preview(
         Mode::Combat { .. } => range.path(to),
         Mode::Explore => walk_path(&map, from, to).map(Vec::from).unwrap_or_default(),
     };
+    if !cells.is_empty() && matches!(*mode, Mode::Combat { .. }) {
+        for (side, cover) in cover_sides(&map, to) {
+            commands.spawn((PathPreview, marks.shield(&map, to, side, cover)));
+        }
+    }
     for cell in cells {
         // Just above the move range marks.
         commands.spawn((PathPreview, marks.mark(&marks.path, &map, cell, FULL_TILE, 0.005)));

@@ -1,9 +1,10 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 
 use crate::camera::Camera;
 use crate::components::Hidden;
+use crate::cover::Cover;
 use crate::debug::DebugState;
 use crate::distance::DistanceAlg;
 use crate::entity_render::{attach_entity_mesh, entity_transform, EntityAssets, EntityShape, Renderable};
@@ -162,6 +163,8 @@ pub struct Map {
     pub visible_tiles: Vec<bool>,
     pub blocked_tiles: Vec<bool>,
     pub view_blocked: HashSet<usize>,
+    /// The raws cover of props by tile index (`cover::cover_at`), rebuilt with `view_blocked`.
+    pub prop_cover: HashMap<usize, Cover>,
     pub tile_content: Vec<Vec<Entity>>,
     pub bloodstains: HashSet<usize>,
 }
@@ -178,6 +181,7 @@ impl Map {
             visible_tiles: vec![false; size],
             blocked_tiles: vec![false; size],
             view_blocked: HashSet::new(),
+            prop_cover: HashMap::new(),
             tile_content: vec![Vec::new(); size],
             bloodstains: HashSet::new(),
         }

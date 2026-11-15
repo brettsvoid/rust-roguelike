@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 use crate::bystander::Bystander;
 use crate::combat::{CombatStats, DEFAULT_AIM};
+use crate::cover::Cover;
 use crate::economy::Gold;
 use crate::entity_render::EntityShape;
 use crate::models::Model;
@@ -377,6 +378,10 @@ pub fn spawn_named_prop(
     // Single activation
     if prop_template.single_activation.unwrap_or(false) {
         entity.insert(SingleActivation);
+    }
+
+    if let Some(cover) = prop_template.cover.filter(|&c| c != Cover::None) {
+        entity.insert(cover);
     }
 
     if let Some(ref light) = prop_template.light {
