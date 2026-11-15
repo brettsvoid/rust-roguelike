@@ -63,6 +63,16 @@ Assumed defaults (the owner can overrule; change the ticket if so):
 - A Town Portal scroll and the up stairs return the party to town. Coming back
   to the dungeon regenerates the level at the deepest depth reached.
 
+Direction from the owner's first playtest (15 November 2026):
+
+- The game should feel smooth and polished, not grid-bound. The old grid-based
+  feel is not something to preserve, and `docs/design.md` is a guideline that
+  will change. Where a ticket has a choice, pick the smoother presentation:
+  continuous camera motion, units that glide, eased transitions.
+- Open, to ask the owner: whether "less grid" stops at presentation (tiles stay
+  the gameplay truth, as in XCOM) or reaches the rules (free movement measured
+  in distance). Until answered, tiles stay the gameplay truth.
+
 Settled questions (owner, 15 November 2026):
 
 1. Depth numbering. The town is depth 0 and the dungeon runs from depth 1 to
@@ -194,6 +204,21 @@ Settled questions (owner, 15 November 2026):
   remove the WASM profile and the WASM branch of `saveload.rs`.
 - Done when: no dead 2D gameplay code remains, the visualiser still works, and
   the WASM outcome is recorded in `CLAUDE.md`.
+
+### F11 Smooth camera
+- Status: todo
+- Needs: F05
+- From the owner's playtest: WASD panning snaps a tile at a time and feels
+  janky, and touchpad zoom feels reversed. Make the camera focus a continuous
+  world position: holding WASD pans at a steady speed scaled by frame time and
+  zoom level, with a short ease in and out; following the active unit and
+  recentring (C) glide instead of jumping; zoom eases towards its target.
+  Touchpad scrolling zooms the natural way round (two fingers up, or a pinch
+  out, zooms in) and its speed suits a touchpad; a mouse wheel still zooms in
+  on wheel up. Add a setting or constant to invert it.
+- Files: `src/camera.rs`, the harness pan and zoom keys.
+- Done when: unit tests pin the pan and zoom maths, harness captures show a
+  pan landing between tiles, and the owner confirms the feel.
 
 ### F10 Performance pass
 - Status: in progress
