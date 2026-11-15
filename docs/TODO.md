@@ -298,7 +298,7 @@ and adds the `model` names to `raws/spawns.json`.
   nearest one, and the run ends only when the last one dies.
 
 ### C02 Explore mode and combat mode
-- Status: in progress
+- Status: done
 - Needs: C01
 - Redesign `RunState` in `game_flow.rs` as an explicit state machine with two
   top-level modes. Explore: a click moves the whole party, followers pathing
@@ -309,7 +309,7 @@ and adds the `model` names to `raws/spawns.json`.
   walks freely, drops into combat on contact and returns to explore after.
 
 ### C03 Action points and movement range
-- Status: todo
+- Status: in progress
 - Needs: C02
 - Each unit has 2 action points per round and a `movement` stat. Actions:
   move (1 AP), dash (2 AP), attack (ends the unit's turn), use item (1 AP),
