@@ -137,7 +137,7 @@ Settled questions (owner, 15 November 2026):
   positions, and tooltips and targeting pick the right tile in 3D.
 
 ### F05 Click to move and camera controls
-- Status: in progress
+- Status: done
 - Needs: F03, F04
 - Left click on a walkable explored tile walks the player there along the
   existing A* path, one tile per turn, stopping when a hostile comes into
