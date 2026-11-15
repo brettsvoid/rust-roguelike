@@ -103,7 +103,6 @@ fn main() {
         .run();
 }
 
-fn setup(mut commands: Commands) {
+fn setup() {
     raws::load_raws();
-    commands.spawn(Camera2d);
 }

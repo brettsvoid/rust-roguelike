@@ -24,7 +24,7 @@ impl Plugin for TooltipPlugin {
 fn update_tooltip(
     mut commands: Commands,
     window: Query<&Window>,
-    camera_query: Query<(&Camera, &GlobalTransform)>,
+    camera_query: Query<(&Camera, &GlobalTransform), With<Camera2d>>,
     game_camera: Res<GameCamera>,
     map: Res<Map>,
     font: Res<UiFont>,

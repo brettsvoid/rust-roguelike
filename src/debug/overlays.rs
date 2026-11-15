@@ -111,7 +111,7 @@ pub fn update_tile_info_overlay(
     debug: Res<DebugMode>,
     map: Res<Map>,
     window: Query<&Window>,
-    camera_query: Query<(&Camera, &GlobalTransform)>,
+    camera_query: Query<(&Camera, &GlobalTransform), With<Camera2d>>,
     font: Res<UiFont>,
     overlay_query: Query<Entity, With<TileInfoOverlay>>,
     tile_query: Query<Entity, With<Tile>>,

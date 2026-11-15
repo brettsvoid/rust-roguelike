@@ -337,7 +337,7 @@ fn spawn_range_indicator(
 fn update_target_highlight(
     mut commands: Commands,
     window: Query<&Window>,
-    camera_query: Query<(&Camera, &GlobalTransform)>,
+    camera_query: Query<(&Camera, &GlobalTransform), With<Camera2d>>,
     game_camera: Res<GameCamera>,
     map: Res<Map>,
     targeting_info: Res<TargetingInfo>,
@@ -482,7 +482,7 @@ fn handle_targeting(
     mut evr_kbd: MessageReader<KeyboardInput>,
     mouse_button: Res<ButtonInput<MouseButton>>,
     window: Query<&Window>,
-    camera_query: Query<(&Camera, &GlobalTransform)>,
+    camera_query: Query<(&Camera, &GlobalTransform), With<Camera2d>>,
     game_camera: Res<GameCamera>,
     map: Res<Map>,
     targeting_info: Res<TargetingInfo>,

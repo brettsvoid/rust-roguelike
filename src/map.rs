@@ -6,6 +6,7 @@ use crate::camera::Camera;
 use crate::components::{Hidden, RenderOrder};
 use crate::debug::DebugState;
 use crate::distance::DistanceAlg;
+use crate::map_render::{attach_tile_mesh, spawn_grey_box_light, TileAssets, TileMesh};
 use crate::player::Player;
 use crate::viewshed::Viewshed;
 use crate::RunState;
@@ -23,6 +24,13 @@ pub const GRID_PX: Vec2 = Vec2 {
 pub struct Position {
     pub x: i32,
     pub y: i32,
+}
+
+/// The one mapping from grid to 3D world space: grid (x, y) is the centre of
+/// the tile at world (x, 0, y). One tile is one world unit and the floor is
+/// the y = 0 plane, so grid y (down the screen in 2D) runs along world +z.
+pub fn grid_to_world(x: i32, y: i32) -> Vec3 {
+    Vec3::new(x as f32, 0.0, y as f32)
 }
 
 #[derive(Component)]
@@ -375,19 +383,24 @@ impl Plugin for MapPlugin {
             .and_then(not(in_state(RunState::GameOver)))
             .and_then(not(in_state(RunState::MapGeneration)));
 
-        app.init_resource::<Map>().add_systems(
-            Update,
-            (
-                // translate_positions always runs (needed for visualization too)
-                translate_positions,
-                // These only run during actual gameplay
-                update_revealed_state.run_if(in_gameplay.clone()),
-                update_revealed_tiles.run_if(in_gameplay.clone()),
-                update_visible_tiles.run_if(in_gameplay.clone()),
-                update_renderable_visibility.run_if(in_gameplay.clone()),
-                update_bloodstains.run_if(in_gameplay.clone()),
-            ),
-        );
+        app.init_resource::<Map>()
+            .init_resource::<TileAssets>()
+            .add_observer(attach_tile_mesh)
+            .add_systems(Startup, spawn_grey_box_light)
+            .add_systems(
+                Update,
+                (
+                    // translate_positions always runs (needed for visualization too)
+                    translate_positions,
+                    // These only run during actual gameplay
+                    update_revealed_state.run_if(in_gameplay.clone()),
+                    update_tile_mesh_visibility.run_if(in_gameplay.clone()),
+                    update_revealed_tiles.run_if(in_gameplay.clone()),
+                    update_visible_tiles.run_if(in_gameplay.clone()),
+                    update_renderable_visibility.run_if(in_gameplay.clone()),
+                    update_bloodstains.run_if(in_gameplay.clone()),
+                ),
+            );
     }
 }
 
@@ -436,11 +449,24 @@ fn update_revealed_state(mut tiles_query: Query<(&mut TextColor, &Revealed), Wit
     }
 }
 
+/// Never-seen 3D tiles are not drawn. Dimming explored tiles is F03.
+fn update_tile_mesh_visibility(
+    mut tiles_query: Query<(&Revealed, &mut Visibility), (With<TileMesh>, Changed<Revealed>)>,
+) {
+    for (revealed, mut visibility) in &mut tiles_query {
+        *visibility = match revealed.0 {
+            RevealedState::Hidden => Visibility::Hidden,
+            RevealedState::Explored | RevealedState::Visible => Visibility::Inherited,
+        };
+    }
+}
+
 fn translate_positions(
     mut commands: Commands,
     window: Single<&Window>,
     camera: Res<Camera>,
-    query: Query<(Entity, &Position, Option<&RenderOrder>)>,
+    // 3D tiles are placed once, at spawn, by `grid_to_world`.
+    query: Query<(Entity, &Position, Option<&RenderOrder>), Without<TileMesh>>,
 ) {
     let half_height = window.height() / 2.;
     let half_width = window.width() / 2.;
