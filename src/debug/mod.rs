@@ -2,6 +2,7 @@ mod commands;
 mod console;
 mod overlays;
 mod resources;
+mod screenshot;
 
 use bevy::prelude::*;
 use crate::RunState;
@@ -33,7 +34,8 @@ impl Plugin for DebugPlugin {
                     console::handle_console_input,
                 )
                     .run_if(debug_enabled.and_then(not(in_state(RunState::MapGeneration)))),
-            );
+            )
+            .add_plugins(screenshot::ScreenshotPlugin);
     }
 }
 

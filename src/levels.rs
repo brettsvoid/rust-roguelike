@@ -18,15 +18,17 @@ use crate::spawner;
 use crate::viewshed::Viewshed;
 
 /// Build the starting map and spawn the player plus initial entities.
-/// Called from the main menu when starting a new game.
+/// Called from the main menu when starting a new game (depth 1), and by the
+/// screenshot harness at any depth.
 pub fn spawn_new_game(
     commands: &mut Commands,
     map: &mut Map,
     rng: &mut GameRng,
     font: &UiFont,
+    depth: i32,
 ) {
     // Depth 1 is the town; deeper levels get procedural dungeons
-    let mut builder = map_builders::level_builder(1, rng);
+    let mut builder = map_builders::level_builder(depth, rng);
     builder.build_map(rng);
     *map = builder.get_map();
 

@@ -16,7 +16,14 @@ cargo build --release
 
 # Run with file watcher (hot reloading for assets)
 cargo run --features file_watcher
+
+# Screenshot harness: start a seeded new game, wait N frames, save a PNG, exit.
+# Depth 1 is the town. Same seed and flags give a byte-identical PNG.
+# Defaults: --seed 42 --depth 1 --frames 60, fog on unless --reveal-map.
+cargo run -- --screenshot out.png --seed 42 --depth 3 --reveal-map --frames 60
 ```
+
+Verify every visible change with a harness screenshot that you look at.
 
 ## Game Design
 
