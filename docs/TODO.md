@@ -112,7 +112,7 @@ Open questions for the owner (found while writing design.md):
   recognisable isometric grey-box geometry, and UI text still renders.
 
 ### F03 Grey-box 3D entities and fog of war
-- Status: in progress
+- Status: done
 - Needs: F02
 - `RenderableBundle` spawns a coloured primitive per entity (capsule for
   creatures, small box for items, per-prop box) using the raws colour.
@@ -136,7 +136,7 @@ Open questions for the owner (found while writing design.md):
   positions, and tooltips and targeting pick the right tile in 3D.
 
 ### F05 Click to move and camera controls
-- Status: todo
+- Status: in progress
 - Needs: F03, F04
 - Left click on a walkable explored tile walks the player there along the
   existing A* path, one tile per turn, stopping when a hostile comes into
@@ -149,7 +149,7 @@ Open questions for the owner (found while writing design.md):
   `CLAUDE.md` controls text is updated.
 
 ### F06 Wall occlusion
-- Status: todo
+- Status: in progress
 - Needs: F03
 - In an isometric view, walls nearer the camera hide the floor behind them.
   Walls that would occlude a visible floor tile or a party member are drawn
@@ -159,7 +159,7 @@ Open questions for the owner (found while writing design.md):
   building interior all show the player and the floor unobstructed.
 
 ### F07 Dark, ominous lighting
-- Status: todo
+- Status: in progress
 - Needs: F03
 - Near-black ambient light in the dungeon. A `LightSource` component (colour,
   radius, flicker) set from the raws. The party carries a torch. Candles and
@@ -174,7 +174,7 @@ Open questions for the owner (found while writing design.md):
   time on a full 80 by 43 level stays under 16 ms in a release build.
 
 ### F08 Model pipeline
-- Status: todo
+- Status: in progress
 - Needs: F03
 - Load `assets/models/<name>.glb` scenes by the raws `model` field for mobs,
   items and props, and by a `TileType` (plus wall bitmask from
