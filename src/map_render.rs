@@ -63,11 +63,28 @@ pub fn tile_style(tile: TileType) -> (TileShape, Color) {
 pub struct TileMesh(pub TileType);
 
 /// The shared tile meshes and materials, created on first use so there is
-/// one mesh per `TileShape` and one material per `TileType`, never per tile.
+/// one mesh per `TileShape` and one bright and one dim material per
+/// `TileType`, never per tile.
 #[derive(Resource, Default)]
 pub struct TileAssets {
     meshes: HashMap<TileShape, Handle<Mesh>>,
-    materials: HashMap<TileType, Handle<StandardMaterial>>,
+    materials: HashMap<TileType, TileMaterials>,
+}
+
+struct TileMaterials {
+    visible: Handle<StandardMaterial>,
+    explored: Handle<StandardMaterial>,
+}
+
+/// How much light an explored but unseen tile keeps. F07 also desaturates.
+const EXPLORED_BRIGHTNESS: f32 = 0.3;
+
+impl TileAssets {
+    /// The material for a tile in view (`explored == false`) or remembered.
+    pub fn material(&self, tile: TileType, explored: bool) -> Option<Handle<StandardMaterial>> {
+        let m = self.materials.get(&tile)?;
+        Some(if explored { m.explored.clone() } else { m.visible.clone() })
+    }
 }
 
 fn tile_reveal_state(map: &Map, idx: usize, reveal: TileReveal) -> RevealedState {
@@ -125,12 +142,21 @@ pub fn attach_tile_mesh(
         .materials
         .entry(*tile)
         .or_insert_with(|| {
-            materials.add(StandardMaterial {
-                base_color: color,
-                perceptual_roughness: 1.0,
-                ..default()
-            })
+            let mut material = |base_color| {
+                materials.add(StandardMaterial {
+                    base_color,
+                    perceptual_roughness: 1.0,
+                    ..default()
+                })
+            };
+            let c = color.to_srgba();
+            let k = EXPLORED_BRIGHTNESS;
+            TileMaterials {
+                visible: material(color),
+                explored: material(Color::srgb(c.red * k, c.green * k, c.blue * k)),
+            }
         })
+        .visible
         .clone();
     commands.entity(add.entity).insert((
         Mesh3d(mesh),

@@ -14,6 +14,7 @@ mod components;
 mod debug;
 mod distance;
 mod economy;
+mod entity_render;
 mod game_flow;
 mod gamelog;
 mod gui;

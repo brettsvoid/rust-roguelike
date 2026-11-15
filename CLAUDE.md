@@ -24,6 +24,9 @@ cargo run -- --screenshot out.png --seed 42 --depth 3 --reveal-map --frames 60
 # Fake the mouse at a window point (logical pixels) and enter targeting with an item:
 cargo run -- --screenshot out.png --depth 3 --reveal-map --cursor 720,430 \
   --console "spawn fireball" --target "Fireball Scroll"
+# --keys presses one key per turn through the real input (h j k l y u n m g .),
+# e.g. walk ten tiles west so explored-but-unseen tiles show:
+cargo run -- --screenshot fog.png --seed 42 --depth 3 --keys hhhhhhhhhh --frames 120
 ```
 
 Verify every visible change with a harness screenshot that you look at.
@@ -45,9 +48,8 @@ for that overhaul. Key points:
 - **Mechanics**: Hunger/survival, items/equipment
 
 The Architecture section below describes the code as it is now. The current
-build is mid-conversion: map tiles are grey-box 3D on an isometric camera,
-while entities are still ASCII `Text2d` glyphs, single player, with keyboard
-movement.
+build is mid-conversion: the map and entities are grey-box 3D primitives on
+an isometric camera, single player, with keyboard movement.
 
 ## Architecture
 
@@ -72,8 +74,13 @@ Non-plugin modules worth knowing:
 
 - `map_builders/` - All procedural generation, organized as builder chains (see its module doc)
 - `map_render.rs` - The one place map tiles get drawn. `spawn_map_tiles` spawns 3D tiles in game
-  (looks in `tile_style`, shared meshes and materials in the `TileAssets` resource) and `Text2d`
-  glyphs for the visualiser (`TileReveal::Preview`, looks in `tile_glyph`)
+  (looks in `tile_style`, shared meshes and a bright and a dim material per `TileType` in the
+  `TileAssets` resource) and `Text2d` glyphs for the visualiser (`TileReveal::Preview`, looks in
+  `tile_glyph`)
+- `entity_render.rs` - 3D bodies for creatures, items, props, particles and bloodstains. An entity
+  with `EntityShape` + `Renderable` (raws glyph and colour) gets a shared mesh per shape and a
+  shared material per colour from `EntityAssets` via the `attach_entity_mesh` observer. Spawn
+  map entities with `RenderableBundle`; re-inserting `EntityShape` re-dresses (doors opening)
 - `levels.rs` - New-game setup and descending to the next level
 - `saveload.rs` - Save/load plus the save-on-quit (Q) system
 
@@ -124,8 +131,19 @@ of the same logic. The build should stay at zero warnings.
   such systems `.after(picking::update_hovered_tile)`. Don't convert the cursor any other way
 - Tile overlays (hover, targeting range, area, target) are `TileMarks::mark` quads just above the
   floor, never 2D sprites
-- 2D: `translate_positions` converts grid positions to screen pixels for `Text2d` entities
-  (everything except 3D tiles, which are placed once at spawn)
+- `translate_positions` moves a 3D entity (`EntityShape`) to `grid_to_world` plus its shape's lift
+  whenever its `Position` changes. Tiles are placed once at spawn. Particles and bloodstains have
+  no `Position` (they are not on the tile for gameplay) and get their transform at spawn
+- 2D: `translate_glyphs` places the visualiser's `Text2d` tiles in screen pixels
+
+### Fog of War
+
+- Tiles: `Revealed` is `Hidden` (not drawn), `Explored` (dim material) or `Visible` (bright
+  material); `update_tile_mesh_visibility` applies it
+- Entities other than the player are shown only on tiles in `Map::visible_tiles`
+  (`update_renderable_visibility`); `Hidden` (unfound traps) always hides
+- Debug `reveal_map` marks every tile explored; `no_fog` (and the harness's `--reveal-map`)
+  treats every revealed tile as visible, so entities show too
 
 ### Key Resources
 

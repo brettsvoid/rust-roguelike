@@ -4,11 +4,10 @@ use crate::components::{DefenseBonus, Equipped, HungerClock, HungerState, MeleeP
 use crate::debug::GodMode;
 use crate::gamelog::GameLog;
 use crate::economy::Gold;
-use crate::map::{Map, Position, FONT_SIZE};
+use crate::map::{Map, Position};
 use crate::particle::ParticleBuilder;
 use crate::player::Player;
 use crate::raws::{spawn_named_item, RAWS};
-use crate::resources::UiFont;
 use crate::saveload;
 use crate::RunState;
 
@@ -145,7 +144,6 @@ pub fn delete_the_dead(
     mut commands: Commands,
     mut log: ResMut<GameLog>,
     mut next_state: ResMut<NextState<RunState>>,
-    font: Res<UiFont>,
     query: Query<(Entity, &CombatStats, &Name, Option<&Position>, Option<&Gold>), Without<Player>>,
     player_query: Query<&CombatStats, With<Player>>,
 ) {
@@ -155,14 +153,9 @@ pub fn delete_the_dead(
             commands.entity(entity).despawn();
 
             if let (Some(pos), Some(&gold)) = (pos, gold) {
-                let text_font = TextFont {
-                    font: font.0.clone().into(),
-                    font_size: FontSize::Px(FONT_SIZE),
-                    ..default()
-                };
                 let raws = RAWS.lock().unwrap();
                 if let Some(pile) =
-                    spawn_named_item(&raws, &mut commands, &text_font, "Gold", pos.x, pos.y)
+                    spawn_named_item(&raws, &mut commands, "Gold", pos.x, pos.y)
                 {
                     commands.entity(pile).insert(gold);
                 }

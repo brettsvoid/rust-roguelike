@@ -61,7 +61,7 @@ impl Plugin for CameraPlugin {
 
 /// The 3D camera draws the world first and clears the screen. The 2D camera
 /// draws on top without clearing: it owns the UI and the remaining `Text2d`
-/// glyphs (entities until F03, the map visualiser).
+/// glyphs (the map visualiser).
 fn spawn_cameras(mut commands: Commands) {
     commands.spawn((
         Camera3d::default(),

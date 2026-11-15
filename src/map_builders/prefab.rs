@@ -231,7 +231,6 @@ fn read_template(template: &str, width: usize, height: usize) -> Vec<char> {
 
 pub fn spawn_by_name(
     commands: &mut Commands,
-    font: &TextFont,
     x: i32,
     y: i32,
     name: &str,
@@ -243,10 +242,10 @@ pub fn spawn_by_name(
     let is_monster = raws.mob_index.contains_key(name);
 
     if is_monster {
-        spawn_named_entity(&raws, commands, font, name, x, y, Some(*monster_id));
+        spawn_named_entity(&raws, commands, name, x, y, Some(*monster_id));
         *monster_id += 1;
     } else {
-        spawn_named_entity(&raws, commands, font, name, x, y, None);
+        spawn_named_entity(&raws, commands, name, x, y, None);
     }
 }
 

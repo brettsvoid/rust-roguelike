@@ -3,7 +3,8 @@ use rand::RngExt;
 
 use crate::{
     combat::CombatStats,
-    components::{HungerClock, HungerState, Name, RenderOrder, RenderableBundle},
+    components::{HungerClock, HungerState, Name, RenderableBundle},
+    entity_render::EntityShape,
     map::{Position, MAP_WIDTH},
     player::Player,
     raws::{get_spawn_table_for_depth, spawn_named_entity, RAWS},
@@ -15,7 +16,7 @@ use crate::{
 const MAX_MONSTERS: i32 = 4;
 const MAX_ITEMS: i32 = 2;
 
-pub fn spawn_player(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
+pub fn spawn_player(commands: &mut Commands, x: i32, y: i32) {
     commands.spawn((
         Player,
         Name {
@@ -39,9 +40,7 @@ pub fn spawn_player(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
         RenderableBundle::new(
             "☺",
             palettes::basic::YELLOW.into(),
-            palettes::basic::BLACK.into(),
-            RenderOrder::PLAYER,
-            font,
+            EntityShape::Creature,
         ),
     ));
 }
@@ -49,7 +48,6 @@ pub fn spawn_player(commands: &mut Commands, font: &TextFont, x: i32, y: i32) {
 pub fn spawn_room(
     commands: &mut Commands,
     rng: &mut GameRng,
-    font: &TextFont,
     room: &Rect,
     monster_id: &mut usize,
     map_depth: i32,
@@ -97,10 +95,10 @@ pub fn spawn_room(
             // Check if it's a monster (needs monster_id)
             let is_monster = raws.mob_index.contains_key(&entity_name);
             if is_monster {
-                spawn_named_entity(&raws, commands, font, &entity_name, *x, *y, Some(*monster_id));
+                spawn_named_entity(&raws, commands, &entity_name, *x, *y, Some(*monster_id));
                 *monster_id += 1;
             } else {
-                spawn_named_entity(&raws, commands, font, &entity_name, *x, *y, None);
+                spawn_named_entity(&raws, commands, &entity_name, *x, *y, None);
             }
         }
     }
@@ -113,7 +111,6 @@ pub fn spawn_room(
 pub fn spawn_region(
     commands: &mut Commands,
     rng: &mut GameRng,
-    font: &TextFont,
     tiles: &[usize],
     monster_id: &mut usize,
     map_depth: i32,
@@ -166,10 +163,10 @@ pub fn spawn_region(
             // Check if it's a monster (needs monster_id)
             let is_monster = raws.mob_index.contains_key(&entity_name);
             if is_monster {
-                spawn_named_entity(&raws, commands, font, &entity_name, x, y, Some(*monster_id));
+                spawn_named_entity(&raws, commands, &entity_name, x, y, Some(*monster_id));
                 *monster_id += 1;
             } else {
-                spawn_named_entity(&raws, commands, font, &entity_name, x, y, None);
+                spawn_named_entity(&raws, commands, &entity_name, x, y, None);
             }
         }
     }

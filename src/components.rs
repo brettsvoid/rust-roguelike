@@ -1,32 +1,22 @@
 use bevy::prelude::*;
 
-#[derive(Component, Clone, Copy)]
-pub struct RenderOrder(pub i32);
-
-impl RenderOrder {
-    pub const ITEM: RenderOrder = RenderOrder(0);
-    pub const MONSTER: RenderOrder = RenderOrder(1);
-    pub const PLAYER: RenderOrder = RenderOrder(2);
-}
+use crate::entity_render::{EntityShape, Renderable};
 
 #[derive(Bundle)]
 pub struct RenderableBundle {
-    pub text: Text2d,
-    pub font: TextFont,
-    pub color: TextColor,
-    pub background: BackgroundColor,
-    pub render_order: RenderOrder,
+    pub renderable: Renderable,
+    pub shape: EntityShape,
     pub visibility: Visibility,
 }
 
 impl RenderableBundle {
-    pub fn new(glyph: &str, fg: Color, bg: Color, render_order: RenderOrder, font: &TextFont) -> Self {
+    pub fn new(glyph: &str, fg: Color, shape: EntityShape) -> Self {
         Self {
-            text: Text2d::new(glyph),
-            font: font.clone(),
-            color: TextColor(fg),
-            background: BackgroundColor(bg),
-            render_order,
+            renderable: Renderable {
+                glyph: glyph.to_string(),
+                fg,
+            },
+            shape,
             visibility: Visibility::Inherited,
         }
     }

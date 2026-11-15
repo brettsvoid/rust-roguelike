@@ -9,6 +9,7 @@ use crate::{
     combat::{CombatStats, WantsToMelee},
     components::{BlocksTile, BlocksVisibility, Door, HungerClock, HungerState, Item, WantsToPickupItem},
     debug::DebugMode,
+    entity_render::{EntityShape, Renderable},
     gamelog::GameLog,
     map::{xy_idx, Map, Position, TileType},
     monsters::Monster,
@@ -54,7 +55,7 @@ fn try_move_player(
     delta_x: i32,
     delta_y: i32,
     combat_stats: &Query<&CombatStats, Without<Player>>,
-    doors: &mut Query<(Entity, &mut Door, &mut Text2d), Without<Player>>,
+    doors: &mut Query<(Entity, &mut Door, &mut Renderable), Without<Player>>,
     bystanders: &Query<Entity, (With<Bystander>, Without<Player>)>,
 ) -> MoveResult {
     let dest_x = player_x + delta_x;
@@ -94,7 +95,8 @@ fn try_move_player(
             if !door.open {
                 // Open the door
                 door.open = true;
-                door_glyph.0 = "/".to_string();
+                door_glyph.glyph = "/".to_string();
+                commands.entity(door_entity).insert(EntityShape::OpenDoor);
                 commands.entity(door_entity).remove::<BlocksTile>();
                 commands.entity(door_entity).remove::<BlocksVisibility>();
                 gamelog.entries.push("You open the door.".to_string());
@@ -144,7 +146,7 @@ fn handle_player_input(
     other_combat_stats: Query<&CombatStats, Without<Player>>,
     items: Query<(Entity, &Position), (With<Item>, Without<Player>, Without<Bystander>)>,
     monsters: Query<&Position, (With<Monster>, Without<Player>, Without<Bystander>)>,
-    mut doors: Query<(Entity, &mut Door, &mut Text2d), Without<Player>>,
+    mut doors: Query<(Entity, &mut Door, &mut Renderable), Without<Player>>,
     bystanders: Query<Entity, (With<Bystander>, Without<Player>)>,
     // ParamSet to handle conflicting Position queries
     mut position_set: ParamSet<(

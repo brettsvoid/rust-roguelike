@@ -43,10 +43,10 @@ pub fn spawn_new_game(
     spawn_map_tiles(commands, map, &text_font, TileReveal::Hidden);
 
     let (player_x, player_y) = builder.get_starting_position();
-    spawner::spawn_player(commands, &text_font, player_x, player_y);
+    spawner::spawn_player(commands, player_x, player_y);
     commands.insert_resource(Purse::default());
 
-    builder.spawn_entities(commands, rng, &text_font);
+    builder.spawn_entities(commands, rng);
 }
 
 /// Tear down the current level and build the next one, keeping the player
@@ -98,7 +98,7 @@ pub fn go_next_level(
     spawn_map_tiles(&mut commands, &map, &text_font, TileReveal::Hidden);
 
     // Spawn monsters and items via builder
-    builder.spawn_entities(&mut commands, &mut rng, &text_font);
+    builder.spawn_entities(&mut commands, &mut rng);
 
     // Move player to starting position
     let (player_x, player_y) = builder.get_starting_position();

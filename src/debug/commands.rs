@@ -6,7 +6,6 @@ use crate::economy::trade;
 use crate::map::{Position, MAP_HEIGHT, MAP_WIDTH};
 use crate::monsters::Monster;
 use crate::player::Player;
-use crate::resources::UiFont;
 
 use super::resources::{DebugState, GodMode};
 
@@ -16,7 +15,6 @@ pub fn execute_command(
     commands: &mut Commands,
     debug_state: &mut DebugState,
     god_mode: &mut GodMode,
-    font: &UiFont,
     player_query: &mut Query<(Entity, &mut Position, &mut CombatStats), With<Player>>,
     monster_query: &Query<Entity, With<Monster>>,
     town: &mut ResMut<TownState>,
@@ -32,7 +30,7 @@ pub fn execute_command(
         Some("heal") => cmd_heal(player_query),
         Some("kill_all") => cmd_kill_all(commands, monster_query),
         Some("teleport") => cmd_teleport(&parts, player_query),
-        Some("spawn") => cmd_spawn(&parts, commands, font, player_query),
+        Some("spawn") => cmd_spawn(&parts, commands, player_query),
         Some("town") => cmd_town(&parts, town),
         Some(cmd) => format!("Unknown command: {}", cmd),
         None => String::new(),
@@ -146,7 +144,6 @@ fn cmd_teleport(
 fn cmd_spawn(
     parts: &[&str],
     commands: &mut Commands,
-    font: &UiFont,
     player_query: &mut Query<(Entity, &mut Position, &mut CombatStats), With<Player>>,
 ) -> String {
     if parts.len() < 2 {
@@ -158,12 +155,6 @@ fn cmd_spawn(
         return "No player found".to_string();
     };
     let (x, y) = (pos.x, pos.y);
-
-    let text_font = TextFont {
-        font: font.0.clone().into(),
-        font_size: FontSize::Px(16.0),
-        ..default()
-    };
 
     // Map aliases to actual item names in spawns.json
     let actual_name = match item_name.as_str() {
@@ -184,7 +175,7 @@ fn cmd_spawn(
     match actual_name {
         Some(name) => {
             let raws = crate::raws::RAWS.lock().unwrap();
-            if crate::raws::spawn_named_entity(&raws, commands, &text_font, name, x, y, None) {
+            if crate::raws::spawn_named_entity(&raws, commands, name, x, y, None) {
                 format!("Spawned {} at ({}, {})", name, x, y)
             } else {
                 format!("Failed to spawn: {}", name)

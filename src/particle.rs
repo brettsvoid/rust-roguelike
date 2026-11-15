@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
-use crate::map::{Position, FONT_SIZE, GRID_PX};
-use crate::resources::UiFont;
+use crate::entity_render::{entity_transform, EntityShape, Renderable};
+use crate::map::Position;
 
 #[derive(Component)]
 pub struct ParticleLifetime {
@@ -34,40 +34,24 @@ impl ParticleBuilder {
     }
 }
 
-pub fn particle_spawn_system(
-    mut commands: Commands,
-    mut builder: ResMut<ParticleBuilder>,
-    font: Res<UiFont>,
-    window: Query<&Window>,
-) {
-    let Ok(window) = window.single() else {
-        return;
-    };
-
-    let half_width = window.width() / 2.0;
-    let half_height = window.height() / 2.0;
-
+/// A particle is a small glowing cube over its tile. Proper effects are A07.
+pub fn particle_spawn_system(mut commands: Commands, mut builder: ResMut<ParticleBuilder>) {
     for request in builder.requests.drain(..) {
-        // Calculate screen position directly to avoid frame delay
-        let screen_x = (request.x as f32) * GRID_PX.x + (GRID_PX.x / 2.0) - half_width;
-        let screen_y = (request.y as f32) * -GRID_PX.y - (GRID_PX.y / 2.0) + half_height;
-
+        // No `Position`: particles are not on the tile for gameplay.
+        let pos = Position {
+            x: request.x,
+            y: request.y,
+        };
         commands.spawn((
             ParticleLifetime {
                 lifetime_ms: request.lifetime_ms,
             },
-            Position {
-                x: request.x,
-                y: request.y,
+            entity_transform(EntityShape::Particle, pos),
+            EntityShape::Particle,
+            Renderable {
+                glyph: request.glyph,
+                fg: request.color,
             },
-            Text2d::new(request.glyph),
-            TextFont {
-                font: font.0.clone().into(),
-                font_size: FontSize::Px(FONT_SIZE),
-                ..default()
-            },
-            TextColor(request.color),
-            Transform::from_xyz(screen_x, screen_y, 10.0), // Above other entities
         ));
     }
 }

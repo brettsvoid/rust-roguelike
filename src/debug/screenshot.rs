@@ -1,15 +1,19 @@
 //! Screenshot harness: `cargo run -- --screenshot out.png [--seed N] [--depth N]
 //! [--reveal-map] [--frames N] [--console CMD]... [--ledger] [--cursor X,Y]
-//! [--target ITEM]` starts a seeded new game, waits, saves a PNG of the window
-//! and exits. `--console` runs a debug console command once play begins
-//! (repeatable); `town ...` commands run before the level is built instead,
-//! e.g. "town level smithing 4"; `--ledger` then opens the town ledger.
+//! [--target ITEM] [--keys KEYS]` starts a seeded new game, waits, saves a PNG
+//! of the window and exits. `--console` runs a debug console command once play
+//! begins (repeatable); `town ...` commands run before the level is built
+//! instead, e.g. "town level smithing 4"; `--ledger` then opens the town ledger.
 //! `--cursor` fakes the mouse at window point X,Y (logical pixels); `--target`
 //! enters targeting with the named item (e.g. `--console "spawn fireball"
-//! --target "Fireball Scroll"`). Every visual change is verified with it.
+//! --target "Fireball Scroll"`). `--keys hjkl` presses one key per turn through
+//! the real input system (h j k l y u n m g and `.`); a key that takes no turn
+//! stalls the rest. Every visual change is verified with it.
 
 use std::path::PathBuf;
 
+use bevy::input::keyboard::{Key, KeyboardInput, NativeKey};
+use bevy::input::ButtonState;
 use bevy::prelude::*;
 use bevy::render::view::screenshot::{save_to_disk, Screenshot, ScreenshotCaptured};
 use bevy::window::{CursorOptions, PrimaryWindow};
@@ -45,6 +49,7 @@ impl Plugin for ScreenshotPlugin {
         app.insert_resource(GameRng::seeded(args.seed))
             .insert_resource(args)
             .add_systems(Startup, ignore_mouse)
+            .add_systems(OnEnter(RunState::AwaitingInput), press_next_key)
             .add_systems(
                 Update,
                 (
@@ -67,6 +72,23 @@ pub struct ScreenshotArgs {
     pub ledger: bool,
     pub cursor: Option<Vec2>,
     pub target: Option<String>,
+    pub keys: Vec<KeyCode>,
+}
+
+fn key_code(c: char) -> Option<KeyCode> {
+    Some(match c {
+        'h' => KeyCode::KeyH,
+        'j' => KeyCode::KeyJ,
+        'k' => KeyCode::KeyK,
+        'l' => KeyCode::KeyL,
+        'y' => KeyCode::KeyY,
+        'u' => KeyCode::KeyU,
+        'n' => KeyCode::KeyN,
+        'm' => KeyCode::KeyM,
+        'g' => KeyCode::KeyG,
+        '.' => KeyCode::Period,
+        _ => return None,
+    })
 }
 
 /// `Ok(None)` when `--screenshot` is absent, so the game starts normally.
@@ -80,6 +102,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
     let mut ledger = false;
     let mut cursor = None;
     let mut target = None;
+    let mut keys = Vec::new();
 
     let mut args = args.into_iter();
     while let Some(flag) = args.next() {
@@ -104,6 +127,12 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
                 cursor = Some(Vec2::new(x.parse().map_err(|_| bad())?, y.parse().map_err(|_| bad())?));
             }
             "--target" => target = Some(value),
+            "--keys" => {
+                keys = value
+                    .chars()
+                    .map(|c| key_code(c).ok_or(format!("--keys: no key for {c:?}")))
+                    .collect::<Result<_, _>>()?
+            }
             _ => return Err(format!("unknown argument: {flag}")),
         }
     }
@@ -124,6 +153,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
         ledger,
         cursor,
         target,
+        keys,
     }))
 }
 
@@ -168,7 +198,6 @@ fn prepare_capture(
     mut done: Local<bool>,
     mut debug_state: ResMut<DebugState>,
     mut god_mode: ResMut<GodMode>,
-    font: Res<UiFont>,
     mut player_query: Query<(Entity, &mut Position, &mut CombatStats), With<Player>>,
     monster_query: Query<Entity, With<Monster>>,
     mut town: ResMut<TownState>,
@@ -183,7 +212,6 @@ fn prepare_capture(
             &mut commands,
             &mut debug_state,
             &mut god_mode,
-            &font,
             &mut player_query,
             &monster_query,
             &mut town,
@@ -210,6 +238,29 @@ fn enter_targeting(
         targeting_info.item = Some(item);
         next_state.set_if_different(RunState::ShowTargeting);
     }
+}
+
+/// Each time the game waits for input, press the next `--keys` key. Runs on
+/// entering the state, so the key lands in this frame's input handling and
+/// the next waits for the turn to come round.
+fn press_next_key(
+    args: Res<ScreenshotArgs>,
+    mut next: Local<usize>,
+    window: Single<Entity, With<PrimaryWindow>>,
+    mut keyboard: MessageWriter<KeyboardInput>,
+) {
+    let Some(&key_code) = args.keys.get(*next) else {
+        return;
+    };
+    *next += 1;
+    keyboard.write(KeyboardInput {
+        key_code,
+        logical_key: Key::Unidentified(NativeKey::Unidentified),
+        state: ButtonState::Pressed,
+        text: None,
+        repeat: false,
+        window: *window,
+    });
 }
 
 /// Counts frames after the game starts, then captures the window once.
@@ -243,7 +294,7 @@ mod tests {
     #[test]
     fn all_flags() {
         assert_eq!(
-            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger"),
+            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger --keys hl."),
             Ok(Some(ScreenshotArgs {
                 path: PathBuf::from("a.png"),
                 seed: 7,
@@ -254,6 +305,7 @@ mod tests {
                 ledger: true,
                 cursor: Some(Vec2::new(640.0, 400.5)),
                 target: Some("Dagger".into()),
+                keys: vec![KeyCode::KeyH, KeyCode::KeyL, KeyCode::Period],
             }))
         );
     }
@@ -272,6 +324,7 @@ mod tests {
                 ledger: false,
                 cursor: None,
                 target: None,
+                keys: vec![],
             }))
         );
     }
@@ -285,5 +338,6 @@ mod tests {
         assert!(parse("--bogus 1").is_err());
         assert!(parse("--screenshot a.png --cursor 640").is_err());
         assert!(parse("--screenshot a.png --cursor 6x,4").is_err());
+        assert!(parse("--screenshot a.png --keys hx").is_err());
     }
 }

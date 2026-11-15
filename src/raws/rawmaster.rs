@@ -5,10 +5,11 @@ use bevy::prelude::*;
 use crate::bystander::Bystander;
 use crate::combat::CombatStats;
 use crate::economy::Gold;
+use crate::entity_render::EntityShape;
 use crate::components::{
     AreaOfEffect, BlocksTile, BlocksVisibility, CausesConfusion, Consumable, DefenseBonus,
     Door, EntryTrigger, EquipmentSlot, Equippable, Hidden, InflictsDamage, Item, MagicMapper,
-    MeleePowerBonus, Name, ProvidesFood, ProvidesHealing, Ranged, RenderOrder, RenderableBundle,
+    MeleePowerBonus, Name, ProvidesFood, ProvidesHealing, Ranged, RenderableBundle,
     SingleActivation, Targeting,
 };
 use crate::map::Position;
@@ -94,32 +95,22 @@ fn parse_color(hex: &str) -> Color {
     Color::srgb(r, g, b)
 }
 
-/// Convert raw renderable to RenderOrder
-fn get_render_order(order: i32) -> RenderOrder {
-    match order {
-        0 => RenderOrder::ITEM,
-        1 => RenderOrder::MONSTER,
-        2 => RenderOrder::PLAYER,
-        _ => RenderOrder::ITEM,
-    }
-}
 
 /// Spawn a named entity (item, mob, or prop)
 pub fn spawn_named_entity(
     raws: &RawMaster,
     commands: &mut Commands,
-    font: &TextFont,
     key: &str,
     x: i32,
     y: i32,
     monster_id: Option<usize>,
 ) -> bool {
     if raws.item_index.contains_key(key) {
-        return spawn_named_item(raws, commands, font, key, x, y).is_some();
+        return spawn_named_item(raws, commands, key, x, y).is_some();
     } else if raws.mob_index.contains_key(key) {
-        return spawn_named_mob(raws, commands, font, key, x, y, monster_id);
+        return spawn_named_mob(raws, commands, key, x, y, monster_id);
     } else if raws.prop_index.contains_key(key) {
-        return spawn_named_prop(raws, commands, font, key, x, y);
+        return spawn_named_prop(raws, commands, key, x, y);
     }
     false
 }
@@ -128,7 +119,6 @@ pub fn spawn_named_entity(
 pub fn spawn_named_item(
     raws: &RawMaster,
     commands: &mut Commands,
-    font: &TextFont,
     key: &str,
     x: i32,
     y: i32,
@@ -149,9 +139,7 @@ pub fn spawn_named_item(
         entity.insert(RenderableBundle::new(
             &renderable.glyph,
             parse_color(&renderable.fg),
-            parse_color(&renderable.bg),
-            get_render_order(renderable.order),
-            font,
+            EntityShape::Item,
         ));
     }
 
@@ -248,7 +236,6 @@ fn roll_gold((min, max): (i32, i32)) -> i32 {
 pub fn spawn_named_mob(
     raws: &RawMaster,
     commands: &mut Commands,
-    font: &TextFont,
     key: &str,
     x: i32,
     y: i32,
@@ -305,9 +292,7 @@ pub fn spawn_named_mob(
         entity.insert(RenderableBundle::new(
             &renderable.glyph,
             parse_color(&renderable.fg),
-            parse_color(&renderable.bg),
-            get_render_order(renderable.order),
-            font,
+            EntityShape::Creature,
         ));
     }
 
@@ -318,7 +303,6 @@ pub fn spawn_named_mob(
 pub fn spawn_named_prop(
     raws: &RawMaster,
     commands: &mut Commands,
-    font: &TextFont,
     key: &str,
     x: i32,
     y: i32,
@@ -340,9 +324,11 @@ pub fn spawn_named_prop(
         entity.insert(RenderableBundle::new(
             &renderable.glyph,
             parse_color(&renderable.fg),
-            parse_color(&renderable.bg),
-            get_render_order(renderable.order),
-            font,
+            match prop_template.door_open {
+                Some(false) => EntityShape::Door,
+                Some(true) => EntityShape::OpenDoor,
+                None => EntityShape::Prop,
+            },
         ));
     }
 

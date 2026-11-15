@@ -3,9 +3,10 @@ use std::collections::HashSet;
 use bevy::prelude::*;
 
 use crate::camera::Camera;
-use crate::components::{Hidden, RenderOrder};
+use crate::components::Hidden;
 use crate::debug::DebugState;
 use crate::distance::DistanceAlg;
+use crate::entity_render::{attach_entity_mesh, entity_transform, EntityAssets, EntityShape, Renderable};
 use crate::map_render::{attach_tile_mesh, spawn_grey_box_light, TileAssets, TileMesh};
 use crate::player::Player;
 use crate::viewshed::Viewshed;
@@ -385,13 +386,16 @@ impl Plugin for MapPlugin {
 
         app.init_resource::<Map>()
             .init_resource::<TileAssets>()
+            .init_resource::<EntityAssets>()
             .add_observer(attach_tile_mesh)
+            .add_observer(attach_entity_mesh)
             .add_systems(Startup, spawn_grey_box_light)
             .add_systems(
                 Update,
                 (
-                    // translate_positions always runs (needed for visualization too)
                     translate_positions,
+                    // The visualiser's 2D glyph tiles
+                    translate_glyphs,
                     // These only run during actual gameplay
                     update_revealed_state.run_if(in_gameplay.clone()),
                     update_tile_mesh_visibility.run_if(in_gameplay.clone()),
@@ -449,34 +453,57 @@ fn update_revealed_state(mut tiles_query: Query<(&mut TextColor, &Revealed), Wit
     }
 }
 
-/// Never-seen 3D tiles are not drawn. Dimming explored tiles is F03.
+/// 3D fog of war: never-seen tiles are not drawn, explored tiles get their
+/// dim material, tiles in view their bright one.
 fn update_tile_mesh_visibility(
-    mut tiles_query: Query<(&Revealed, &mut Visibility), (With<TileMesh>, Changed<Revealed>)>,
+    assets: Res<TileAssets>,
+    mut tiles_query: Query<
+        (&TileMesh, &Revealed, &mut Visibility, &mut MeshMaterial3d<StandardMaterial>),
+        Changed<Revealed>,
+    >,
 ) {
-    for (revealed, mut visibility) in &mut tiles_query {
-        *visibility = match revealed.0 {
-            RevealedState::Hidden => Visibility::Hidden,
-            RevealedState::Explored | RevealedState::Visible => Visibility::Inherited,
+    for (TileMesh(tile), revealed, mut visibility, mut material) in &mut tiles_query {
+        let explored = match revealed.0 {
+            RevealedState::Hidden => {
+                *visibility = Visibility::Hidden;
+                continue;
+            }
+            RevealedState::Explored => true,
+            RevealedState::Visible => false,
         };
+        *visibility = Visibility::Inherited;
+        if let Some(handle) = assets.material(*tile, explored) {
+            if material.0 != handle {
+                material.0 = handle;
+            }
+        }
     }
 }
 
-fn translate_positions(
+/// Keeps 3D entities on their tile as their `Position` changes. Tiles never
+/// move and are placed at spawn.
+pub fn translate_positions(
+    mut query: Query<(&Position, &EntityShape, &mut Transform), Or<(Changed<Position>, Changed<EntityShape>)>>,
+) {
+    for (&pos, &shape, mut transform) in &mut query {
+        *transform = entity_transform(shape, pos);
+    }
+}
+
+/// Places the visualiser's 2D glyph tiles in screen pixels.
+fn translate_glyphs(
     mut commands: Commands,
     window: Single<&Window>,
     camera: Res<Camera>,
-    // 3D tiles are placed once, at spawn, by `grid_to_world`.
-    query: Query<(Entity, &Position, Option<&RenderOrder>), Without<TileMesh>>,
+    query: Query<(Entity, &Position), With<Text2d>>,
 ) {
     let half_height = window.height() / 2.;
     let half_width = window.width() / 2.;
 
-    for (entity, position, render_order) in &query {
+    for (entity, position) in &query {
         // Glyphs overlap their neighbours, and Bevy draws equal z in an unstable order,
-        // so every cell gets its own z (below 0.004) and anything with a RenderOrder
-        // is lifted 0.01 clear of the tiles. Screenshots then match run to run.
-        let tiebreak = xy_idx(position.x, position.y) as f32 * 1e-6;
-        let z = tiebreak + render_order.map(|r| 0.01 + r.0 as f32 * 0.1).unwrap_or(0.0);
+        // so every cell gets its own z. Screenshots then match run to run.
+        let z = xy_idx(position.x, position.y) as f32 * 1e-6;
 
         // Convert world position to screen position using camera
         let (screen_x, screen_y) = camera.world_to_screen(position.x, position.y);
@@ -519,7 +546,7 @@ fn update_visible_tiles(
 
 fn update_renderable_visibility(
     map: Res<Map>,
-    mut query: Query<(&Position, &mut Visibility, Option<&Hidden>), (With<RenderOrder>, Without<Player>)>,
+    mut query: Query<(&Position, &mut Visibility, Option<&Hidden>), (With<EntityShape>, Without<Player>)>,
 ) {
     for (pos, mut visibility, hidden) in &mut query {
         // Hidden entities are always invisible
@@ -540,42 +567,28 @@ fn update_renderable_visibility(
 fn update_bloodstains(
     mut commands: Commands,
     map: Res<Map>,
-    camera: Res<Camera>,
-    window: Query<&Window>,
     existing: Query<Entity, With<BloodstainMarker>>,
 ) {
-    // Despawn existing bloodstain sprites
     for entity in &existing {
         commands.entity(entity).despawn();
     }
 
-    let Ok(window) = window.single() else {
-        return;
-    };
-
-    let half_width = window.width() / 2.0;
-    let half_height = window.height() / 2.0;
-
-    // Spawn bloodstain sprites for visible bloody tiles
+    // Stains are only drawn on tiles in view
     for &idx in &map.bloodstains {
         if map.visible_tiles[idx] {
-            let world_x = (idx % MAP_WIDTH) as i32;
-            let world_y = (idx / MAP_WIDTH) as i32;
-
-            // Convert world position to screen position using camera
-            let (screen_x, screen_y) = camera.world_to_screen(world_x, world_y);
-
-            let pixel_x = (screen_x as f32) * GRID_PX.x + (GRID_PX.x / 2.0) - half_width;
-            let pixel_y = (screen_y as f32) * -GRID_PX.y - (GRID_PX.y / 2.0) + half_height;
-
+            // No `Position`: a stain is not something on the tile for gameplay.
+            let pos = Position {
+                x: (idx % MAP_WIDTH) as i32,
+                y: (idx / MAP_WIDTH) as i32,
+            };
             commands.spawn((
                 BloodstainMarker,
-                Sprite {
-                    color: Color::srgba(0.75, 0.0, 0.0, 0.25),
-                    custom_size: Some(Vec2::new(GRID_PX.x, GRID_PX.y)),
-                    ..default()
+                entity_transform(EntityShape::Stain, pos),
+                EntityShape::Stain,
+                Renderable {
+                    glyph: String::new(),
+                    fg: Color::srgb(0.35, 0.0, 0.0),
                 },
-                Transform::from_xyz(pixel_x, pixel_y, 0.5), // Just above floor
             ));
         }
     }

@@ -11,9 +11,10 @@ use crate::combat::CombatStats;
 use crate::components::{
     AreaOfEffect, BlocksTile, CausesConfusion, Confusion, Consumable, EntryTrigger, Hidden,
     HungerClock, HungerState, InBackpack, InflictsDamage, Item, MagicMapper, Name, ProvidesFood,
-    ProvidesHealing, Ranged, RenderOrder, RenderableBundle, SingleActivation, Targeting,
+    ProvidesHealing, Ranged, RenderableBundle, SingleActivation, Targeting,
 };
 use crate::economy::{Gold, Purse};
+use crate::entity_render::{EntityShape, Renderable};
 use crate::game_flow::RunState;
 use crate::gamelog::GameLog;
 use crate::map::{tile_walkable, Map, Position, Tile, TileType, FONT_SIZE};
@@ -58,7 +59,7 @@ pub type MonsterSaveQuery<'w, 's> = Query<
         &'static Name,
         &'static CombatStats,
         &'static Viewshed,
-        &'static Text2d,
+        &'static Renderable,
         Option<&'static Confusion>,
         Option<&'static Gold>,
     ),
@@ -71,8 +72,7 @@ pub type ItemSaveQuery<'w, 's> = Query<
     (
         Entity,
         &'static Name,
-        &'static Text2d,
-        &'static TextColor,
+        &'static Renderable,
         Option<&'static Position>,
         Option<&'static InBackpack>,
         Option<&'static Consumable>,
@@ -95,8 +95,7 @@ pub type TrapSaveQuery<'w, 's> = Query<
     (
         &'static Position,
         &'static Name,
-        &'static Text2d,
-        &'static TextColor,
+        &'static Renderable,
         &'static InflictsDamage,
         Option<&'static Hidden>,
         Option<&'static SingleActivation>,
@@ -287,11 +286,11 @@ pub fn save_game(
     let monsters: Vec<SerializedMonster> = monster_query
         .iter()
         .map(
-            |(pos, name, stats, viewshed, text, confusion, gold)| SerializedMonster {
+            |(pos, name, stats, viewshed, renderable, confusion, gold)| SerializedMonster {
                 x: pos.x,
                 y: pos.y,
                 name: name.name.clone(),
-                glyph: text.0.clone(),
+                glyph: renderable.glyph.clone(),
                 max_hp: stats.max_hp,
                 hp: stats.hp,
                 defense: stats.defense,
@@ -310,8 +309,7 @@ pub fn save_game(
             |(
                 _entity,
                 name,
-                text,
-                color,
+                renderable,
                 pos,
                 in_backpack,
                 consumable,
@@ -341,10 +339,10 @@ pub fn save_game(
                     ItemLocation::OnGround { x: 0, y: 0 }
                 };
 
-                let srgba = color.0.to_srgba();
+                let srgba = renderable.fg.to_srgba();
                 SerializedItem {
                     name: name.name.clone(),
-                    glyph: text.0.clone(),
+                    glyph: renderable.glyph.clone(),
                     color: SerializedColor {
                         r: srgba.red,
                         g: srgba.green,
@@ -374,13 +372,13 @@ pub fn save_game(
     // Serialize traps
     let traps: Vec<SerializedTrap> = trap_query
         .iter()
-        .map(|(pos, name, text, color, damage, hidden, single)| {
-            let srgba = color.0.to_srgba();
+        .map(|(pos, name, renderable, damage, hidden, single)| {
+            let srgba = renderable.fg.to_srgba();
             SerializedTrap {
                 x: pos.x,
                 y: pos.y,
                 name: name.name.clone(),
-                glyph: text.0.clone(),
+                glyph: renderable.glyph.clone(),
                 color: SerializedColor {
                     r: srgba.red,
                     g: srgba.green,
@@ -459,6 +457,25 @@ pub fn load_game(
         return false;
     };
 
+    restore_game(commands, entities_to_despawn, map, game_log, font, save_data);
+
+    // Delete save file (permadeath)
+    delete_save_file();
+
+    info!("Game loaded successfully");
+    true
+}
+
+/// Rebuild the world from parsed save data.
+#[cfg(not(target_arch = "wasm32"))]
+fn restore_game(
+    commands: &mut Commands,
+    entities_to_despawn: &Query<Entity, Or<(With<Player>, With<Monster>, With<Item>, With<Tile>, With<EntryTrigger>)>>,
+    map: &mut Map,
+    game_log: &mut GameLog,
+    font: &UiFont,
+    save_data: SaveData,
+) {
     // Despawn all existing game entities
     for entity in entities_to_despawn.iter() {
         commands.entity(entity).despawn();
@@ -520,9 +537,7 @@ pub fn load_game(
             RenderableBundle::new(
                 "☺",
                 palettes::basic::YELLOW.into(),
-                palettes::basic::BLACK.into(),
-                RenderOrder::PLAYER,
-                &text_font,
+                EntityShape::Creature,
             ),
         ))
         .id();
@@ -551,9 +566,7 @@ pub fn load_game(
             RenderableBundle::new(
                 &monster.glyph,
                 palettes::basic::RED.into(),
-                palettes::basic::BLACK.into(),
-                RenderOrder::MONSTER,
-                &text_font,
+                EntityShape::Creature,
             ),
         ));
 
@@ -574,9 +587,7 @@ pub fn load_game(
             RenderableBundle::new(
                 &item.glyph,
                 color,
-                palettes::basic::BLACK.into(),
-                RenderOrder::ITEM,
-                &text_font,
+                EntityShape::Item,
             ),
         ));
 
@@ -641,9 +652,7 @@ pub fn load_game(
             RenderableBundle::new(
                 &trap.glyph,
                 color,
-                palettes::basic::BLACK.into(),
-                RenderOrder::ITEM,
-                &text_font,
+                EntityShape::Prop,
             ),
         ));
 
@@ -654,12 +663,6 @@ pub fn load_game(
             entity_commands.insert(SingleActivation);
         }
     }
-
-    // Delete save file (permadeath)
-    delete_save_file();
-
-    info!("Game loaded successfully");
-    true
 }
 
 // ============================================================================
@@ -763,6 +766,49 @@ mod tests {
         assert_eq!(loaded.gold, 42);
         assert_eq!(loaded.monsters[0].gold, Some(6));
         assert_eq!(loaded.items[0].properties.gold, Some(17));
+    }
+
+    #[test]
+    fn a_loaded_game_puts_3d_bodies_on_their_tiles() {
+        use crate::entity_render::{attach_entity_mesh, EntityAssets};
+        use bevy::ecs::system::RunSystemOnce;
+
+        let mut app = App::new();
+        app.init_resource::<Assets<Mesh>>()
+            .init_resource::<Assets<StandardMaterial>>()
+            .init_resource::<EntityAssets>()
+            .add_observer(attach_entity_mesh)
+            .add_systems(Update, crate::map::translate_positions);
+        app.world_mut()
+            .run_system_once(
+                |mut commands: Commands,
+                 existing: Query<
+                    Entity,
+                    Or<(With<Player>, With<Monster>, With<Item>, With<Tile>, With<EntryTrigger>)>,
+                >| {
+                    let font = UiFont(Handle::default());
+                    let (mut map, mut log) = (Map::default(), GameLog::default());
+                    restore_game(&mut commands, &existing, &mut map, &mut log, &font, save_with_gold());
+                },
+            )
+            .unwrap();
+        app.update();
+
+        let world = app.world_mut();
+        let mut bodies: Vec<(String, Vec3, bool)> = world
+            .query_filtered::<(&Name, &Transform, Has<Mesh3d>), With<EntityShape>>()
+            .iter(world)
+            .map(|(name, transform, mesh)| (name.name.clone(), transform.translation, mesh))
+            .collect();
+        bodies.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(
+            bodies,
+            vec![
+                ("Goblin".into(), Vec3::new(1.0, 0.7, 1.0), true),
+                ("Gold".into(), Vec3::new(2.0, 0.15, 2.0), true),
+                ("Player".into(), Vec3::new(0.0, 0.7, 0.0), true),
+            ]
+        );
     }
 
     #[test]

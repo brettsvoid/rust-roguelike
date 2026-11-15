@@ -312,7 +312,7 @@ pub fn builder_by_index(index: usize, depth: i32) -> Box<dyn MapBuilder> {
 /// the code that spawns a level.
 pub trait MapBuilder {
     fn build_map(&mut self, rng: &mut GameRng);
-    fn spawn_entities(&self, commands: &mut Commands, rng: &mut GameRng, font: &TextFont);
+    fn spawn_entities(&self, commands: &mut Commands, rng: &mut GameRng);
     fn get_map(&self) -> Map;
     fn get_starting_position(&self) -> (i32, i32);
     fn get_snapshot_history(&self) -> Vec<Map>;
@@ -411,7 +411,7 @@ impl MapBuilder for BuilderChain {
         self.run_build(rng);
     }
 
-    fn spawn_entities(&self, commands: &mut Commands, rng: &mut GameRng, font: &TextFont) {
+    fn spawn_entities(&self, commands: &mut Commands, rng: &mut GameRng) {
         // Spawn from rooms if available
         if let Some(ref rooms) = self.build_data.rooms {
             let mut monster_id: usize = 0;
@@ -419,7 +419,6 @@ impl MapBuilder for BuilderChain {
                 crate::spawner::spawn_room(
                     commands,
                     rng,
-                    font,
                     room,
                     &mut monster_id,
                     self.build_data.depth,
@@ -431,7 +430,7 @@ impl MapBuilder for BuilderChain {
         for (idx, name) in &self.build_data.spawn_list {
             let x = (*idx % MAP_WIDTH) as i32;
             let y = (*idx / MAP_WIDTH) as i32;
-            prefab::spawn_by_name(commands, font, x, y, name, &mut 0);
+            prefab::spawn_by_name(commands, x, y, name, &mut 0);
         }
     }
 
