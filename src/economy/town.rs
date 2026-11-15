@@ -6,6 +6,7 @@
 //! Bevy systems at the bottom only call them.
 
 use std::collections::BTreeMap;
+use std::ops::RangeInclusive;
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -49,16 +50,57 @@ pub enum Vendor {
     Clothier,
     Barkeep,
     Priest,
+    /// Opens once arcana reaches the lowest tier of its stall (see `STALLS`).
+    Enchanter,
 }
 
 impl Vendor {
-    pub const ALL: [Vendor; 5] = [
+    pub const ALL: [Vendor; 6] = [
         Vendor::Blacksmith,
         Vendor::Alchemist,
         Vendor::Clothier,
         Vendor::Barkeep,
         Vendor::Priest,
+        Vendor::Enchanter,
     ];
+}
+
+/// Who sells what: each vendor stocks its sector's items whose tier is in
+/// the range and at most the sector's level. A vendor is open once any of
+/// its stalls has a tier the town can stock, which is how the enchanter
+/// arrives at arcana level 3 and takes the better magic over from the
+/// alchemist. Every sector and tier from 1 to 5 has exactly one vendor.
+pub const STALLS: [(Vendor, Sector, RangeInclusive<i32>); 7] = [
+    (Vendor::Blacksmith, Sector::Smithing, 1..=5),
+    (Vendor::Alchemist, Sector::Alchemy, 1..=5),
+    (Vendor::Alchemist, Sector::Arcana, 1..=2),
+    (Vendor::Clothier, Sector::Textiles, 1..=5),
+    (Vendor::Barkeep, Sector::Provisions, 1..=5),
+    (Vendor::Priest, Sector::Faith, 1..=5),
+    (Vendor::Enchanter, Sector::Arcana, 3..=5),
+];
+
+/// The vendors that stock an item of `sector` and `tier`, once the sector
+/// has levelled far enough. E02 also uses this to decide who buys it.
+pub fn stocked_by(sector: Sector, tier: i32) -> impl Iterator<Item = Vendor> {
+    STALLS
+        .into_iter()
+        .filter(move |(_, s, tiers)| *s == sector && tiers.contains(&tier))
+        .map(|(v, _, _)| v)
+}
+
+impl TownState {
+    /// The vendors trading in town at the sectors' current levels.
+    pub fn open_vendors(&self) -> Vec<Vendor> {
+        Vendor::ALL
+            .into_iter()
+            .filter(|&v| {
+                STALLS.iter().any(|(sv, s, tiers)| {
+                    *sv == v && *tiers.start() as u32 <= self.sectors[s].level
+                })
+            })
+            .collect()
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -96,7 +138,7 @@ pub struct TownState {
 impl TownState {
     /// A newly founded town: every sector at level 1, nothing in stock.
     pub fn fresh(seed: u64) -> Self {
-        TownState {
+        let mut town = TownState {
             version: TOWN_VERSION,
             seed,
             day: 0,
@@ -114,12 +156,15 @@ impl TownState {
                     )
                 })
                 .collect(),
-            vendor_stock: Vendor::ALL
-                .into_iter()
-                .map(|v| (v, BTreeMap::new()))
-                .collect(),
+            vendor_stock: BTreeMap::new(),
             news: Vec::new(),
-        }
+        };
+        town.vendor_stock = town
+            .open_vendors()
+            .into_iter()
+            .map(|v| (v, BTreeMap::new()))
+            .collect();
+        town
     }
 
     /// 1 for a fresh town, plus one for every sector level gained, so each
