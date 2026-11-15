@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 
+use crate::bystander::Bystander;
 use crate::combat::CombatStats;
 use crate::components::{
     AreaOfEffect, BlocksTile, BlocksVisibility, CausesConfusion, Consumable, DefenseBonus,
@@ -246,7 +247,6 @@ pub fn spawn_named_mob(
     };
 
     let mut entity = commands.spawn((
-        Monster,
         Name { name },
         Position { x, y },
         CombatStats {
@@ -260,6 +260,17 @@ pub fn spawn_named_mob(
             ..default()
         },
     ));
+
+    // Add AI component based on type
+    match mob_template.ai.as_deref() {
+        Some("bystander") => {
+            entity.insert(Bystander);
+        }
+        _ => {
+            // Default to monster (aggressive) AI
+            entity.insert(Monster);
+        }
+    }
 
     if mob_template.blocks_tile {
         entity.insert(BlocksTile);
@@ -337,12 +348,9 @@ pub fn spawn_named_prop(
         entity.insert(EntryTrigger);
 
         for (effect, value) in trigger.effects.iter() {
-            match effect.as_str() {
-                "damage" => {
-                    let damage = value.parse::<i32>().unwrap_or(0);
-                    entity.insert(InflictsDamage { damage });
-                }
-                _ => {}
+            if effect.as_str() == "damage" {
+                let damage = value.parse::<i32>().unwrap_or(0);
+                entity.insert(InflictsDamage { damage });
             }
         }
     }

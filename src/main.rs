@@ -7,6 +7,7 @@ use bevy::prelude::*;
 
 use map::{GRID_PX, MAP_WIDTH};
 
+mod bystander;
 mod camera;
 mod combat;
 mod components;
@@ -69,6 +70,7 @@ fn main() {
             viewshed::ViewshedPlugin,
             map::MapPlugin,
             monsters::MonstersPlugin,
+            bystander::BystanderPlugin,
             camera::CameraPlugin,
         ))
         // UI plugins

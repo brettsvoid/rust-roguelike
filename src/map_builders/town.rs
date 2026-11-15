@@ -1,11 +1,31 @@
+//! The starting town (depth 1).
+//!
+//! Not procedural chaos like the dungeons - a hand-shaped map: grass with a
+//! river, a main road with a bridge, and a handful of buildings (pub,
+//! temple, shops, hovels) sized by importance and linked to the road by
+//! paths. The player starts at the pub; the "dungeon entrance" leads down.
+
 use std::collections::HashSet;
 
+use rand::seq::SliceRandom;
 use rand::Rng;
 
 use crate::map::TileType;
 use crate::rng::GameRng;
 
 use super::{BuilderMap, InitialMapBuilder};
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BuildingTag {
+    Pub,
+    Temple,
+    Blacksmith,
+    Clothier,
+    Alchemist,
+    PlayerHouse,
+    Hovel,
+    Abandoned,
+}
 
 pub struct TownBuilder {}
 
@@ -36,33 +56,24 @@ impl TownBuilder {
         build_data.take_snapshot();
 
         // Build some buildings
-        let mut buildings = self.buildings(rng, build_data, &mut available_building_tiles);
+        let buildings = self.buildings(rng, build_data, &mut available_building_tiles);
         build_data.take_snapshot();
 
         if buildings.is_empty() {
             // Fallback if no buildings could be placed
             build_data.starting_position = Some((15, wall_gap_y));
         } else {
-            // Find the largest building (the pub) and set starting position
-            let building_sizes: Vec<(usize, i32)> = buildings
-                .iter()
-                .enumerate()
-                .map(|(i, b)| (i, b.2 * b.3))
-                .collect();
-            let pub_building = building_sizes
-                .iter()
-                .max_by_key(|(_i, size)| *size)
-                .map(|(i, _)| *i)
-                .unwrap_or(0);
-
-            // Set starting position in center of the pub (interior)
-            let pub_rect = buildings[pub_building];
+            // Find the pub (first building, largest) and set starting position there
+            let pub_rect = &buildings[0];
             build_data.starting_position =
                 Some((pub_rect.0 + pub_rect.2 / 2, pub_rect.1 + pub_rect.3 / 2));
         }
 
         // Build doors and get their positions for path generation
         let door_positions = self.add_doors(rng, build_data, &buildings, wall_gap_y);
+
+        // Populate buildings with NPCs and props
+        self.populate_buildings(rng, build_data, &buildings);
         build_data.take_snapshot();
 
         // Create paths from doors to the main road
@@ -169,8 +180,8 @@ impl TownBuilder {
         rng: &mut GameRng,
         build_data: &mut BuilderMap,
         available: &mut HashSet<usize>,
-    ) -> Vec<(i32, i32, i32, i32)> {
-        let mut buildings = Vec::new();
+    ) -> Vec<(i32, i32, i32, i32, BuildingTag)> {
+        let mut buildings: Vec<(i32, i32, i32, i32)> = Vec::new();
         let map = &mut build_data.map;
 
         // Try to place 12 buildings
@@ -234,20 +245,46 @@ impl TownBuilder {
             }
         }
 
+        // Sort buildings by size (largest first)
+        buildings.sort_by(|a, b| (b.2 * b.3).cmp(&(a.2 * a.3)));
+
+        // Assign tags based on sorted order
+        let tags = [
+            BuildingTag::Pub,
+            BuildingTag::Temple,
+            BuildingTag::Blacksmith,
+            BuildingTag::Clothier,
+            BuildingTag::Alchemist,
+            BuildingTag::PlayerHouse,
+            BuildingTag::Hovel,
+            BuildingTag::Abandoned,
+        ];
+
         buildings
+            .into_iter()
+            .enumerate()
+            .map(|(i, (x, y, w, h))| {
+                let tag = if i < tags.len() {
+                    tags[i]
+                } else {
+                    BuildingTag::Abandoned
+                };
+                (x, y, w, h, tag)
+            })
+            .collect()
     }
 
     fn add_doors(
         &self,
         rng: &mut GameRng,
         build_data: &mut BuilderMap,
-        buildings: &[(i32, i32, i32, i32)],
+        buildings: &[(i32, i32, i32, i32, BuildingTag)],
         main_road_y: i32,
     ) -> Vec<(i32, i32)> {
         let map = &mut build_data.map;
         let mut door_positions = Vec::new();
 
-        for (x, y, w, h) in buildings.iter() {
+        for (x, y, w, h, _tag) in buildings.iter() {
             // Calculate building center
             let center_y = *y + *h / 2;
 
@@ -299,7 +336,7 @@ impl TownBuilder {
         // Create paths from each door to the main road
         for &(start_x, start_y) in door_positions {
             // Path from door to main road at the same x position, then along to join
-            let mut px = start_x;
+            let px = start_x;
             let mut py = start_y;
 
             // First, move vertically to the main road's y level
@@ -314,6 +351,207 @@ impl TownBuilder {
             }
 
             // The main road already exists, no need to draw horizontal
+        }
+    }
+
+    fn populate_buildings(
+        &self,
+        rng: &mut GameRng,
+        build_data: &mut BuilderMap,
+        buildings: &[(i32, i32, i32, i32, BuildingTag)],
+    ) {
+        for (x, y, w, h, tag) in buildings {
+            match tag {
+                BuildingTag::Pub => self.build_pub(rng, build_data, *x, *y, *w, *h),
+                BuildingTag::Temple => self.build_temple(rng, build_data, *x, *y, *w, *h),
+                BuildingTag::Blacksmith => self.build_blacksmith(rng, build_data, *x, *y, *w, *h),
+                BuildingTag::Clothier => self.build_clothier(rng, build_data, *x, *y, *w, *h),
+                BuildingTag::Alchemist => self.build_alchemist(rng, build_data, *x, *y, *w, *h),
+                BuildingTag::PlayerHouse => self.build_player_house(rng, build_data, *x, *y, *w, *h),
+                BuildingTag::Hovel => self.build_hovel(rng, build_data, *x, *y, *w, *h),
+                BuildingTag::Abandoned => self.build_abandoned(rng, build_data, *x, *y, *w, *h),
+            }
+        }
+    }
+
+    /// Get interior tiles of a building (excluding walls), shuffled randomly
+    fn get_interior_tiles(&self, rng: &mut GameRng, build_data: &BuilderMap, x: i32, y: i32, w: i32, h: i32) -> Vec<usize> {
+        let mut tiles = Vec::new();
+        for by in (y + 1)..(y + h - 1) {
+            for bx in (x + 1)..(x + w - 1) {
+                tiles.push(build_data.map.xy_idx(bx, by));
+            }
+        }
+        tiles.shuffle(&mut rng.0);
+        tiles
+    }
+
+    fn build_pub(
+        &self,
+        rng: &mut GameRng,
+        build_data: &mut BuilderMap,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+    ) {
+        // Place barkeep in center
+        let center_idx = build_data.map.xy_idx(x + w / 2, y + h / 2);
+        build_data.spawn_list.push((center_idx, "Barkeep".to_string()));
+
+        // Get interior tiles for props (shuffled for random placement)
+        let mut interior = self.get_interior_tiles(rng, build_data, x, y, w, h);
+        // Remove center (where barkeep is)
+        interior.retain(|&idx| idx != center_idx);
+
+        // Add patrons
+        let num_patrons = rng.0.gen_range(1..=3);
+        for _ in 0..num_patrons {
+            if let Some(&idx) = interior.first() {
+                build_data.spawn_list.push((idx, "Patron".to_string()));
+                interior.remove(0);
+            }
+        }
+
+        // Add props (tables, chairs, kegs)
+        let props = ["Table", "Chair", "Keg"];
+        for prop in props {
+            if let Some(&idx) = interior.first() {
+                build_data.spawn_list.push((idx, prop.to_string()));
+                interior.remove(0);
+            }
+        }
+    }
+
+    fn build_temple(&self, rng: &mut GameRng, build_data: &mut BuilderMap, x: i32, y: i32, w: i32, h: i32) {
+        // Place priest in center
+        let center_idx = build_data.map.xy_idx(x + w / 2, y + h / 2);
+        build_data.spawn_list.push((center_idx, "Priest".to_string()));
+
+        // Add candles
+        let mut interior = self.get_interior_tiles(rng, build_data, x, y, w, h);
+        interior.retain(|&idx| idx != center_idx);
+
+        for _ in 0..2 {
+            if let Some(&idx) = interior.first() {
+                build_data.spawn_list.push((idx, "Candle".to_string()));
+                interior.remove(0);
+            }
+        }
+    }
+
+    fn build_blacksmith(&self, rng: &mut GameRng, build_data: &mut BuilderMap, x: i32, y: i32, w: i32, h: i32) {
+        // Place blacksmith in center
+        let center_idx = build_data.map.xy_idx(x + w / 2, y + h / 2);
+        build_data.spawn_list.push((center_idx, "Blacksmith".to_string()));
+
+        // Add props
+        let mut interior = self.get_interior_tiles(rng, build_data, x, y, w, h);
+        interior.retain(|&idx| idx != center_idx);
+
+        let props = ["Anvil", "Water Trough", "Weapon Rack", "Armor Stand"];
+        for prop in props {
+            if let Some(&idx) = interior.first() {
+                build_data.spawn_list.push((idx, prop.to_string()));
+                interior.remove(0);
+            }
+        }
+    }
+
+    fn build_clothier(&self, rng: &mut GameRng, build_data: &mut BuilderMap, x: i32, y: i32, w: i32, h: i32) {
+        // Place clothier in center
+        let center_idx = build_data.map.xy_idx(x + w / 2, y + h / 2);
+        build_data.spawn_list.push((center_idx, "Clothier".to_string()));
+
+        // Add props
+        let mut interior = self.get_interior_tiles(rng, build_data, x, y, w, h);
+        interior.retain(|&idx| idx != center_idx);
+
+        let props = ["Loom", "Hide Rack", "Cabinet"];
+        for prop in props {
+            if let Some(&idx) = interior.first() {
+                build_data.spawn_list.push((idx, prop.to_string()));
+                interior.remove(0);
+            }
+        }
+    }
+
+    fn build_alchemist(&self, rng: &mut GameRng, build_data: &mut BuilderMap, x: i32, y: i32, w: i32, h: i32) {
+        // Place alchemist in center
+        let center_idx = build_data.map.xy_idx(x + w / 2, y + h / 2);
+        build_data.spawn_list.push((center_idx, "Alchemist".to_string()));
+
+        // Add props
+        let mut interior = self.get_interior_tiles(rng, build_data, x, y, w, h);
+        interior.retain(|&idx| idx != center_idx);
+
+        let props = ["Chemistry Set", "Dead Thing", "Cabinet"];
+        for prop in props {
+            if let Some(&idx) = interior.first() {
+                build_data.spawn_list.push((idx, prop.to_string()));
+                interior.remove(0);
+            }
+        }
+    }
+
+    fn build_player_house(&self, rng: &mut GameRng, build_data: &mut BuilderMap, x: i32, y: i32, w: i32, h: i32) {
+        // Place mom in center
+        let center_idx = build_data.map.xy_idx(x + w / 2, y + h / 2);
+        build_data.spawn_list.push((center_idx, "Mom".to_string()));
+
+        // Add props
+        let mut interior = self.get_interior_tiles(rng, build_data, x, y, w, h);
+        interior.retain(|&idx| idx != center_idx);
+
+        let props = ["Bed", "Cabinet"];
+        for prop in props {
+            if let Some(&idx) = interior.first() {
+                build_data.spawn_list.push((idx, prop.to_string()));
+                interior.remove(0);
+            }
+        }
+    }
+
+    fn build_hovel(
+        &self,
+        rng: &mut GameRng,
+        build_data: &mut BuilderMap,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+    ) {
+        // Place peasant in center
+        let center_idx = build_data.map.xy_idx(x + w / 2, y + h / 2);
+        build_data.spawn_list.push((center_idx, "Peasant".to_string()));
+
+        // Maybe add some basic furniture
+        let mut interior = self.get_interior_tiles(rng, build_data, x, y, w, h);
+        interior.retain(|&idx| idx != center_idx);
+
+        if rng.0.gen_bool(0.5) && !interior.is_empty() {
+            let idx = interior[0];
+            build_data.spawn_list.push((idx, "Bed".to_string()));
+        }
+    }
+
+    fn build_abandoned(
+        &self,
+        rng: &mut GameRng,
+        build_data: &mut BuilderMap,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+    ) {
+        // Spawn rats in abandoned buildings
+        let interior = self.get_interior_tiles(rng, build_data, x, y, w, h);
+        let num_rats = rng.0.gen_range(1..=3);
+
+        for i in 0..num_rats {
+            if let Some(&idx) = interior.get(i) {
+                build_data.spawn_list.push((idx, "Rat".to_string()));
+            }
         }
     }
 }

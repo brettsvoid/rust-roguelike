@@ -9,6 +9,8 @@ pub struct Mob {
     pub blocks_tile: bool,
     pub stats: MobStats,
     pub vision_range: i32,
+    #[serde(default)]
+    pub ai: Option<String>, // "melee" (default) or "bystander"
 }
 
 #[derive(Deserialize, Debug, Clone)]

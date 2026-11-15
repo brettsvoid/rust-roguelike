@@ -199,6 +199,167 @@
         "power": 2
       },
       "vision_range": 4
+    },
+    {
+      "name": "Rat",
+      "renderable": {
+        "glyph": "r",
+        "fg": "#A52A2A",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 2,
+        "hp": 2,
+        "defense": 0,
+        "power": 1
+      },
+      "vision_range": 4
+    },
+    {
+      "name": "Barkeep",
+      "renderable": {
+        "glyph": "@",
+        "fg": "#FF69B4",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 16,
+        "hp": 16,
+        "defense": 1,
+        "power": 2
+      },
+      "vision_range": 8,
+      "ai": "bystander"
+    },
+    {
+      "name": "Patron",
+      "renderable": {
+        "glyph": "@",
+        "fg": "#808080",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 8,
+        "hp": 8,
+        "defense": 0,
+        "power": 1
+      },
+      "vision_range": 6,
+      "ai": "bystander"
+    },
+    {
+      "name": "Priest",
+      "renderable": {
+        "glyph": "@",
+        "fg": "#ADD8E6",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 12,
+        "hp": 12,
+        "defense": 0,
+        "power": 1
+      },
+      "vision_range": 8,
+      "ai": "bystander"
+    },
+    {
+      "name": "Blacksmith",
+      "renderable": {
+        "glyph": "@",
+        "fg": "#800080",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 20,
+        "hp": 20,
+        "defense": 2,
+        "power": 4
+      },
+      "vision_range": 8,
+      "ai": "bystander"
+    },
+    {
+      "name": "Clothier",
+      "renderable": {
+        "glyph": "@",
+        "fg": "#800080",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 10,
+        "hp": 10,
+        "defense": 0,
+        "power": 1
+      },
+      "vision_range": 8,
+      "ai": "bystander"
+    },
+    {
+      "name": "Alchemist",
+      "renderable": {
+        "glyph": "@",
+        "fg": "#800080",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 10,
+        "hp": 10,
+        "defense": 0,
+        "power": 1
+      },
+      "vision_range": 8,
+      "ai": "bystander"
+    },
+    {
+      "name": "Mom",
+      "renderable": {
+        "glyph": "@",
+        "fg": "#FF69B4",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 8,
+        "hp": 8,
+        "defense": 0,
+        "power": 1
+      },
+      "vision_range": 8,
+      "ai": "bystander"
+    },
+    {
+      "name": "Peasant",
+      "renderable": {
+        "glyph": "@",
+        "fg": "#808080",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 6,
+        "hp": 6,
+        "defense": 0,
+        "power": 1
+      },
+      "vision_range": 6,
+      "ai": "bystander"
     }
   ],
   "props": [
@@ -227,6 +388,132 @@
         "effects": { "damage": "6" }
       },
       "single_activation": true
+    },
+    {
+      "name": "Keg",
+      "renderable": {
+        "glyph": "o",
+        "fg": "#8B4513",
+        "bg": "#000000",
+        "order": 0
+      }
+    },
+    {
+      "name": "Table",
+      "renderable": {
+        "glyph": "T",
+        "fg": "#8B4513",
+        "bg": "#000000",
+        "order": 0
+      }
+    },
+    {
+      "name": "Chair",
+      "renderable": {
+        "glyph": "h",
+        "fg": "#8B4513",
+        "bg": "#000000",
+        "order": 0
+      }
+    },
+    {
+      "name": "Candle",
+      "renderable": {
+        "glyph": "i",
+        "fg": "#FFD700",
+        "bg": "#000000",
+        "order": 0
+      }
+    },
+    {
+      "name": "Anvil",
+      "renderable": {
+        "glyph": "A",
+        "fg": "#808080",
+        "bg": "#000000",
+        "order": 0
+      }
+    },
+    {
+      "name": "Water Trough",
+      "renderable": {
+        "glyph": "~",
+        "fg": "#00FFFF",
+        "bg": "#000000",
+        "order": 0
+      }
+    },
+    {
+      "name": "Weapon Rack",
+      "renderable": {
+        "glyph": "W",
+        "fg": "#808080",
+        "bg": "#000000",
+        "order": 0
+      }
+    },
+    {
+      "name": "Armor Stand",
+      "renderable": {
+        "glyph": "S",
+        "fg": "#808080",
+        "bg": "#000000",
+        "order": 0
+      }
+    },
+    {
+      "name": "Chemistry Set",
+      "renderable": {
+        "glyph": "C",
+        "fg": "#00FF00",
+        "bg": "#000000",
+        "order": 0
+      }
+    },
+    {
+      "name": "Dead Thing",
+      "renderable": {
+        "glyph": "&",
+        "fg": "#FF0000",
+        "bg": "#000000",
+        "order": 0
+      }
+    },
+    {
+      "name": "Cabinet",
+      "renderable": {
+        "glyph": "H",
+        "fg": "#8B4513",
+        "bg": "#000000",
+        "order": 0
+      }
+    },
+    {
+      "name": "Bed",
+      "renderable": {
+        "glyph": "8",
+        "fg": "#FF0000",
+        "bg": "#000000",
+        "order": 0
+      }
+    },
+    {
+      "name": "Loom",
+      "renderable": {
+        "glyph": "=",
+        "fg": "#8B4513",
+        "bg": "#000000",
+        "order": 0
+      }
+    },
+    {
+      "name": "Hide Rack",
+      "renderable": {
+        "glyph": "n",
+        "fg": "#8B4513",
+        "bg": "#000000",
+        "order": 0
+      }
     }
   ],
   "spawn_table": [
