@@ -5,6 +5,7 @@ use crate::components::{HungerClock, HungerState};
 use crate::economy::Purse;
 use crate::gamelog::GameLog;
 use crate::map::Map;
+use crate::picking::BlocksPicking;
 use crate::player::Player;
 use crate::resources::UiFont;
 use crate::RunState;
@@ -50,6 +51,7 @@ fn setup_hud(mut commands: Commands, font: Res<UiFont>) {
                 ..default()
             },
             BackgroundColor(Color::srgb(0.15, 0.15, 0.15)),
+            BlocksPicking,
         ))
         .with_children(|parent| {
             // HP label and value

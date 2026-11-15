@@ -28,6 +28,7 @@ mod mapgen_viz;
 mod monsters;
 mod particle;
 mod pathfinding;
+mod picking;
 mod player;
 mod raws;
 mod resources;
@@ -79,6 +80,7 @@ fn main() {
         // UI plugins
         .add_plugins((
             gui::GuiPlugin,
+            picking::PickingPlugin,
             ui::HudPlugin,
             ui::TooltipPlugin,
             ui::TargetingPlugin,

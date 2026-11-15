@@ -32,12 +32,6 @@ impl Camera {
         (x - min_x, y - min_y)
     }
 
-    /// Convert screen coordinates to world coordinates
-    pub fn screen_to_world(&self, screen_x: i32, screen_y: i32) -> (i32, i32) {
-        let (min_x, _, min_y, _) = self.get_screen_bounds();
-        (screen_x + min_x, screen_y + min_y)
-    }
-
     /// Check if world coordinates are within camera bounds
     #[allow(dead_code)]
     pub fn in_bounds(&self, x: i32, y: i32) -> bool {
@@ -75,12 +69,7 @@ fn spawn_cameras(mut commands: Commands) {
             order: 0,
             ..default()
         },
-        Projection::from(OrthographicProjection {
-            scaling_mode: ScalingMode::FixedVertical {
-                viewport_height: ISO_VIEW_HEIGHT,
-            },
-            ..OrthographicProjection::default_3d()
-        }),
+        Projection::from(iso_projection()),
         AmbientLight {
             brightness: 300.0,
             ..default()
@@ -102,7 +91,16 @@ fn spawn_cameras(mut commands: Commands) {
     ));
 }
 
-fn iso_camera_transform(target: Vec3) -> Transform {
+pub(crate) fn iso_projection() -> OrthographicProjection {
+    OrthographicProjection {
+        scaling_mode: ScalingMode::FixedVertical {
+            viewport_height: ISO_VIEW_HEIGHT,
+        },
+        ..OrthographicProjection::default_3d()
+    }
+}
+
+pub(crate) fn iso_camera_transform(target: Vec3) -> Transform {
     let offset = Vec3::new(
         ISO_YAW.sin() * ISO_PITCH.cos(),
         ISO_PITCH.sin(),
@@ -120,6 +118,6 @@ fn update_camera(player_query: Query<&Position, With<Player>>, mut camera: ResMu
 
 /// The 3D camera follows the logical `Camera` target, so panning (F05) only
 /// has to move that.
-fn follow_iso_camera(camera: Res<Camera>, mut rig: Single<&mut Transform, With<Camera3d>>) {
+pub(crate) fn follow_iso_camera(camera: Res<Camera>, mut rig: Single<&mut Transform, With<Camera3d>>) {
     **rig = iso_camera_transform(grid_to_world(camera.x, camera.y));
 }

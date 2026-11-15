@@ -21,6 +21,9 @@ cargo run --features file_watcher
 # Depth 1 is the town. Same seed and flags give a byte-identical PNG.
 # Defaults: --seed 42 --depth 1 --frames 60, fog on unless --reveal-map.
 cargo run -- --screenshot out.png --seed 42 --depth 3 --reveal-map --frames 60
+# Fake the mouse at a window point (logical pixels) and enter targeting with an item:
+cargo run -- --screenshot out.png --depth 3 --reveal-map --cursor 720,430 \
+  --console "spawn fireball" --target "Fireball Scroll"
 ```
 
 Verify every visible change with a harness screenshot that you look at.
@@ -60,6 +63,7 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
 - **ViewshedPlugin** (`viewshed.rs`) - Field of view calculation using Bresenham line algorithm
 - **MapPlugin** (`map.rs`) - Map data, fog of war, position-to-screen translation, `grid_to_world`
 - **CameraPlugin** (`camera.rs`) - The logical `Camera` follow target, the isometric 3D camera and the 2D overlay camera
+- **PickingPlugin** (`picking.rs`) - Cursor to grid cell via the `Camera3d` ray on the floor plane, the `HoveredTile` resource, the hover highlight and `TileMarks` (flat unlit quads for tile overlays)
 - **MapGenVizPlugin** (`mapgen_viz.rs`) - The map generation visualizer (main menu tool)
 - **MonstersPlugin** (`monsters.rs`) - Monster spawning and AI
 - **GuiPlugin** (`gui.rs`) - Main menu and builder-select menu (other UI lives in `ui/`)
@@ -113,6 +117,13 @@ of the same logic. The build should stay at zero warnings.
 - Camera layering: the `Camera3d` (order 0) draws the world and clears the screen; the `Camera2d`
   (order 1, no clear, `IsDefaultUiCamera`) draws UI and any `Text2d` on top. Queries for the
   render camera must filter `With<Camera2d>` or `With<Camera3d>`, since `single()` fails with two
+- Mouse: `picking::ray_to_tile` turns a ray into the grid cell it hits on `y = 0`, and
+  `update_hovered_tile` writes `HoveredTile { cursor, tile }` each frame. `tile` is `None` off the
+  window, over a `BlocksPicking` UI panel (the HUD, the targeting banner), off the map, or outside
+  gameplay. Every mouse consumer (tooltip, targeting, debug tile info) reads `HoveredTile`; order
+  such systems `.after(picking::update_hovered_tile)`. Don't convert the cursor any other way
+- Tile overlays (hover, targeting range, area, target) are `TileMarks::mark` quads just above the
+  floor, never 2D sprites
 - 2D: `translate_positions` converts grid positions to screen pixels for `Text2d` entities
   (everything except 3D tiles, which are placed once at spawn)
 
@@ -120,6 +131,7 @@ of the same logic. The build should stay at zero warnings.
 
 - `Map` - Contains tile data, rooms, and visibility state
 - `UiFont` - Shared font handle for all text rendering
+- `HoveredTile` - The grid cell under the mouse this frame (see Coordinate System)
 
 ## Commit Style
 

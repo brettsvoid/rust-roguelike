@@ -1,12 +1,12 @@
 use bevy::prelude::*;
 
-use crate::camera::Camera as GameCamera;
 use crate::components::Name;
-use crate::map::{Map, Position, GRID_PX, MAP_HEIGHT, MAP_WIDTH};
+use crate::map::{Map, Position};
+use crate::picking::{update_hovered_tile, HoveredTile};
 use crate::resources::UiFont;
 use crate::RunState;
 
-use super::components::{CursorHighlight, Tooltip};
+use super::components::Tooltip;
 
 pub struct TooltipPlugin;
 
@@ -17,76 +17,29 @@ impl Plugin for TooltipPlugin {
             .and_then(not(in_state(RunState::MapGeneration)))
             .and_then(not(in_state(RunState::MapBuilderSelect)));
 
-        app.add_systems(Update, update_tooltip.run_if(in_gameplay));
+        app.add_systems(Update, update_tooltip.after(update_hovered_tile).run_if(in_gameplay));
     }
 }
 
 fn update_tooltip(
     mut commands: Commands,
     window: Query<&Window>,
-    camera_query: Query<(&Camera, &GlobalTransform), With<Camera2d>>,
-    game_camera: Res<GameCamera>,
+    hovered: Res<HoveredTile>,
     map: Res<Map>,
     font: Res<UiFont>,
     entities_query: Query<(&Position, &Name)>,
     tooltip_query: Query<Entity, With<Tooltip>>,
-    highlight_query: Query<Entity, With<CursorHighlight>>,
 ) {
-    // Remove existing tooltip and highlight
     for entity in &tooltip_query {
-        commands.entity(entity).despawn();
-    }
-    for entity in &highlight_query {
         commands.entity(entity).despawn();
     }
 
     let Ok(window) = window.single() else {
         return;
     };
-
-    let Some(cursor_position) = window.cursor_position() else {
+    let (Some(cursor_position), Some((map_x, map_y))) = (hovered.cursor, hovered.tile) else {
         return;
     };
-
-    // Convert screen position to world position
-    let Ok((camera, camera_transform)) = camera_query.single() else {
-        return;
-    };
-
-    let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_position) else {
-        return;
-    };
-
-    // Convert world position (pixels) to screen tile coordinates
-    let half_width = window.width() / 2.0;
-    let half_height = window.height() / 2.0;
-
-    let screen_tile_x = ((world_pos.x + half_width) / GRID_PX.x).floor() as i32;
-    let screen_tile_y = ((-world_pos.y + half_height) / GRID_PX.y).floor() as i32;
-
-    // Convert screen tile coordinates to world map coordinates using game camera
-    let (map_x, map_y) = game_camera.screen_to_world(screen_tile_x, screen_tile_y);
-
-    // Check bounds
-    if map_x < 0 || map_x >= MAP_WIDTH as i32 || map_y < 0 || map_y >= MAP_HEIGHT as i32 {
-        return;
-    }
-
-    // Spawn cursor highlight (magenta background on the tile)
-    // Use screen coordinates for rendering (translate_positions will handle it)
-    commands.spawn((
-        Sprite {
-            color: Color::srgba(1.0, 0.0, 1.0, 0.3), // Magenta with transparency
-            custom_size: Some(Vec2::new(GRID_PX.x, GRID_PX.y)),
-            ..default()
-        },
-        Transform::from_xyz(
-            (screen_tile_x as f32) * GRID_PX.x + (GRID_PX.x / 2.0) - half_width,
-            (screen_tile_y as f32) * -GRID_PX.y - (GRID_PX.y / 2.0) + half_height,
-            0.5, // Between tiles and entities
-        ),
-        CursorHighlight,
-    ));
 
     // Check if tile is visible
     let idx = map.xy_idx(map_x, map_y);

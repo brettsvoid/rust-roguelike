@@ -27,7 +27,7 @@ impl Plugin for DebugPlugin {
                 (
                     overlays::toggle_debug_overlays,
                     overlays::update_fov_overlay,
-                    overlays::update_tile_info_overlay,
+                    overlays::update_tile_info_overlay.after(crate::picking::update_hovered_tile),
                     overlays::update_state_inspector,
                     overlays::process_reveal_map,
                     console::update_console,

@@ -1,9 +1,12 @@
 //! Screenshot harness: `cargo run -- --screenshot out.png [--seed N] [--depth N]
-//! [--reveal-map] [--frames N] [--console CMD]... [--ledger]` starts a seeded
-//! new game, waits, saves a PNG of the window and exits. `--console` runs a
-//! debug console command once play begins (repeatable); `town ...` commands
-//! run before the level is built instead, e.g. "town level smithing 4";
-//! `--ledger` then opens the town ledger. Every visual change is verified with it.
+//! [--reveal-map] [--frames N] [--console CMD]... [--ledger] [--cursor X,Y]
+//! [--target ITEM]` starts a seeded new game, waits, saves a PNG of the window
+//! and exits. `--console` runs a debug console command once play begins
+//! (repeatable); `town ...` commands run before the level is built instead,
+//! e.g. "town level smithing 4"; `--ledger` then opens the town ledger.
+//! `--cursor` fakes the mouse at window point X,Y (logical pixels); `--target`
+//! enters targeting with the named item (e.g. `--console "spawn fireball"
+//! --target "Fireball Scroll"`). Every visual change is verified with it.
 
 use std::path::PathBuf;
 
@@ -12,15 +15,17 @@ use bevy::render::view::screenshot::{save_to_disk, Screenshot, ScreenshotCapture
 use bevy::window::{CursorOptions, PrimaryWindow};
 
 use crate::combat::CombatStats;
+use crate::components::{Name, Ranged};
 use crate::debug::{DebugState, GodMode};
 use crate::economy::town::TownState;
 use crate::levels;
 use crate::map::{Map, Position};
 use crate::monsters::Monster;
+use crate::picking::FakeCursor;
 use crate::player::Player;
 use crate::resources::UiFont;
 use crate::rng::GameRng;
-use crate::RunState;
+use crate::{RunState, TargetingInfo};
 
 /// Does nothing unless the command line asks for a screenshot.
 pub struct ScreenshotPlugin;
@@ -34,6 +39,9 @@ impl Plugin for ScreenshotPlugin {
         let Some(args) = args else {
             return;
         };
+        if let Some(cursor) = args.cursor {
+            app.insert_resource(FakeCursor(cursor));
+        }
         app.insert_resource(GameRng::seeded(args.seed))
             .insert_resource(args)
             .add_systems(Startup, ignore_mouse)
@@ -41,7 +49,7 @@ impl Plugin for ScreenshotPlugin {
                 Update,
                 (
                     start_game.run_if(in_state(RunState::MainMenu)),
-                    prepare_capture.run_if(in_state(RunState::AwaitingInput)),
+                    (prepare_capture, enter_targeting).run_if(in_state(RunState::AwaitingInput)),
                     capture_after_frames.run_if(not(in_state(RunState::MainMenu))),
                 ),
             );
@@ -57,6 +65,8 @@ pub struct ScreenshotArgs {
     pub frames: u32,
     pub console: Vec<String>,
     pub ledger: bool,
+    pub cursor: Option<Vec2>,
+    pub target: Option<String>,
 }
 
 /// `Ok(None)` when `--screenshot` is absent, so the game starts normally.
@@ -68,6 +78,8 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
     let mut frames = 60;
     let mut console = Vec::new();
     let mut ledger = false;
+    let mut cursor = None;
+    let mut target = None;
 
     let mut args = args.into_iter();
     while let Some(flag) = args.next() {
@@ -80,13 +92,18 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
             continue;
         }
         let value = args.next().ok_or(format!("{flag} needs a value"))?;
-        let bad = |_| format!("bad value for {flag}: {value}");
+        let bad = || format!("bad value for {flag}: {value}");
         match flag.as_str() {
             "--screenshot" => path = Some(PathBuf::from(&value)),
-            "--seed" => seed = value.parse().map_err(bad)?,
-            "--depth" => depth = value.parse().map_err(bad)?,
-            "--frames" => frames = value.parse().map_err(bad)?,
+            "--seed" => seed = value.parse().map_err(|_| bad())?,
+            "--depth" => depth = value.parse().map_err(|_| bad())?,
+            "--frames" => frames = value.parse().map_err(|_| bad())?,
             "--console" => console.push(value),
+            "--cursor" => {
+                let (x, y) = value.split_once(',').ok_or_else(bad)?;
+                cursor = Some(Vec2::new(x.parse().map_err(|_| bad())?, y.parse().map_err(|_| bad())?));
+            }
+            "--target" => target = Some(value),
             _ => return Err(format!("unknown argument: {flag}")),
         }
     }
@@ -105,6 +122,8 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
         frames,
         console,
         ledger,
+        cursor,
+        target,
     }))
 }
 
@@ -176,6 +195,23 @@ fn prepare_capture(
     }
 }
 
+/// Aims the `--target` item once it exists (a `--console` spawn lands a frame later).
+fn enter_targeting(
+    args: Res<ScreenshotArgs>,
+    items: Query<(Entity, &Name, &Ranged)>,
+    mut targeting_info: ResMut<TargetingInfo>,
+    mut next_state: ResMut<NextState<RunState>>,
+) {
+    let Some(target) = &args.target else {
+        return;
+    };
+    if let Some((item, _, ranged)) = items.iter().find(|(_, name, _)| &name.name == target) {
+        targeting_info.range = ranged.range;
+        targeting_info.item = Some(item);
+        next_state.set_if_different(RunState::ShowTargeting);
+    }
+}
+
 /// Counts frames after the game starts, then captures the window once.
 fn capture_after_frames(mut commands: Commands, args: Res<ScreenshotArgs>, mut frame: Local<u32>) {
     *frame += 1;
@@ -207,7 +243,7 @@ mod tests {
     #[test]
     fn all_flags() {
         assert_eq!(
-            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10 --console heal --console godmode --ledger"),
+            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger"),
             Ok(Some(ScreenshotArgs {
                 path: PathBuf::from("a.png"),
                 seed: 7,
@@ -216,6 +252,8 @@ mod tests {
                 frames: 10,
                 console: vec!["heal".into(), "godmode".into()],
                 ledger: true,
+                cursor: Some(Vec2::new(640.0, 400.5)),
+                target: Some("Dagger".into()),
             }))
         );
     }
@@ -232,6 +270,8 @@ mod tests {
                 frames: 60,
                 console: vec![],
                 ledger: false,
+                cursor: None,
+                target: None,
             }))
         );
     }
@@ -243,5 +283,7 @@ mod tests {
         assert!(parse("--screenshot a.png --seed x").is_err());
         assert!(parse("--screenshot").is_err());
         assert!(parse("--bogus 1").is_err());
+        assert!(parse("--screenshot a.png --cursor 640").is_err());
+        assert!(parse("--screenshot a.png --cursor 6x,4").is_err());
     }
 }

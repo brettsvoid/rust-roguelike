@@ -42,9 +42,6 @@ pub struct BuilderMenuText;
 #[derive(Component)]
 pub struct Tooltip;
 
-#[derive(Component)]
-pub struct CursorHighlight;
-
 // ============================================================================
 // Targeting Components
 // ============================================================================

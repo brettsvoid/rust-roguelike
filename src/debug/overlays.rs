@@ -2,8 +2,9 @@ use bevy::prelude::*;
 
 use crate::combat::CombatStats;
 use crate::components::{HungerClock, Item};
-use crate::map::{Map, Position, Revealed, RevealedState, Tile, TileType, GRID_PX, MAP_HEIGHT, MAP_WIDTH};
+use crate::map::{Map, Position, Revealed, RevealedState, Tile, TileType, GRID_PX};
 use crate::monsters::Monster;
+use crate::picking::HoveredTile;
 use crate::player::Player;
 use crate::resources::UiFont;
 use crate::viewshed::Viewshed;
@@ -110,8 +111,7 @@ pub fn update_tile_info_overlay(
     mut commands: Commands,
     debug: Res<DebugMode>,
     map: Res<Map>,
-    window: Query<&Window>,
-    camera_query: Query<(&Camera, &GlobalTransform), With<Camera2d>>,
+    hovered: Res<HoveredTile>,
     font: Res<UiFont>,
     overlay_query: Query<Entity, With<TileInfoOverlay>>,
     tile_query: Query<Entity, With<Tile>>,
@@ -125,30 +125,9 @@ pub fn update_tile_info_overlay(
         return;
     }
 
-    let Ok(window) = window.single() else {
+    let (Some(cursor_pos), Some((grid_x, grid_y))) = (hovered.cursor, hovered.tile) else {
         return;
     };
-    let Ok((camera, camera_transform)) = camera_query.single() else {
-        return;
-    };
-    let Some(cursor_pos) = window.cursor_position() else {
-        return;
-    };
-    let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) else {
-        return;
-    };
-
-    let half_width = window.width() / 2.0;
-    let half_height = window.height() / 2.0;
-
-    // Convert world position to map coordinates
-    let grid_x = ((world_pos.x + half_width) / GRID_PX.x).floor() as i32;
-    let grid_y = ((-world_pos.y + half_height) / GRID_PX.y).floor() as i32;
-
-    // Bounds check
-    if grid_x < 0 || grid_x >= MAP_WIDTH as i32 || grid_y < 0 || grid_y >= MAP_HEIGHT as i32 {
-        return;
-    }
 
     let idx = map.xy_idx(grid_x, grid_y);
     let tile_type = match map.tiles[idx] {
@@ -182,14 +161,19 @@ pub fn update_tile_info_overlay(
     // Spawn text near cursor
     commands.spawn((
         TileInfoOverlay,
-        Text2d::new(info_text),
+        Text::new(info_text),
         TextFont {
             font: font.0.clone().into(),
             font_size: FontSize::Px(14.0),
             ..default()
         },
         TextColor(Color::WHITE),
-        Transform::from_xyz(world_pos.x + 20.0, world_pos.y + 10.0, 100.0),
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(cursor_pos.x + 20.0),
+            top: Val::Px(cursor_pos.y - 24.0),
+            ..default()
+        },
     ));
 }
 
