@@ -478,7 +478,7 @@ and adds the `model` names to `raws/spawns.json`.
 - Done when: the screen reflects `TownState` and updates after a sale.
 
 ### E09 Fix caravan starvation
-- Status: in progress
+- Status: done
 - Needs: E04
 - Found by E08: only one caravan leaves per day, to the neighbour that takes
   the most goods, so a sector whose buyer takes less never trades while a
