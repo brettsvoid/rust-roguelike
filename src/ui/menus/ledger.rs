@@ -4,7 +4,7 @@
 
 use bevy::prelude::*;
 
-use crate::economy::town::{Sector, SectorState, TownState};
+use crate::economy::town::{Sector, SectorState, TownState, STALLS};
 use crate::economy::trade::{LEVEL_THRESHOLDS, NEIGHBOURS};
 use crate::resources::UiFont;
 use crate::RunState;
@@ -70,10 +70,26 @@ fn refresh_ledger(
     }
 }
 
-/// What reaching `level` brings a sector. The one place E05's real unlocks
-/// (vendor tiers, the enchanter at an arcana threshold) replace this line.
-fn unlock_text(_sector: Sector, level: u32) -> String {
-    format!("tier {level} goods")
+/// What reaching `level` brings a sector, from `STALLS`: the vendor who
+/// stocks that tier, or opens with it.
+fn unlock_text(sector: Sector, level: u32) -> String {
+    let tier = level as i32;
+    let unlocks: Vec<_> = STALLS
+        .iter()
+        .filter(|(_, s, tiers)| *s == sector && tiers.contains(&tier))
+        .map(|(vendor, _, tiers)| {
+            if *tiers.start() == tier {
+                format!("{} opens with tier {tier}", vendor.name())
+            } else {
+                format!("tier {tier} at the {}", vendor.name().to_lowercase())
+            }
+        })
+        .collect();
+    if unlocks.is_empty() {
+        "nothing new".to_string()
+    } else {
+        unlocks.join(", ")
+    }
 }
 
 fn ledger_text(town: &TownState) -> String {
@@ -110,7 +126,7 @@ fn ledger_text(town: &TownState) -> String {
     out
 }
 
-/// `Smithing    Lv 2 [###---------]  150/600   60g waiting   Next: tier 3 goods`
+/// `Smithing    Lv 2 [###---------]  150/600   60g waiting   Next: tier 3 at the blacksmith`
 fn sector_line(sector: Sector, state: &SectorState) -> String {
     let head = format!("{:<11} Lv {}", sector.name(), state.level);
     let waiting = if state.stock > 0 {
@@ -186,7 +202,7 @@ mod tests {
         };
         assert_eq!(
             sector_line(Sector::Smithing, &state),
-            "Smithing    Lv 2 [###---------]  150/600   60g waiting   Next: tier 3 goods"
+            "Smithing    Lv 2 [###---------]  150/600   60g waiting   Next: tier 3 at the blacksmith"
         );
         let maxed = SectorState {
             stock: 0,
@@ -200,10 +216,19 @@ mod tests {
     }
 
     #[test]
+    fn unlocks_name_the_vendor_from_the_stalls() {
+        assert_eq!(unlock_text(Sector::Smithing, 2), "tier 2 at the blacksmith");
+        assert_eq!(unlock_text(Sector::Arcana, 2), "tier 2 at the alchemist");
+        assert_eq!(unlock_text(Sector::Arcana, 3), "Enchanter opens with tier 3");
+        assert_eq!(unlock_text(Sector::Arcana, 4), "tier 4 at the enchanter");
+        assert_eq!(unlock_text(Sector::Faith, 6), "nothing new");
+    }
+
+    #[test]
     fn a_fresh_town_ledger() {
         let text = ledger_text(&TownState::fresh(1));
         assert!(text.starts_with("Day 0   Treasury 0 gold   Town level 1\n\nSECTORS\n"));
-        assert!(text.contains("Arcana      Lv 1 [------------]    0/250                 Next: tier 2 goods"));
+        assert!(text.contains("Arcana      Lv 1 [------------]    0/250                 Next: tier 2 at the alchemist"));
         assert!(text.contains("Eastmarch       wants arms and armour 40, food 10\n"));
         assert!(text.ends_with("NEWS\nNo news yet. Sell goods in town and caravans will take them to market."));
     }

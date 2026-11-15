@@ -63,6 +63,24 @@ impl Vendor {
         Vendor::Priest,
         Vendor::Enchanter,
     ];
+
+    /// Also the raws name of the townsperson who trades as this vendor.
+    pub fn name(self) -> &'static str {
+        match self {
+            Vendor::Blacksmith => "Blacksmith",
+            Vendor::Alchemist => "Alchemist",
+            Vendor::Clothier => "Clothier",
+            Vendor::Barkeep => "Barkeep",
+            Vendor::Priest => "Priest",
+            Vendor::Enchanter => "Enchanter",
+        }
+    }
+
+    /// Ignores case and a spawned mob's ` #id` suffix.
+    pub fn from_name(name: &str) -> Option<Vendor> {
+        let name = name.split(" #").next().unwrap_or(name);
+        Vendor::ALL.into_iter().find(|v| v.name().eq_ignore_ascii_case(name))
+    }
 }
 
 /// Who sells what: each vendor stocks its sector's items whose tier is in
@@ -81,7 +99,7 @@ pub const STALLS: [(Vendor, Sector, RangeInclusive<i32>); 7] = [
 ];
 
 /// The vendors that stock an item of `sector` and `tier`, once the sector
-/// has levelled far enough. E02 also uses this to decide who buys it.
+/// has levelled far enough. `shop::buys` also uses it to decide who buys it.
 pub fn stocked_by(sector: Sector, tier: i32) -> impl Iterator<Item = Vendor> {
     STALLS
         .into_iter()
@@ -490,8 +508,8 @@ mod tests {
                  mut map: ResMut<Map>,
                  mut rng: ResMut<GameRng>,
                  font: Res<UiFont>,
-                 town: Res<TownState>| {
-                    crate::levels::spawn_new_game(&mut commands, &mut map, &mut rng, &font, &town, 1);
+                 mut town: ResMut<TownState>| {
+                    crate::levels::spawn_new_game(&mut commands, &mut map, &mut rng, &font, &mut town, 1);
                 },
             )
             .unwrap();

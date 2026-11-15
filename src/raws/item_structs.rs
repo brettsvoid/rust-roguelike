@@ -8,7 +8,6 @@ use crate::economy::town::Sector;
 pub struct Item {
     pub name: String,
     /// Price in gold before vendor markup. Required, so every item has one.
-    #[allow(dead_code)] // first read by vendors (E02)
     pub base_value: i32,
     /// Quality band, 1 to 5. A vendor stocks it once its sector reaches this
     /// level, and the spawn table keeps it to matching depths.

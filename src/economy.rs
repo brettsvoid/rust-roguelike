@@ -3,6 +3,7 @@
 
 use bevy::prelude::*;
 
+pub mod shop;
 pub mod stock;
 pub mod town;
 pub mod trade;

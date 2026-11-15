@@ -132,7 +132,7 @@ fn handle_main_menu_input(
     mut rng: ResMut<crate::rng::GameRng>,
     font: Res<UiFont>,
     mut selected_builder: ResMut<SelectedBuilder>,
-    town: Res<TownState>,
+    mut town: ResMut<TownState>,
 ) {
     for ev in evr_kbd.read() {
         if ev.state != ButtonState::Pressed {
@@ -143,7 +143,7 @@ fn handle_main_menu_input(
             KeyCode::KeyN => {
                 // New Game - start game immediately (skip visualizer)
                 selected_builder.0 = None;
-                levels::spawn_new_game(&mut commands, &mut map, &mut rng, &font, &town, 1);
+                levels::spawn_new_game(&mut commands, &mut map, &mut rng, &font, &mut town, 1);
                 next_state.set_if_different(RunState::PreRun);
             }
             KeyCode::KeyC => {

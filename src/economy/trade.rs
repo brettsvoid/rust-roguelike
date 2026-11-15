@@ -113,14 +113,12 @@ fn glut_pct(town: &TownState, sector: Sector) -> i32 {
 }
 
 /// Gold the town pays the party for one item. Rounds down.
-#[allow(dead_code)] // first called by vendors (E02)
 pub fn sell_price(town: &TownState, sector: Sector, base_value: i32) -> i32 {
     base_value * SELL_PCT * glut_pct(town, sector) / 10_000
 }
 
 /// Gold the town charges the party for one item. Rounds up, so it is never
 /// below `sell_price`'s floor-rounded figure.
-#[allow(dead_code)] // first called by vendors (E02)
 pub fn buy_price(town: &TownState, sector: Sector, base_value: i32) -> i32 {
     (base_value * BUY_PCT * glut_pct(town, sector) + 9_999) / 10_000
 }

@@ -1,0 +1,333 @@
+//! The shop screen (E02). Clicking a vendor in town walks the active hero
+//! beside them and opens it. Tab switches between buying from the vendor and
+//! selling from the active hero's backpack, a letter trades that line and
+//! Escape closes it. The trade rules are `economy::shop`; this module moves
+//! the item entities.
+
+use std::collections::HashSet;
+
+use bevy::input::keyboard::KeyboardInput;
+use bevy::input::ButtonState;
+use bevy::prelude::*;
+
+use crate::bystander::Bystander;
+use crate::components::{BlocksTile, Door, InBackpack, Item, Name};
+use crate::debug::DebugMode;
+use crate::economy::shop::{self, buys};
+use crate::economy::town::{TownState, Vendor};
+use crate::economy::trade::{buy_price, sell_price};
+use crate::economy::Purse;
+use crate::gamelog::GameLog;
+use crate::map::{Map, Position};
+use crate::party::{ActiveUnit, PartyMember};
+use crate::picking::{self, HoveredTile};
+use crate::pathfinding::a_star_explored_avoiding;
+use crate::player::{self, WalkPath};
+use crate::raws::{self, RAWS};
+use crate::resources::UiFont;
+use crate::RunState;
+
+use crate::ui::menu::{
+    build_menu_text, despawn_modal_menu, get_selected_index, handle_pagination_input,
+    spawn_modal_menu, ModalMenu, ModalMenuBuilder, ModalMenuContainer, ModalMenuText,
+};
+use crate::ui::resources::MenuPage;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ShopMode {
+    Buy,
+    Sell,
+}
+
+/// The open shop: whose it is, which way the trade goes and the last result.
+#[derive(Resource, Debug)]
+pub struct Shop {
+    pub vendor: Vendor,
+    pub mode: ShopMode,
+    pub message: String,
+}
+
+impl Shop {
+    pub fn open(vendor: Vendor) -> Self {
+        Shop {
+            vendor,
+            mode: ShopMode::Buy,
+            message: String::new(),
+        }
+    }
+}
+
+impl Default for Shop {
+    fn default() -> Self {
+        Shop::open(Vendor::Blacksmith)
+    }
+}
+
+pub struct ShopPlugin;
+
+impl Plugin for ShopPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<Shop>()
+            .add_systems(OnEnter(RunState::ShowShop), spawn_shop)
+            .add_systems(OnExit(RunState::ShowShop), despawn_shop)
+            .add_systems(
+                Update,
+                (
+                    click_vendor
+                        .run_if(in_state(RunState::AwaitingInput))
+                        .after(picking::update_hovered_tile)
+                        .before(player::handle_player_input),
+                    (handle_shop_input, refresh_shop)
+                        .chain()
+                        .run_if(in_state(RunState::ShowShop)),
+                ),
+            );
+    }
+}
+
+/// A click on an open vendor walks the active hero beside them, then opens
+/// their shop; from beside them it opens at once. The click is taken, so
+/// the player's own input does not also walk onto the vendor.
+#[allow(clippy::too_many_arguments)]
+pub fn click_vendor(
+    mut mouse: ResMut<ButtonInput<MouseButton>>,
+    hovered: Res<HoveredTile>,
+    debug_mode: Res<DebugMode>,
+    map: Res<Map>,
+    town: Res<TownState>,
+    active: Res<ActiveUnit>,
+    mut walk: ResMut<WalkPath>,
+    mut shop: ResMut<Shop>,
+    mut next_state: ResMut<NextState<RunState>>,
+    party: Query<&Position, With<PartyMember>>,
+    vendors: Query<(&Position, &Name), With<Bystander>>,
+    obstacles: Query<&Position, (With<BlocksTile>, Without<Door>, Without<Bystander>, Without<PartyMember>)>,
+) {
+    let Some(from) = active.0.and_then(|unit| party.get(unit).ok()).map(|p| (p.x, p.y)) else {
+        return;
+    };
+    let mut open = |vendor| {
+        *shop = Shop::open(vendor);
+        next_state.set_if_different(RunState::ShowShop);
+    };
+    if walk.cells.is_empty() && walk.trade_with.is_some() {
+        open(walk.trade_with.take().unwrap());
+        return;
+    }
+    if debug_mode.show_console || !mouse.just_pressed(MouseButton::Left) {
+        return;
+    }
+    let Some(target) = hovered.tile else {
+        return;
+    };
+    let Some(vendor) = vendors
+        .iter()
+        .find(|(pos, _)| (pos.x, pos.y) == target)
+        .and_then(|(_, name)| Vendor::from_name(&name.name))
+        .filter(|vendor| town.vendor_stock.contains_key(vendor))
+    else {
+        return;
+    };
+    mouse.clear_just_pressed(MouseButton::Left);
+    *walk = WalkPath::default();
+    if (target.0 - from.0).abs() <= 1 && (target.1 - from.1).abs() <= 1 {
+        open(vendor);
+        return;
+    }
+    // Walk round fixed obstacles, such as a stall's counter, to the nearest
+    // free cell beside them. Doors open and people swap places on the way.
+    let obstacles: HashSet<usize> = obstacles.iter().map(|p| map.xy_idx(p.x, p.y)).collect();
+    let start = map.xy_idx(from.0, from.1);
+    let path = (-1..=1)
+        .flat_map(|dx| (-1..=1).map(move |dy| (target.0 + dx, target.1 + dy)))
+        .filter(|&(x, y)| (0..map.width).contains(&x) && (0..map.height).contains(&y))
+        .map(|(x, y)| map.xy_idx(x, y))
+        .filter(|&end| !map.blocked_tiles[end])
+        .filter_map(|end| a_star_explored_avoiding(&map, start, end, |i| obstacles.contains(&i)))
+        .min_by_key(Vec::len);
+    if let Some(path) = path {
+        let width = map.width as usize;
+        walk.cells = path.into_iter().skip(1).map(|i| ((i % width) as i32, (i / width) as i32)).collect();
+        walk.trade_with = Some(vendor);
+    }
+}
+
+/// One tradeable line: the raws item, its backpack entity when selling, and
+/// the text shown.
+struct Line {
+    item: raws::Item,
+    entity: Option<Entity>,
+    label: String,
+}
+
+/// The vendor's shelf when buying, or what the vendor will buy from the
+/// hero's backpack when selling, each with its price now.
+fn shop_lines(
+    shop: &Shop,
+    town: &TownState,
+    hero: Entity,
+    backpack: &Query<(Entity, &InBackpack, &Name), With<Item>>,
+) -> Vec<Line> {
+    let raws = RAWS.lock().unwrap();
+    let find = |name: &str| raws.item_index.get(name).map(|&i| raws.raws.items[i].clone());
+    match shop.mode {
+        ShopMode::Buy => town
+            .vendor_stock
+            .get(&shop.vendor)
+            .into_iter()
+            .flatten()
+            .filter_map(|(name, &left)| {
+                let item = find(name)?;
+                let price = buy_price(town, item.sector?, item.base_value);
+                Some(Line {
+                    label: format!("{name:<24}{price:>5} gold   {left} left"),
+                    item,
+                    entity: None,
+                })
+            })
+            .collect(),
+        ShopMode::Sell => backpack
+            .iter()
+            .filter(|(_, pack, _)| pack.owner == hero)
+            .filter_map(|(entity, _, name)| {
+                let item = find(&name.name).filter(|item| buys(shop.vendor, item))?;
+                let price = sell_price(town, item.sector?, item.base_value);
+                Some(Line {
+                    label: format!("{:<24}{price:>5} gold", name.name),
+                    item,
+                    entity: Some(entity),
+                })
+            })
+            .collect(),
+    }
+}
+
+fn shop_menu(shop: &Shop, gold: i32, hero: &str, lines: &[Line]) -> ModalMenu {
+    let vendor = shop.vendor.name();
+    let (tabs, empty, other) = match shop.mode {
+        ShopMode::Buy => (
+            format!("[Buy]   Sell from {hero}'s pack "),
+            format!("The {} has nothing left to sell.", vendor.to_lowercase()),
+            "sell",
+        ),
+        ShopMode::Sell => (
+            format!(" Buy   [Sell from {hero}'s pack]"),
+            format!("Nothing in {hero}'s pack that the {} buys.", vendor.to_lowercase()),
+            "buy",
+        ),
+    };
+    let mut footer = String::new();
+    if !shop.message.is_empty() {
+        footer.push_str(&shop.message);
+        footer.push_str("\n\n");
+    }
+    footer.push_str(&format!("(Tab to {other}, Escape to close)"));
+    ModalMenuBuilder::new(format!("{vendor:<20}Purse: {gold} gold\n\n{tabs}"))
+        .items_with_index(lines.iter().map(|line| line.label.as_str()))
+        .paginated()
+        .empty_message(empty)
+        .footer(footer)
+        .build()
+}
+
+/// A bought item, made real and put straight into the hero's backpack.
+fn give_item(commands: &mut Commands, name: &str, hero: Entity) {
+    let raws = RAWS.lock().unwrap();
+    if let Some(item) = raws::spawn_named_item(&raws, commands, name, 0, 0) {
+        commands
+            .entity(item)
+            .remove::<Position>()
+            .insert((InBackpack { owner: hero }, Visibility::Hidden));
+    }
+}
+
+/// The text is filled in by `refresh_shop` the same frame.
+fn spawn_shop(mut commands: Commands, font: Res<UiFont>, mut menu_page: ResMut<MenuPage>) {
+    menu_page.0 = 0;
+    spawn_modal_menu(&mut commands, &font, &ModalMenuBuilder::new("").build(), &menu_page);
+}
+
+fn despawn_shop(mut commands: Commands, menu_query: Query<Entity, With<ModalMenuContainer>>) {
+    despawn_modal_menu(&mut commands, &menu_query);
+}
+
+/// One trade per frame, so the next is chosen from the updated lists.
+#[allow(clippy::too_many_arguments)]
+pub fn handle_shop_input(
+    mut commands: Commands,
+    mut evr_kbd: MessageReader<KeyboardInput>,
+    mut next_state: ResMut<NextState<RunState>>,
+    mut shop: ResMut<Shop>,
+    mut menu_page: ResMut<MenuPage>,
+    mut town: ResMut<TownState>,
+    mut purse: ResMut<Purse>,
+    mut gamelog: ResMut<GameLog>,
+    active: Res<ActiveUnit>,
+    backpack: Query<(Entity, &InBackpack, &Name), With<Item>>,
+) {
+    let Some(hero) = active.0 else {
+        return;
+    };
+    for ev in evr_kbd.read() {
+        if ev.state != ButtonState::Pressed {
+            continue;
+        }
+        match ev.key_code {
+            KeyCode::Escape => {
+                next_state.set_if_different(RunState::AwaitingInput);
+                return;
+            }
+            KeyCode::Tab => {
+                shop.mode = match shop.mode {
+                    ShopMode::Buy => ShopMode::Sell,
+                    ShopMode::Sell => ShopMode::Buy,
+                };
+                shop.message.clear();
+                menu_page.0 = 0;
+            }
+            key => {
+                let lines = shop_lines(&shop, &town, hero, &backpack);
+                if handle_pagination_input(key, &mut menu_page, lines.len()) {
+                    continue;
+                }
+                let Some(line) = get_selected_index(key, &menu_page, lines.len()).map(|i| &lines[i])
+                else {
+                    continue;
+                };
+                let vendor = shop.vendor;
+                let result = match shop.mode {
+                    ShopMode::Buy => shop::buy(&mut town, &mut purse.gold, vendor, &line.item)
+                        .inspect(|_| give_item(&mut commands, &line.item.name, hero)),
+                    ShopMode::Sell => shop::sell(&mut town, &mut purse.gold, vendor, &line.item)
+                        .inspect(|_| commands.entity(line.entity.unwrap()).despawn()),
+                };
+                shop.message = result.unwrap_or_else(|refusal| refusal);
+                gamelog.entries.push(shop.message.clone());
+                return;
+            }
+        }
+    }
+}
+
+fn refresh_shop(
+    shop: Res<Shop>,
+    town: Res<TownState>,
+    purse: Res<Purse>,
+    menu_page: Res<MenuPage>,
+    active: Res<ActiveUnit>,
+    names: Query<&Name>,
+    backpack: Query<(Entity, &InBackpack, &Name), With<Item>>,
+    mut text_query: Query<&mut Text, With<ModalMenuText>>,
+) {
+    let Some(hero) = active.0 else {
+        return;
+    };
+    let hero_name = names.get(hero).map_or("Hero", |n| n.name.as_str());
+    let lines = shop_lines(&shop, &town, hero, &backpack);
+    let text = build_menu_text(&shop_menu(&shop, purse.gold, hero_name, &lines), &menu_page);
+    if let Ok(mut shown) = text_query.single_mut() {
+        if **shown != text {
+            **shown = text;
+        }
+    }
+}

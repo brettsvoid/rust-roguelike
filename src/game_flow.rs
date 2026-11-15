@@ -39,6 +39,7 @@ pub enum RunState {
     ShowRemoveItem,
     ShowTargeting,
     ShowLedger,
+    ShowShop,
     NextLevel,
     MagicMapReveal,
     GameOver,

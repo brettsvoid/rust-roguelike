@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::combat::CombatStats;
 use crate::economy::town::{Sector, TownState};
 use crate::economy::trade;
+use crate::economy::Purse;
 use crate::effects::{EffectKind, Effects};
 use crate::map::{Map, Position, MAP_HEIGHT, MAP_WIDTH};
 use crate::monsters::Monster;
@@ -35,13 +36,14 @@ pub fn execute_command(
         Some("spawn") => cmd_spawn(&parts, commands, party, active),
         Some("effect") => cmd_effect(&parts, commands, party, active),
         Some("town") => cmd_town(&parts, town),
+        Some("gold") => cmd_gold(&parts, commands),
         Some(cmd) => format!("Unknown command: {}", cmd),
         None => String::new(),
     }
 }
 
 fn cmd_help() -> String {
-    "Commands: spawn <item>, effect <spark|fireball|missile|heal|confusion|blood>, teleport <x> <y>, godmode, reveal, nofog, heal, kill_all, town sell <sector> <value>, town days <n>, town level <sector> <n>".to_string()
+    "Commands: spawn <item>, effect <spark|fireball|missile|heal|confusion|blood>, teleport <x> <y>, gold <n>, godmode, reveal, nofog, heal, kill_all, town sell <sector> <value>, town days <n>, town level <sector> <n>".to_string()
 }
 
 fn cmd_godmode(god_mode: &mut GodMode) -> String {
@@ -95,6 +97,17 @@ pub(super) fn cmd_town(parts: &[&str], town: &mut ResMut<TownState>) -> String {
             Err(_) => "Usage: town days <n>".to_string(),
         },
         _ => "Usage: town sell <sector> <value> | town days <n> | town level <sector> <n>".to_string(),
+    }
+}
+
+/// Adds gold to the party's purse (a negative amount takes it away).
+fn cmd_gold(parts: &[&str], commands: &mut Commands) -> String {
+    match parts.get(1).map(|n| n.parse::<i32>()) {
+        Some(Ok(amount)) => {
+            commands.queue(move |world: &mut World| world.resource_mut::<Purse>().gold += amount);
+            format!("Added {amount} gold to the purse")
+        }
+        _ => "Usage: gold <n>".to_string(),
     }
 }
 

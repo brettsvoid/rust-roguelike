@@ -1,18 +1,23 @@
 //! Screenshot harness: `cargo run -- --screenshot out.png [--seed N] [--depth N]
 //! [--reveal-map] [--frames N] [--console CMD]... [--ledger] [--cursor X,Y]
-//! [--target ITEM] [--keys KEYS]... [--click X,Y]...` starts a seeded new game,
-//! waits, saves a PNG of the window and exits. `--console` runs a debug console
+//! [--target ITEM] [--keys KEYS]... [--click X,Y]... [--shop VENDOR]...` starts
+//! a seeded new game, waits, saves a PNG of the window and exits. `--console` runs a debug console
 //! command once play begins (repeatable); `town ...` commands run before the
 //! level is built instead, e.g. "town level smithing 4"; `--ledger` then opens
 //! the town ledger. `--cursor` fakes the mouse at window point X,Y (logical
 //! pixels); `--target` enters targeting with the named item (e.g. `--console
-//! "spawn fireball" --target "Fireball Scroll"`). `--keys` and `--click` queue
+//! "spawn fireball" --target "Fireball Scroll"`). `--keys`, `--click` and `--shop` queue
 //! input in the order given, fed through the real input systems one at a time
 //! while the game waits for input: `--keys` presses keys (`g`, `.`, `i` for the
 //! inventory, `n` for Tab to select the next hero, `e` to end the party phase
 //! in combat, `w` `a` `s` `d` to pan, `c` to recentre, `+` and `-` scroll the
 //! wheel to zoom in and out); `--click X,Y` left-clicks grid cell X,Y as if the mouse hovered it (a click on another
-//! hero selects them), and the next input waits until the walk it starts ends.
+//! hero selects them), and the next input waits until the walk it starts ends;
+//! `--shop VENDOR` clicks that vendor (e.g. `blacksmith`), so the active hero
+//! walks beside them and their shop opens (the vendor's tile must be explored,
+//! so pair it with `--reveal-map`). Inputs are also fed while a shop is open:
+//! `n` (Tab) switches buy and sell, the letters `a` to `j` trade that line and
+//! `!` (Escape) closes it.
 //! Every visual change is verified with it.
 
 use std::path::PathBuf;
@@ -27,10 +32,11 @@ use bevy::render::view::screenshot::{save_to_disk, Screenshot, ScreenshotCapture
 use bevy::time::TimeUpdateStrategy;
 use bevy::window::{CursorOptions, PrimaryWindow};
 
+use crate::bystander::Bystander;
 use crate::combat::CombatStats;
 use crate::components::{Name, Ranged};
 use crate::debug::{DebugState, GodMode};
-use crate::economy::town::TownState;
+use crate::economy::town::{TownState, Vendor};
 use crate::levels;
 use crate::map::{Map, Position};
 use crate::models::AvailableModels;
@@ -39,6 +45,7 @@ use crate::picking::{self, FakeCursor, HoveredTile};
 use crate::party::{ActiveUnit, PartyMember};
 use crate::player::{self, WalkPath};
 use crate::resources::UiFont;
+use crate::ui::menus::shop;
 use crate::rng::GameRng;
 use crate::{RunState, TargetingInfo};
 
@@ -67,8 +74,10 @@ impl Plugin for ScreenshotPlugin {
                 Update,
                 (
                     feed_next_input
-                        .run_if(in_state(RunState::AwaitingInput))
+                        .run_if(in_state(RunState::AwaitingInput).or_else(in_state(RunState::ShowShop)))
                         .after(picking::update_hovered_tile)
+                        .before(shop::click_vendor)
+                        .before(shop::handle_shop_input)
                         .before(player::handle_player_input),
                     // Models load async; starting only once they are in keeps the
                     // picture the same run to run.
@@ -101,12 +110,20 @@ pub enum HarnessInput {
     /// Wheel notches, up (zoom in) positive.
     Scroll(f32),
     Click(i32, i32),
+    /// Click the vendor's townsperson.
+    Shop(Vendor),
 }
 
 fn key_input(c: char) -> Option<HarnessInput> {
     let key = match c {
         '+' => return Some(HarnessInput::Scroll(1.0)),
         '-' => return Some(HarnessInput::Scroll(-1.0)),
+        '!' => KeyCode::Escape,
+        'b' => KeyCode::KeyB,
+        'e' => KeyCode::KeyE,
+        'f' => KeyCode::KeyF,
+        'h' => KeyCode::KeyH,
+        'j' => KeyCode::KeyJ,
         'g' => KeyCode::KeyG,
         '.' => KeyCode::Period,
         'i' => KeyCode::KeyI,
@@ -167,6 +184,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
                 let (x, y) = value.split_once(',').ok_or_else(bad)?;
                 inputs.push(HarnessInput::Click(x.parse().map_err(|_| bad())?, y.parse().map_err(|_| bad())?));
             }
+            "--shop" => inputs.push(HarnessInput::Shop(Vendor::from_name(&value).ok_or_else(bad)?)),
             _ => return Err(format!("unknown argument: {flag}")),
         }
     }
@@ -212,7 +230,7 @@ fn start_game(
         let parts: Vec<&str> = cmd.split_whitespace().collect();
         info!("console> {cmd}: {}", super::commands::cmd_town(&parts, &mut town));
     }
-    levels::spawn_new_game(&mut commands, &mut map, &mut rng, &font, &town, args.depth);
+    levels::spawn_new_game(&mut commands, &mut map, &mut rng, &font, &mut town, args.depth);
     if args.reveal_map {
         debug_state.reveal_map = true;
         debug_state.no_fog = true;
@@ -301,6 +319,7 @@ fn feed_next_input(
     mut wheel: MessageWriter<MouseWheel>,
     mut mouse: ResMut<ButtonInput<MouseButton>>,
     mut hovered: ResMut<HoveredTile>,
+    vendors: Query<(&Position, &Name), With<Bystander>>,
 ) {
     if walk.is_active() {
         return;
@@ -331,6 +350,15 @@ fn feed_next_input(
         }
         HarnessInput::Click(x, y) => {
             hovered.tile = Some((x, y));
+            mouse.release(MouseButton::Left);
+            mouse.press(MouseButton::Left);
+        }
+        HarnessInput::Shop(vendor) => {
+            let Some((pos, _)) = vendors.iter().find(|(_, name)| Vendor::from_name(&name.name) == Some(vendor)) else {
+                warn!("--shop: no {} in this level", vendor.name());
+                return;
+            };
+            hovered.tile = Some((pos.x, pos.y));
             mouse.release(MouseButton::Left);
             mouse.press(MouseButton::Left);
         }
@@ -368,7 +396,7 @@ mod tests {
     #[test]
     fn all_flags() {
         assert_eq!(
-            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger --keys g.in --click 3,-4 --keys wasdc+-e"),
+            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger --keys g.in --click 3,-4 --keys wasdc+-e --shop Priest --keys bj!"),
             Ok(Some(ScreenshotArgs {
                 path: PathBuf::from("a.png"),
                 seed: 7,
@@ -393,6 +421,10 @@ mod tests {
                     HarnessInput::Scroll(1.0),
                     HarnessInput::Scroll(-1.0),
                     HarnessInput::Key(KeyCode::KeyE),
+                    HarnessInput::Shop(Vendor::Priest),
+                    HarnessInput::Key(KeyCode::KeyB),
+                    HarnessInput::Key(KeyCode::KeyJ),
+                    HarnessInput::Key(KeyCode::Escape),
                 ],
             }))
         );
@@ -426,8 +458,9 @@ mod tests {
         assert!(parse("--bogus 1").is_err());
         assert!(parse("--screenshot a.png --cursor 640").is_err());
         assert!(parse("--screenshot a.png --cursor 6x,4").is_err());
-        assert!(parse("--screenshot a.png --keys gh").is_err());
+        assert!(parse("--screenshot a.png --keys gk").is_err());
         assert!(parse("--screenshot a.png --click 3").is_err());
         assert!(parse("--screenshot a.png --click 3,4.5").is_err());
+        assert!(parse("--screenshot a.png --shop baker").is_err());
     }
 }

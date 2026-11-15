@@ -14,7 +14,6 @@ fn quantity(tier: i32) -> u32 {
 /// Refill every open vendor's shelf from scratch: each stocks the items of
 /// its stalls whose tier is at most the sector's level. Closed vendors lose
 /// their shelf. Running it twice gives the same stock.
-#[allow(dead_code)] // first called by vendors (E02) and on return to town (E07)
 pub fn restock(town: &mut TownState, items: &[Item]) {
     let mut shelves: BTreeMap<_, BTreeMap<String, u32>> = town
         .open_vendors()

@@ -10,6 +10,7 @@ use crate::{
     combat::{CombatStats, WantsToMelee},
     components::{BlocksTile, BlocksVisibility, Door, HungerClock, HungerState, Item, WantsToPickupItem},
     debug::DebugMode,
+    economy::town::Vendor,
     entity_render::{EntityShape, Renderable},
     game_flow::{Mode, TurnEnded},
     gamelog::GameLog,
@@ -64,11 +65,13 @@ pub struct WalkPath {
     pub cells: VecDeque<(i32, i32)>,
     /// The click was on the down stairs, so take them on arrival.
     pub descend: bool,
+    /// The click was on a vendor, so open their shop on arrival (`ui::menus::shop`).
+    pub trade_with: Option<Vendor>,
 }
 
 impl WalkPath {
     pub fn is_active(&self) -> bool {
-        !self.cells.is_empty() || self.descend
+        !self.cells.is_empty() || self.descend || self.trade_with.is_some()
     }
 }
 

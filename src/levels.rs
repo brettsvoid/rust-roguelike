@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 use crate::combat::CombatStats;
 use crate::components::{EntryTrigger, Item};
+use crate::economy::stock::restock;
 use crate::economy::town::TownState;
 use crate::economy::Purse;
 use crate::game_flow::RunState;
@@ -20,15 +21,19 @@ use crate::viewshed::Viewshed;
 
 /// Build the starting map and spawn the party plus initial entities.
 /// Called from the main menu when starting a new game (depth 1), and by the
-/// screenshot harness at any depth.
+/// screenshot harness at any depth. Starting in town refills the vendors'
+/// shelves; a return to town should do the same.
 pub fn spawn_new_game(
     commands: &mut Commands,
     map: &mut Map,
     rng: &mut GameRng,
     font: &UiFont,
-    town: &TownState,
+    town: &mut TownState,
     depth: i32,
 ) {
+    if depth == 1 {
+        restock(town, &crate::raws::RAWS.lock().unwrap().raws.items);
+    }
     // Depth 1 is the town; deeper levels get procedural dungeons
     let mut builder = map_builders::level_builder(depth, rng, town);
     builder.build_map(rng);

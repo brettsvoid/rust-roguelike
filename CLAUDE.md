@@ -21,6 +21,8 @@ cargo run --features file_watcher
 # Depth 1 is the town. Same seed and flags give a byte-identical PNG.
 # Known exception: runs with clicks or a lit effect (missile, fireball) can differ by a
 # few isolated pixels between runs, with identical game state. Cause not found yet.
+# The harness reads and writes town.json in the working directory: copy a baseline
+# back before each run when you compare captures, since sales and purchases change it.
 # Defaults: --seed 42 --depth 1 --frames 60, fog on unless --reveal-map.
 cargo run -- --screenshot out.png --seed 42 --depth 3 --reveal-map --frames 60
 # Fake the mouse at a window point (logical pixels) and enter targeting with an item:
@@ -44,6 +46,17 @@ cargo run -- --screenshot fx.png --depth 3 --console "effect missile" --frames 1
 cargo run -- --screenshot combat.png --depth 3 --reveal-map --console godmode \
   --click 19,21 --click 19,21 --click 19,21 --click 19,21 --click 19,21 --click 19,21 \
   --click 19,21 --keys ee --click 22,21 --click 21,21 --frames 300
+# --shop VENDOR clicks that vendor (blacksmith, alchemist, clothier, barkeep, priest,
+# enchanter): the active hero walks beside them and the shop opens. Inputs after it are
+# fed into the shop: n (Tab: buy or sell), a to j (trade that line), ! (Escape: close).
+# "gold N" fills the purse. A monster in view stops the walk, so add --console kill_all
+# when rats in an advanced town get in the way. Buy the first item, close the shop and
+# show the inventory:
+cargo run -- --screenshot buy.png --reveal-map --console "gold 40" --shop blacksmith \
+  --keys 'a!i' --frames 420
+# Sell a picked-up dagger:
+cargo run -- --screenshot sell.png --reveal-map --console "spawn dagger" --keys g \
+  --shop blacksmith --keys na --frames 420
 ```
 
 Verify every visible change with a harness screenshot that you look at.
@@ -134,7 +147,7 @@ Two pieces of state, both in `game_flow.rs`:
 - `AwaitingInput` - Waiting for the party's input
 - `PartyAction` - Resolving the active hero's action (move, attack, item, wait, end turn)
 - `EnemyTurn` - The monsters act (hunger ticks here too)
-- `ShowInventory` / `ShowDropItem` / `ShowRemoveItem` / `ShowTargeting` / `ShowLedger` - UI
+- `ShowInventory` / `ShowDropItem` / `ShowRemoveItem` / `ShowTargeting` / `ShowLedger` / `ShowShop` - UI
   overlays; they return to `AwaitingInput` and leave `Mode` alone
 - `NextLevel`, `MagicMapReveal`, `GameOver`, and the visualiser's `MapBuilderSelect` / `MapGeneration`
 
@@ -198,6 +211,10 @@ of the same logic. The build should stay at zero warnings.
 - Permadeath: save file deleted on load and when the last hero dies. A fallen hero leaves play
   and drops what they carried; the selection moves to the next living hero
 - WASM: save/load disabled (no filesystem access)
+- Vendors: clicking a vendor in town walks the active hero beside them and opens the
+  shop (`ui/menus/shop.rs`, `RunState::ShowShop`). The trade rules are pure functions in
+  `economy/shop.rs`; who buys and stocks what is `town::STALLS`. Shelves refill
+  (`stock::restock`) when a new game starts in town. Sales feed the sector's stock.
 - Town state (`economy/town.rs`) lives in its own `town.json`, loaded at startup
   and saved whenever `TownState` changes. Permadeath never deletes it. A bad or
   wrong-version file is renamed to `town.json.bad-<secs>` and a fresh town founded.

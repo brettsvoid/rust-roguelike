@@ -39,9 +39,19 @@ pub fn a_star_ignoring_entities(map: &Map, start: usize, end: usize) -> Option<V
 /// A* over walls only, through tiles the player has seen, so a click-to-move
 /// path never gives away unexplored rooms.
 pub fn a_star_explored(map: &Map, start: usize, end: usize) -> Option<Vec<usize>> {
+    a_star_explored_avoiding(map, start, end, |_| false)
+}
+
+/// `a_star_explored` that also keeps off the tiles `avoid` names.
+pub fn a_star_explored_avoiding(
+    map: &Map,
+    start: usize,
+    end: usize,
+    avoid: impl Fn(usize) -> bool,
+) -> Option<Vec<usize>> {
     a_star_with(map, start, end, |idx| {
         let mut exits = map.get_available_exits_ignoring_entities(idx);
-        exits.retain(|&(next, _)| map.revealed_tiles[next]);
+        exits.retain(|&(next, _)| map.revealed_tiles[next] && !avoid(next));
         exits
     })
 }

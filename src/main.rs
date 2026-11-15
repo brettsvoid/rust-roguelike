@@ -113,6 +113,7 @@ fn main() {
             ui::GameOverPlugin,
             ui::InventoryPlugin,
             ui::LedgerPlugin,
+            ui::ShopPlugin,
             debug::DebugPlugin,
         ))
         .add_systems(Startup, setup)
