@@ -284,7 +284,7 @@ and adds the `model` names to `raws/spawns.json`.
 ## C: Tactical combat (XCOM style, with a party)
 
 ### C01 Party model
-- Status: in progress
+- Status: done
 - Needs: F05
 - Replace the single `Player` assumption. A `PartyMember` component, an
   `ActiveUnit` resource, a party of 4 spawned at new game, and a click or Tab
@@ -298,7 +298,7 @@ and adds the `model` names to `raws/spawns.json`.
   nearest one, and the run ends only when the last one dies.
 
 ### C02 Explore mode and combat mode
-- Status: todo
+- Status: in progress
 - Needs: C01
 - Redesign `RunState` in `game_flow.rs` as an explicit state machine with two
   top-level modes. Explore: a click moves the whole party, followers pathing
