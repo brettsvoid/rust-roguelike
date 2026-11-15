@@ -133,7 +133,6 @@ fn key_input(c: char) -> Option<HarnessInput> {
         's' => KeyCode::KeyS,
         'd' => KeyCode::KeyD,
         'c' => KeyCode::KeyC,
-        'e' => KeyCode::KeyE,
         _ => return None,
     };
     Some(HarnessInput::Key(key))
