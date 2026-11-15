@@ -244,36 +244,36 @@ impl BuilderType {
                 BuilderChain::new(depth, "WFC (Cellular Automata)")
                     .start_with(Box::new(CellularAutomataBuilder::new()))
                     .with(Box::new(WfcBuilder::new()))
+                    .with(AreaStartingPosition::new(XStart::Center, YStart::Center))
                     .with(CullUnreachable::new())
                     .with(DistantExit::new())
-                    .with(AreaStartingPosition::new(XStart::Center, YStart::Center))
                     .with(VoronoiSpawning::new()),
             ),
             BuilderType::WfcBspDungeon => Box::new(
                 BuilderChain::new(depth, "WFC (BSP Dungeon)")
                     .start_with(Box::new(BspDungeonBuilder::new()))
                     .with(Box::new(WfcBuilder::new()))
+                    .with(AreaStartingPosition::new(XStart::Center, YStart::Center))
                     .with(CullUnreachable::new())
                     .with(DistantExit::new())
-                    .with(AreaStartingPosition::new(XStart::Center, YStart::Center))
                     .with(VoronoiSpawning::new()),
             ),
             BuilderType::WfcBspInterior => Box::new(
                 BuilderChain::new(depth, "WFC (BSP Interior)")
                     .start_with(Box::new(BspInteriorBuilder::new()))
                     .with(Box::new(WfcBuilder::new()))
+                    .with(AreaStartingPosition::new(XStart::Center, YStart::Center))
                     .with(CullUnreachable::new())
                     .with(DistantExit::new())
-                    .with(AreaStartingPosition::new(XStart::Center, YStart::Center))
                     .with(VoronoiSpawning::new()),
             ),
             BuilderType::WfcDla => Box::new(
                 BuilderChain::new(depth, "WFC (DLA)")
                     .start_with(Box::new(DLABuilder::walk_inwards()))
                     .with(Box::new(WfcBuilder::new()))
+                    .with(AreaStartingPosition::new(XStart::Center, YStart::Center))
                     .with(CullUnreachable::new())
                     .with(DistantExit::new())
-                    .with(AreaStartingPosition::new(XStart::Center, YStart::Center))
                     .with(VoronoiSpawning::new()),
             ),
 
@@ -573,8 +573,8 @@ fn random_eroded_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
 
     // Use area-based finishing since erosion may disconnect rooms
     chain = chain
-        .with(CullUnreachable::new())
         .with(AreaStartingPosition::new(XStart::Center, YStart::Center))
+        .with(CullUnreachable::new())
         .with(DistantExit::new())
         .with(VoronoiSpawning::new());
 
@@ -592,8 +592,8 @@ fn random_complex_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> 
         .with(RoomSorter::new(RoomSort::Central))
         .with(NearestCorridors::new())
         .with(CellularAutomataEroder::with_iterations(2))
-        .with(CullUnreachable::new())
         .with(AreaStartingPosition::new(XStart::Center, YStart::Center))
+        .with(CullUnreachable::new())
         .with(DistantExit::new());
 
     // Maybe add prefabs
