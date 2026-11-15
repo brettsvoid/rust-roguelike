@@ -126,7 +126,7 @@ Open questions for the owner (found while writing design.md):
   and a harness screenshot shows the three fog states.
 
 ### F04 Mouse picking and tile hover
-- Status: in progress
+- Status: done
 - Needs: F02
 - A pure function from cursor ray to grid tile (ray against the `y = 0`
   plane). A `HoveredTile` resource and a highlight quad on the hovered tile.
