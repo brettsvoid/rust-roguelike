@@ -10,9 +10,12 @@
 //! Every move between modes and phases goes through `advance`, a pure function
 //! over `Mode`, the `Step` just finished and a plain-data `Situation`. A turn
 //! cycles `AwaitingInput -> PartyAction -> EnemyTurn -> AwaitingInput` in
-//! explore (each step costs a turn). In combat, `PartyAction` returns to
-//! `AwaitingInput` until every living hero has acted or the turn is ended, and
+//! explore (each step costs a turn). In combat, every hero gets
+//! `AP_PER_ROUND` action points a round; `PartyAction` returns to
+//! `AwaitingInput` until no living hero has AP left or the turn is ended, and
 //! only then do the monsters act (the enemy phase).
+
+use std::collections::HashMap;
 
 use bevy::prelude::*;
 
@@ -21,6 +24,7 @@ use crate::map::{self, Map, Position, Revealed, RevealedState, Tile};
 use crate::monsters::Monster;
 use crate::party::{next_unit, ActiveUnit, PartyMember};
 use crate::player::WalkPath;
+use crate::tactics::{Action, AP_PER_ROUND};
 use crate::viewshed::{self, Viewshed};
 use crate::{combat, hunger, inventory, levels, monsters, traps};
 
@@ -52,27 +56,33 @@ pub enum Mode {
     /// A click moves the whole party; every step is a turn.
     #[default]
     Explore,
-    /// Rounds of a party phase then an enemy phase. `acted` lists the heroes
-    /// who have used this round's action.
-    Combat { round: u32, acted: Vec<Entity> },
+    /// Rounds of a party phase then an enemy phase. `ap_spent` holds the
+    /// action points each hero has spent this round; a missing hero has spent
+    /// none.
+    Combat { round: u32, ap_spent: HashMap<Entity, u8> },
 }
 
 impl Mode {
-    /// Whether `unit` may still act. The one place that knows a hero gets one
-    /// action per round; action points (C03) replace it.
-    pub fn can_act(&self, unit: Entity) -> bool {
+    /// The action points `unit` has left this round. Exploring, the budget
+    /// never runs out.
+    pub fn ap_left(&self, unit: Entity) -> u8 {
         match self {
-            Mode::Explore => true,
-            Mode::Combat { acted, .. } => !acted.contains(&unit),
+            Mode::Explore => AP_PER_ROUND,
+            Mode::Combat { ap_spent, .. } => AP_PER_ROUND.saturating_sub(ap_spent.get(&unit).copied().unwrap_or(0)),
         }
+    }
+
+    /// Whether `unit` may still act.
+    pub fn can_act(&self, unit: Entity) -> bool {
+        self.ap_left(unit) > 0
     }
 }
 
 /// What just finished, to move the state machine on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Step {
-    /// A hero moved, attacked, used or dropped an item, or waited.
-    PartyActed(Entity),
+    /// A hero took an action.
+    PartyActed(Entity, Action),
     /// The player ended the party phase (E).
     EndTurn,
     /// The monsters took their turn.
@@ -108,20 +118,22 @@ pub fn advance(mode: &Mode, step: Step, situation: &Situation) -> (Mode, RunStat
     let aware = situation.hostiles.iter().any(|h| h.sees_party);
     let contact = situation.hostiles.iter().any(|h| h.sees_party && h.seen_by_party);
     match (mode, step) {
-        (Mode::Explore, _) if contact => (Mode::Combat { round: 1, acted: Vec::new() }, RunState::AwaitingInput),
-        (Mode::Explore, Step::PartyActed(_)) => (Mode::Explore, RunState::EnemyTurn),
+        (Mode::Explore, _) if contact => (Mode::Combat { round: 1, ap_spent: HashMap::new() }, RunState::AwaitingInput),
+        (Mode::Explore, Step::PartyActed(..)) => (Mode::Explore, RunState::EnemyTurn),
         (Mode::Explore, Step::EndTurn | Step::EnemiesActed) => (Mode::Explore, RunState::AwaitingInput),
         (Mode::Combat { .. }, _) if !aware => (Mode::Explore, RunState::AwaitingInput),
-        (Mode::Combat { round, acted }, Step::PartyActed(unit)) => {
-            let mut acted = acted.clone();
-            acted.push(unit);
-            let phase_over = situation.party.iter().all(|hero| acted.contains(hero));
-            let next = if phase_over { RunState::EnemyTurn } else { RunState::AwaitingInput };
-            (Mode::Combat { round: *round, acted }, next)
+        (Mode::Combat { round, ap_spent }, Step::PartyActed(unit, action)) => {
+            // The input only offers what the hero can afford; anything else spends the rest.
+            let left = action.spend(mode.ap_left(unit)).unwrap_or(0);
+            let mut ap_spent = ap_spent.clone();
+            ap_spent.insert(unit, AP_PER_ROUND - left);
+            let mode = Mode::Combat { round: *round, ap_spent };
+            let phase_over = situation.party.iter().all(|&hero| !mode.can_act(hero));
+            (mode, if phase_over { RunState::EnemyTurn } else { RunState::AwaitingInput })
         }
         (Mode::Combat { .. }, Step::EndTurn) => (mode.clone(), RunState::EnemyTurn),
         (Mode::Combat { round, .. }, Step::EnemiesActed) => {
-            (Mode::Combat { round: round + 1, acted: Vec::new() }, RunState::AwaitingInput)
+            (Mode::Combat { round: round + 1, ap_spent: HashMap::new() }, RunState::AwaitingInput)
         }
     }
 }
@@ -147,6 +159,11 @@ impl Default for MagicMapReveal {
 #[derive(Resource, Default)]
 pub struct TurnEnded(pub bool);
 
+/// The action the active hero just took, set by the map input. The inventory
+/// and targeting screens leave it unset: those are item actions.
+#[derive(Resource, Default)]
+pub struct HeroAction(pub Option<Action>);
+
 pub struct GameFlowPlugin;
 
 impl Plugin for GameFlowPlugin {
@@ -156,6 +173,7 @@ impl Plugin for GameFlowPlugin {
             .init_resource::<PendingMagicMap>()
             .init_resource::<MagicMapReveal>()
             .init_resource::<TurnEnded>()
+            .init_resource::<HeroAction>()
             // PreRun: one frame of setup, then hand control to the party
             .add_systems(OnEnter(RunState::PreRun), |mut mode: ResMut<Mode>| *mode = Mode::Explore)
             .add_systems(
@@ -184,10 +202,14 @@ impl Plugin for GameFlowPlugin {
             .add_systems(
                 Update,
                 (
+                    // Each side's status effects bite at the start of its turn.
+                    combat::start_of_turn::<With<Monster>>,
+                    combat::damage_system,
                     monsters::monster_ai,
                     traps::trap_trigger_system,
                     combat::melee_combat_system,
                     hunger::hunger_system,
+                    combat::start_of_turn::<With<PartyMember>>,
                     combat::damage_system,
                     combat::delete_the_dead,
                     viewshed::update_viewshed,
@@ -219,7 +241,7 @@ type HostileSight<'w, 's> =
     Query<'w, 's, (&'static CombatStats, &'static Position, &'static Viewshed), (With<Monster>, Without<PartyMember>)>;
 
 /// Applies `step` to the mode and the frame loop. In combat, the walk stops
-/// and a hero who has acted hands control to the next one who can.
+/// and a hero out of AP hands control to the next one who can act.
 fn take_step(
     step: Step,
     mode: &mut Mode,
@@ -263,13 +285,15 @@ fn after_party_action(
     mut active: ResMut<ActiveUnit>,
     mut walk: ResMut<WalkPath>,
     mut turn_ended: ResMut<TurnEnded>,
+    mut hero_action: ResMut<HeroAction>,
     mut pending_magic_map: ResMut<PendingMagicMap>,
     mut reveal: ResMut<MagicMapReveal>,
     party: PartySight,
     hostiles: HostileSight,
 ) {
+    let action = hero_action.0.take().unwrap_or(Action::UseItem);
     let step = match (std::mem::take(&mut turn_ended.0), active.0) {
-        (false, Some(unit)) => Step::PartyActed(unit),
+        (false, Some(unit)) => Step::PartyActed(unit, action),
         _ => Step::EndTurn,
     };
     let next = take_step(step, &mut mode, &mut next_state, &mut active, &mut walk, &party, &hostiles);
@@ -339,8 +363,13 @@ mod tests {
         }
     }
 
-    fn combat(round: u32, acted: &[Entity]) -> Mode {
-        Mode::Combat { round, acted: acted.to_vec() }
+    /// Combat in `round` with the AP each listed hero has spent.
+    fn combat(round: u32, ap_spent: &[(Entity, u8)]) -> Mode {
+        Mode::Combat { round, ap_spent: ap_spent.iter().copied().collect() }
+    }
+
+    fn acted(unit: Entity, action: Action) -> Step {
+        Step::PartyActed(unit, action)
     }
 
     #[test]
@@ -348,9 +377,10 @@ mod tests {
         let p = heroes(2);
         // Only one side sees the other: no combat yet.
         let s = situation(&p, &[(true, false), (false, true)]);
-        assert_eq!(advance(&Mode::Explore, Step::PartyActed(p[0]), &s), (Mode::Explore, RunState::EnemyTurn));
+        assert_eq!(advance(&Mode::Explore, acted(p[0], Action::Move), &s), (Mode::Explore, RunState::EnemyTurn));
         assert_eq!(advance(&Mode::Explore, Step::EnemiesActed, &s), (Mode::Explore, RunState::AwaitingInput));
         assert_eq!(advance(&Mode::Explore, Step::EndTurn, &s), (Mode::Explore, RunState::AwaitingInput));
+        assert!(Mode::Explore.can_act(p[0]));
     }
 
     #[test]
@@ -358,40 +388,60 @@ mod tests {
         let p = heroes(2);
         let s = situation(&p, &[(false, false), (true, true)]);
         let start = (combat(1, &[]), RunState::AwaitingInput);
-        assert_eq!(advance(&Mode::Explore, Step::PartyActed(p[0]), &s), start);
+        assert_eq!(advance(&Mode::Explore, acted(p[0], Action::Move), &s), start);
         assert_eq!(advance(&Mode::Explore, Step::EnemiesActed, &s), start);
+        assert_eq!(start.0.ap_left(p[0]), AP_PER_ROUND);
     }
 
     #[test]
-    fn the_party_phase_ends_when_every_living_hero_has_acted() {
+    fn each_action_spends_its_ap_and_a_hero_with_ap_left_keeps_acting() {
+        let p = heroes(2);
+        let s = situation(&p, &[(true, true)]);
+        let (mode, next) = advance(&combat(1, &[]), acted(p[0], Action::Move), &s);
+        assert_eq!((mode.clone(), next), (combat(1, &[(p[0], 1)]), RunState::AwaitingInput));
+        assert_eq!(mode.ap_left(p[0]), 1);
+        assert!(mode.can_act(p[0]));
+        let (mode, _) = advance(&mode, acted(p[0], Action::UseItem), &s);
+        assert_eq!(mode.ap_left(p[0]), 0);
+        assert!(!mode.can_act(p[0]));
+        // A dash spends both, as does an attack or a wait with any AP left.
+        for action in [Action::Dash, Action::Attack, Action::Wait] {
+            assert_eq!(advance(&combat(1, &[]), acted(p[1], action), &s).0.ap_left(p[1]), 0, "{action:?}");
+        }
+        assert_eq!(advance(&combat(1, &[(p[1], 1)]), acted(p[1], Action::Attack), &s).0.ap_left(p[1]), 0);
+    }
+
+    #[test]
+    fn the_party_phase_ends_when_no_living_hero_has_ap_left() {
         let p = heroes(3);
         let s = situation(&p, &[(true, true)]);
-        let mode = combat(2, &[]);
-        let (mode, next) = advance(&mode, Step::PartyActed(p[1]), &s);
-        assert_eq!((mode.clone(), next), (combat(2, &[p[1]]), RunState::AwaitingInput));
-        assert!(mode.can_act(p[0]) && !mode.can_act(p[1]));
-        let (mode, next) = advance(&mode, Step::PartyActed(p[0]), &s);
-        assert_eq!((mode.clone(), next), (combat(2, &[p[1], p[0]]), RunState::AwaitingInput));
-        let (mode, next) = advance(&mode, Step::PartyActed(p[2]), &s);
-        assert_eq!((mode, next), (combat(2, &[p[1], p[0], p[2]]), RunState::EnemyTurn));
+        let (mode, next) = advance(&combat(2, &[]), acted(p[1], Action::Dash), &s);
+        assert_eq!((mode.clone(), next), (combat(2, &[(p[1], 2)]), RunState::AwaitingInput));
+        let (mode, next) = advance(&mode, acted(p[0], Action::Attack), &s);
+        assert_eq!((mode.clone(), next), (combat(2, &[(p[1], 2), (p[0], 2)]), RunState::AwaitingInput));
+        let (mode, next) = advance(&mode, acted(p[2], Action::Move), &s);
+        assert_eq!(next, RunState::AwaitingInput, "one AP left");
+        let (mode, next) = advance(&mode, acted(p[2], Action::Move), &s);
+        assert_eq!((mode, next), (combat(2, &[(p[1], 2), (p[0], 2), (p[2], 2)]), RunState::EnemyTurn));
         // A fallen hero does not hold the phase open.
         let s = situation(&p[1..], &[(true, true)]);
-        assert_eq!(advance(&combat(1, &[p[1]]), Step::PartyActed(p[2]), &s).1, RunState::EnemyTurn);
+        assert_eq!(advance(&combat(1, &[(p[1], 2)]), acted(p[2], Action::Wait), &s).1, RunState::EnemyTurn);
     }
 
     #[test]
     fn ending_the_turn_hands_over_to_the_enemy_phase() {
         let p = heroes(2);
         let s = situation(&p, &[(true, false)]);
-        assert_eq!(advance(&combat(3, &[p[0]]), Step::EndTurn, &s), (combat(3, &[p[0]]), RunState::EnemyTurn));
+        let mode = combat(3, &[(p[0], 1)]);
+        assert_eq!(advance(&mode, Step::EndTurn, &s), (mode, RunState::EnemyTurn));
     }
 
     #[test]
-    fn the_enemy_phase_leads_to_the_next_round() {
+    fn the_enemy_phase_leads_to_the_next_round_with_full_ap() {
         let p = heroes(2);
         let s = situation(&p, &[(true, false)]);
         assert_eq!(
-            advance(&combat(1, &[p[0], p[1]]), Step::EnemiesActed, &s),
+            advance(&combat(1, &[(p[0], 2), (p[1], 2)]), Step::EnemiesActed, &s),
             (combat(2, &[]), RunState::AwaitingInput)
         );
     }
@@ -401,7 +451,7 @@ mod tests {
         let p = heroes(2);
         let explore = (Mode::Explore, RunState::AwaitingInput);
         // The last hostile died mid party phase.
-        assert_eq!(advance(&combat(1, &[]), Step::PartyActed(p[0]), &situation(&p, &[])), explore);
+        assert_eq!(advance(&combat(1, &[]), acted(p[0], Action::Attack), &situation(&p, &[])), explore);
         // Seen but not seeing: it has lost the party.
         let s = situation(&p, &[(false, true)]);
         assert_eq!(advance(&combat(4, &[]), Step::EnemiesActed, &s), explore);

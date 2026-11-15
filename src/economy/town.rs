@@ -489,6 +489,7 @@ mod tests {
                 hp: 0,
                 defense: 0,
                 power: 0,
+                movement: crate::tactics::DEFAULT_MOVEMENT,
             },
         ));
         world.run_system_once(delete_the_dead).unwrap();

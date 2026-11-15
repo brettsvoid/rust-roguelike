@@ -41,11 +41,12 @@ cargo run -- --screenshot tab.png --seed 42 --depth 3 --keys nn --click 43,25 --
 # Play an effect on the active hero's tile (spark, fireball, missile, heal, confusion; blood
 # stains the active hero's tile and two east). It starts about frame 3, so frame 12 is ~0.15 s in:
 cargo run -- --screenshot fx.png --depth 3 --console "effect missile" --frames 12
-# Walk west into a rat: the fifth click drops into combat (round 1), the next two are
-# Aldric's and Brenna's actions. Then end two rounds, select Aldric and kill the rat:
+# Walk south-west until two goblins see the party (combat, round 1, Aldric on (36,24)).
+# Aldric moves (1 AP, 1 left), Tab, Brenna dashes (2 AP), E ends the phase: the goblins
+# close in (one moves four tiles over two moves). Tab twice back to Aldric, who attacks
+# the goblin beside him, which ends his turn:
 cargo run -- --screenshot combat.png --depth 3 --reveal-map --console godmode \
-  --click 19,21 --click 19,21 --click 19,21 --click 19,21 --click 19,21 --click 19,21 \
-  --click 19,21 --keys ee --click 22,21 --click 21,21 --frames 300
+  --click 30,28 --click 34,27 --keys n --click 35,28 --keys enn --click 33,28 --frames 300
 # --shop VENDOR clicks that vendor (blacksmith, alchemist, clothier, barkeep, priest,
 # enchanter): the active hero walks beside them and the shop opens. Inputs after it are
 # fed into the shop: n (Tab: buy or sell), a to j (trade that line), ! (Escape: close).
@@ -74,20 +75,23 @@ for that overhaul. Key points:
 - **Presentation**: Isometric true 3D, dark torch-lit dungeons, stylised low-poly models
 - **Party and combat**: A party of 4 heroes (default), XCOM-style combat (action points, hit chances, cover, overwatch). Free click-to-move exploration drops into turn mode on contact
 - **Living town**: Loot sold in town is traded with neighbouring towns, sectors level up and stock better gear. The town persists across permadeath
-- **Controls**: Left click walks the active hero to an explored tile (one tile per turn, stopping
-  when a hostile comes into view), attacks an adjacent hostile, walks to the down stairs and takes
-  them, and on the hero's own tile picks up an item. Exploring, the other heroes follow. A click
-  on another hero, or Tab, selects them (no turn passes; in combat only heroes yet to act).
+- **Controls**: Exploring, left click walks the active hero to an explored tile (one tile per
+  turn, stopping when a hostile comes into view), attacks an adjacent hostile, walks to the down
+  stairs and takes them, and on the hero's own tile picks up an item; the other heroes follow.
+  In combat, left click on a tile in the drawn move range moves there as one action (blue zone
+  1 AP, green zone a 2 AP dash), on an adjacent hostile attacks, and on an adjacent closed door
+  opens it; anything else logs "Out of range.". A click on another hero, or Tab, selects them
+  (no turn passes; in combat only heroes with AP left).
   WASD pans the camera, the scroll wheel zooms, C recentres. G picks up, I inventory, X drops
-  (D pans), R removes equipment, `.` descends, Space waits, E ends the party phase in combat,
-  T opens the ledger in town, Q saves and quits
+  (D pans), R removes equipment, `.` descends, Space waits (in combat it ends that hero's
+  turn), E ends the party phase in combat, T opens the ledger in town, Q saves and quits
 - **Mechanics**: Hunger/survival, items/equipment
 
 The Architecture section below describes the code as it is now. The current
 build is mid-conversion: the map and entities are grey-box 3D primitives on
 an isometric camera, with a party of four heroes. Exploring, the active hero
 leads and the others follow; on contact the game drops into combat rounds where
-each hero gets one action (action points, hit chances and cover come later).
+every unit spends 2 action points a round (hit chances and cover come later).
 
 ## Architecture
 
@@ -102,12 +106,13 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
 - **ResourcesPlugin** (`resources.rs`) - Loads shared resources like fonts
 - **PartyPlugin** (`party.rs`) - The party: `PartyMember { slot }` on every hero, the `ActiveUnit`
   resource (the hero the input drives), `HEROES` (names and colours), and the pure rules
-  `spawn_tiles`, `next_unit` (Tab, skipping the dead and, in combat, those who have acted) and
+  `spawn_tiles`, `next_unit` (Tab, skipping the dead and, in combat, those out of AP) and
   `follow` (where followers step when the leader moves in explore)
 - **PlayerPlugin** (`player.rs`) - Input for the active hero: keys, Tab and a click on a hero to
-  select, left click to walk/attack/pick up/descend, the
+  select, left click to walk/attack/pick up/descend (in combat, to move within range), the
   `WalkPath` resource (the cells of a click walk still to take, and whether to take the stairs on
-  arrival) and the hover path preview
+  arrival), the hover path preview, and in combat the `MoveRange` resource (the active hero's
+  range, recomputed each frame of the party phase) and its two-zone overlay
 - **ViewshedPlugin** (`viewshed.rs`) - Field of view calculation using Bresenham line algorithm
 - **MapPlugin** (`map.rs`) - Map data, fog of war, position-to-screen translation, `grid_to_world`
 - **CameraPlugin** (`camera.rs`) - The logical `Camera` follow target, WASD pan, scroll zoom, the isometric 3D camera and the 2D overlay camera
@@ -115,7 +120,9 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
 - **OcclusionPlugin** (`occlusion.rs`) - Cuts walls down to stubs and hides town roofs so the party and the visible floor stay in view (see Coordinate System)
 - **MapGenVizPlugin** (`mapgen_viz.rs`) - The map generation visualizer (main menu tool)
 - **MonstersPlugin** (`monsters.rs`) - Monster spawning and AI. `monster_target` picks the nearest
-  hero a monster sees or stands next to
+  hero a monster sees or stands next to. Exploring, `monster_ai` takes one step or attacks per
+  turn; in combat each monster spends its AP by the heroes' rules (move as far along its path as
+  one AP reaches, attack when beside a hero, which ends its turn)
 - **GuiPlugin** (`gui.rs`) - Main menu and builder-select menu (other UI lives in `ui/`)
 - **LightingPlugin** (`lighting.rs`) - `LightSource` point lights, flicker, the shadow caster cap,
   and the per-depth ambient light, fog, bloom and town sun (see Lighting)
@@ -134,6 +141,12 @@ Non-plugin modules worth knowing:
   shared material per colour from `EntityAssets` via the `attach_entity_mesh` observer. Spawn
   map entities with `RenderableBundle`; re-inserting `EntityShape` re-dresses (doors opening)
 - `models.rs` - The model pipeline (see Models below)
+- `tactics.rs` - The pure action point rules: `AP_PER_ROUND` (2), `DEFAULT_MOVEMENT` (4 tiles per
+  AP), `Action` and `Action::spend` (move and item 1 AP, dash 2, attack and wait spend the rest
+  and need at least 1), `move_range` (cheapest-first flood fill over `Map::get_available_exits`,
+  diagonals 1.45 like the pathfinder, giving each reachable tile its AP cost and path) and
+  `confused_step`. Movement is `CombatStats::movement`, from the raws `stats.movement` for
+  monsters (Giant Bat 6)
 - `levels.rs` - New-game setup and descending to the next level
 - `saveload.rs` - Save/load plus the save-on-quit (Q) system
 
@@ -146,12 +159,14 @@ Two pieces of state, both in `game_flow.rs`:
 - `PreRun` - Initial setup before gameplay begins; resets `Mode` to explore
 - `AwaitingInput` - Waiting for the party's input
 - `PartyAction` - Resolving the active hero's action (move, attack, item, wait, end turn)
-- `EnemyTurn` - The monsters act (hunger ticks here too)
+- `EnemyTurn` - The monsters act (hunger ticks here too). It opens with `start_of_turn` for the
+  monsters and ends with it for the heroes (the start of their next turn): `Poison` deals its
+  damage and `Confusion` counts down
 - `ShowInventory` / `ShowDropItem` / `ShowRemoveItem` / `ShowTargeting` / `ShowLedger` / `ShowShop` - UI
   overlays; they return to `AwaitingInput` and leave `Mode` alone
 - `NextLevel`, `MagicMapReveal`, `GameOver`, and the visualiser's `MapBuilderSelect` / `MapGeneration`
 
-`Mode` (a resource) is the tactical mode: `Explore`, or `Combat { round, acted }`. Every change
+`Mode` (a resource) is the tactical mode: `Explore`, or `Combat { round, ap_spent }`. Every change
 of mode or phase goes through `advance(mode, step, situation)`, a pure function over plain data
 (the living heroes, and per hostile whether it sees a hero and a hero sees it), unit tested in
 `game_flow.rs`. The `PartyAction` and `EnemyTurn` chains end in a system that calls it.
@@ -159,9 +174,15 @@ of mode or phase goes through `advance(mode, step, situation)`, a pure function 
   click path and the others follow
 - Explore to combat: a hostile and a hero see each other. Combat starts at the party phase of
   round 1
-- Combat party phase: each hero gets one action (`Mode::can_act` is the one place that knows;
-  C03 swaps it for action points). The active unit moves on to the next hero who can act. The
-  phase ends when every living hero has acted or on E, then `EnemyTurn` is the enemy phase
+- Combat party phase: each hero has `AP_PER_ROUND` action points, spent in any order across
+  heroes (`Mode::ap_left`, `Mode::can_act`). The map input records the `Action` it took in the
+  `HeroAction` resource and `Step::PartyActed(hero, action)` spends it; the inventory and
+  targeting screens leave it unset, which counts as an item (1 AP). A hero with AP left stays
+  active; one out of AP hands over to the next hero who can act. The phase ends when no living
+  hero has AP left or on E, then `EnemyTurn` is the enemy phase
+- Status effects under AP: poison bites at the start of the unit's turn (Giant Spider melee hits
+  poison, raws `poison: [damage, turns]`); a confused unit's move goes to a random adjacent tile
+  (`confused_step`, rolled through `GameRng`) and still costs the AP of the move it chose
 - Combat to explore: no hostile sees a living hero (dead or out of sight)
 - Game over: no hero left alive
 - `Mode` is not saved: a loaded game starts in explore and drops back into combat at the next
@@ -208,6 +229,7 @@ of the same logic. The build should stay at zero warnings.
 - Saves on quit (Q key), loads on Continue from main menu
 - The save holds the whole party (`SaveData::party`, in slot order), the active hero's slot, and
   each backpack item's owner by slot
+- Not saved yet (P01): `Poison` on a unit and a mob's poison bite (`PoisonsOnHit`)
 - Permadeath: save file deleted on load and when the last hero dies. A fallen hero leaves play
   and drops what they carried; the selection moves to the next living hero
 - WASM: save/load disabled (no filesystem access)
@@ -245,8 +267,9 @@ of the same logic. The build should stay at zero warnings.
   A roof hides while any hero is inside the building or behind it; while it shows, its walls
   stay full height
 - Click-to-move paths (`pathfinding::a_star_explored`) only cross explored tiles
-- Tile overlays (hover, path preview, targeting range, area, target) are `TileMarks::mark` quads
-  just above the floor, never 2D sprites
+- Tile overlays (hover, path preview, combat move range, targeting range, area, target) are
+  `TileMarks::mark` quads just above the floor, never 2D sprites. The move range draws the one-AP
+  zone blue (`move_one`) and the two-AP zone green (`move_two`), inset so the grid shows
 - `translate_positions` moves a 3D entity (`EntityShape`) to `grid_to_world` plus its shape's lift
   whenever its `Position` changes. Tiles are placed once at spawn. Effects and bloodstains have
   no `Position` (they are not on the tile for gameplay) and get their transform at spawn

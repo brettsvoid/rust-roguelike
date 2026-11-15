@@ -10,6 +10,7 @@ use crate::{
     raws::{get_spawn_table_for_depth, spawn_named_entity, RAWS},
     rng::GameRng,
     shapes::Rect,
+    tactics::DEFAULT_MOVEMENT,
     viewshed::Viewshed,
 };
 
@@ -28,6 +29,7 @@ pub fn party_member(slot: usize, x: i32, y: i32) -> impl Bundle {
             hp: 30,
             defense: 2,
             power: 5,
+            movement: DEFAULT_MOVEMENT,
         },
         Viewshed {
             range: 8,

@@ -69,6 +69,25 @@ pub struct Confusion {
     pub turns: i32,
 }
 
+/// Loses `damage` hp at the start of each of its next `turns` turns.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Poison {
+    pub damage: i32,
+    pub turns: i32,
+}
+
+impl Poison {
+    /// This turn's damage and the poison left after it, `None` once it wears off.
+    pub fn tick(self) -> (i32, Option<Poison>) {
+        let turns = self.turns - 1;
+        (self.damage, (turns > 0).then_some(Poison { turns, ..self }))
+    }
+}
+
+/// Its melee hits that do damage poison the target (a mob's raws `poison`).
+#[derive(Component, Debug, Clone, Copy)]
+pub struct PoisonsOnHit(pub Poison);
+
 #[derive(Component, Debug)]
 pub struct CausesConfusion {
     pub turns: i32,
@@ -171,3 +190,15 @@ pub struct Door {
 
 #[derive(Component, Debug)]
 pub struct BlocksVisibility;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn poison_bites_each_turn_until_it_wears_off() {
+        let poison = Poison { damage: 2, turns: 2 };
+        assert_eq!(poison.tick(), (2, Some(Poison { damage: 2, turns: 1 })));
+        assert_eq!(Poison { damage: 2, turns: 1 }.tick(), (2, None));
+    }
+}

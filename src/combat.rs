@@ -1,6 +1,11 @@
 use bevy::prelude::*;
 
-use crate::components::{DefenseBonus, Equipped, HungerClock, HungerState, InBackpack, Item, MeleePowerBonus, Name};
+use bevy::ecs::query::QueryFilter;
+
+use crate::components::{
+    Confusion, DefenseBonus, Equipped, HungerClock, HungerState, InBackpack, Item, MeleePowerBonus, Name, Poison,
+    PoisonsOnHit,
+};
 use crate::debug::GodMode;
 use crate::gamelog::GameLog;
 use crate::economy::Gold;
@@ -17,6 +22,8 @@ pub struct CombatStats {
     pub hp: i32,
     pub defense: i32,
     pub power: i32,
+    /// Tiles moved per action point in combat.
+    pub movement: i32,
 }
 
 #[derive(Component, Debug)]
@@ -46,6 +53,7 @@ pub fn melee_combat_system(
     melee_bonus_query: Query<(&Equipped, &MeleePowerBonus)>,
     defense_bonus_query: Query<(&Equipped, &DefenseBonus)>,
     hunger_query: Query<&HungerClock>,
+    poisoners: Query<&PoisonsOnHit>,
 ) {
     for (entity, wants_melee, name, stats) in &query {
         if stats.hp <= 0 {
@@ -96,6 +104,10 @@ pub fn melee_combat_system(
                     name.name, target_name.name, damage
                 ));
                 SufferDamage::new_damage(&mut commands, wants_melee.target, damage);
+                if let Ok(PoisonsOnHit(poison)) = poisoners.get(entity) {
+                    commands.entity(wants_melee.target).insert(*poison);
+                    log.entries.push(format!("{} is poisoned!", target_name.name));
+                }
 
                 effects.play(EffectKind::HitSpark, target_pos.x, target_pos.y);
             }
@@ -128,6 +140,39 @@ pub fn damage_system(
         }
 
         commands.entity(entity).remove::<SufferDamage>();
+    }
+}
+
+/// The start of a side's turn for every living unit `F` picks: poison bites
+/// and confusion wears down.
+pub fn start_of_turn<F: QueryFilter>(
+    mut commands: Commands,
+    mut log: ResMut<GameLog>,
+    mut units: Query<(Entity, &Name, &CombatStats, Option<&mut Poison>, Option<&mut Confusion>), F>,
+) {
+    for (entity, name, stats, poison, confusion) in &mut units {
+        if stats.hp <= 0 {
+            continue;
+        }
+        if let Some(mut poison) = poison {
+            let (damage, left) = poison.tick();
+            SufferDamage::new_damage(&mut commands, entity, damage);
+            log.entries.push(format!("{} takes {damage} poison damage.", name.name));
+            match left {
+                Some(left) => *poison = left,
+                None => {
+                    commands.entity(entity).remove::<Poison>();
+                    log.entries.push(format!("{} is no longer poisoned.", name.name));
+                }
+            }
+        }
+        if let Some(mut confused) = confusion {
+            confused.turns -= 1;
+            if confused.turns < 1 {
+                commands.entity(entity).remove::<Confusion>();
+                log.entries.push(format!("{} is no longer confused.", name.name));
+            }
+        }
     }
 }
 
@@ -199,6 +244,7 @@ mod tests {
                     hp,
                     defense: 0,
                     power: 0,
+                    movement: crate::tactics::DEFAULT_MOVEMENT,
                 },
             ))
             .id()

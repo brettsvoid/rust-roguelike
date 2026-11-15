@@ -5,20 +5,25 @@ use bevy::{
     prelude::*,
 };
 
+use rand::RngExt;
+
 use crate::{
     bystander::Bystander,
     combat::{CombatStats, WantsToMelee},
-    components::{BlocksTile, BlocksVisibility, Door, HungerClock, HungerState, Item, WantsToPickupItem},
+    components::{BlocksTile, BlocksVisibility, Confusion, Door, HungerClock, HungerState, Item, WantsToPickupItem},
     debug::DebugMode,
     economy::town::Vendor,
     entity_render::{EntityShape, Renderable},
-    game_flow::{Mode, TurnEnded},
+    game_flow::{HeroAction, Mode, TurnEnded},
     gamelog::GameLog,
     map::{tile_walkable, xy_idx, Map, Position, TileType},
+    map_indexing,
     monsters::Monster,
     party::{follow, next_unit, ActiveUnit, PartyMember},
     pathfinding::a_star_explored,
     picking::{self, HoveredTile, TileMarks, FULL_TILE},
+    rng::GameRng,
+    tactics::{confused_step, move_range, Action, MoveRange},
     viewshed::Viewshed,
     RunState,
 };
@@ -45,16 +50,77 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<WalkPath>()
+            .init_resource::<MoveRange>()
             .add_systems(OnEnter(RunState::PreRun), |mut walk: ResMut<WalkPath>| *walk = WalkPath::default())
             .add_systems(
                 Update,
                 (
+                    update_move_range.after(map_indexing::map_indexing_system),
                     handle_player_input
                         .run_if(in_state(RunState::AwaitingInput))
-                        .after(picking::update_hovered_tile),
-                    show_path_preview.after(picking::update_hovered_tile),
+                        .after(picking::update_hovered_tile)
+                        .after(update_move_range),
+                    show_path_preview.after(picking::update_hovered_tile).after(update_move_range),
+                    show_move_range.after(update_move_range),
                 ),
             );
+    }
+}
+
+/// The active hero's move range while the party phase waits for input. Kept
+/// through a party action and the inventory screens, so the overlay does not
+/// flicker; empty otherwise.
+fn update_move_range(
+    mut range: ResMut<MoveRange>,
+    state: Res<State<RunState>>,
+    mode: Res<Mode>,
+    active: Res<ActiveUnit>,
+    map: Res<Map>,
+    party: Query<(Entity, &Position, &CombatStats), With<PartyMember>>,
+) {
+    let combat = matches!(*mode, Mode::Combat { .. });
+    let hero = active.0.and_then(|unit| party.get(unit).ok());
+    let new = match (state.get(), hero) {
+        (RunState::AwaitingInput, Some((unit, pos, stats))) if combat => {
+            let others: Vec<_> = party.iter().filter(|h| h.0 != unit).map(|h| (h.1.x, h.1.y)).collect();
+            let open = |cell: (i32, i32)| map.revealed_tiles[map.xy_idx(cell.0, cell.1)] && !others.contains(&cell);
+            move_range(&map, (pos.x, pos.y), stats.movement, mode.ap_left(unit), open)
+        }
+        (
+            RunState::PartyAction
+            | RunState::ShowInventory
+            | RunState::ShowDropItem
+            | RunState::ShowRemoveItem
+            | RunState::ShowTargeting,
+            _,
+        ) if combat => return,
+        _ => MoveRange::default(),
+    };
+    range.set_if_neq(new);
+}
+
+#[derive(Component)]
+struct RangeMark;
+
+/// The move range as tile marks: the one-AP zone and the two-AP zone in their
+/// own colours, inset so the tile grid shows between them.
+fn show_move_range(
+    mut commands: Commands,
+    range: Res<MoveRange>,
+    map: Res<Map>,
+    marks: Res<TileMarks>,
+    shown: Query<Entity, With<RangeMark>>,
+) {
+    if !range.is_changed() {
+        return;
+    }
+    for mark in &shown {
+        commands.entity(mark).despawn();
+    }
+    let inset = Rect::from_center_half_size(Vec2::ZERO, Vec2::splat(0.45));
+    for (cell, ap) in range.cells() {
+        let material = if ap == 1 { &marks.move_one } else { &marks.move_two };
+        commands.spawn((RangeMark, marks.mark(material, &map, cell, inset, 0.0)));
     }
 }
 
@@ -97,14 +163,18 @@ fn walk_step(from: (i32, i32), path: &VecDeque<(i32, i32)>, hostile_in_view: boo
 #[derive(Component)]
 struct PathPreview;
 
-/// Marks the walk a click on the hovered tile would take. Redrawn only when
-/// the active unit or the hovered tile changes.
+/// Marks the walk a click on the hovered tile would take; in combat, the
+/// path of the move within range. Redrawn only when the active unit, the
+/// hovered tile or the move range changes.
+#[allow(clippy::too_many_arguments)]
 fn show_path_preview(
     mut commands: Commands,
     state: Res<State<RunState>>,
     hovered: Res<HoveredTile>,
     map: Res<Map>,
     marks: Res<TileMarks>,
+    mode: Res<Mode>,
+    range: Res<MoveRange>,
     active: Res<ActiveUnit>,
     party: Query<&Position, With<PartyMember>>,
     previews: Query<Entity, With<PathPreview>>,
@@ -124,7 +194,7 @@ fn show_path_preview(
         // The field of view may reveal the hovered tile after this runs, so
         // redraw when it does or the preview depends on system order.
         .map(|(from, to)| (from, to, map.revealed_tiles[map.xy_idx(to.0, to.1)]));
-    if wanted == *shown {
+    if wanted == *shown && !range.is_changed() {
         return;
     }
     *shown = wanted;
@@ -134,8 +204,13 @@ fn show_path_preview(
     let Some((from, to, _)) = wanted else {
         return;
     };
-    for cell in walk_path(&map, from, to).unwrap_or_default() {
-        commands.spawn((PathPreview, marks.mark(&marks.path, &map, cell, FULL_TILE, 0.0)));
+    let cells = match *mode {
+        Mode::Combat { .. } => range.path(to),
+        Mode::Explore => walk_path(&map, from, to).map(Vec::from).unwrap_or_default(),
+    };
+    for cell in cells {
+        // Just above the move range marks.
+        commands.spawn((PathPreview, marks.mark(&marks.path, &map, cell, FULL_TILE, 0.005)));
     }
 }
 
@@ -245,7 +320,15 @@ pub(crate) fn handle_player_input(
     monsters: Query<&Position, (With<Monster>, Without<PartyMember>, Without<Bystander>)>,
     mut doors: Query<(Entity, &mut Door, &mut Renderable), Without<PartyMember>>,
     mut positions: Query<&mut Position, Or<(With<Bystander>, With<PartyMember>)>>,
-    (debug_mode, mode, mut turn_ended): (Res<DebugMode>, Res<Mode>, ResMut<TurnEnded>),
+    (debug_mode, mode, mut turn_ended, mut hero_action, range, confused, mut rng): (
+        Res<DebugMode>,
+        Res<Mode>,
+        ResMut<TurnEnded>,
+        ResMut<HeroAction>,
+        Res<MoveRange>,
+        Query<(), With<Confusion>>,
+        ResMut<GameRng>,
+    ),
 ) {
     // Don't process player input if debug console is open
     if debug_mode.show_console {
@@ -274,6 +357,7 @@ pub(crate) fn handle_player_input(
     let mut select = None;
 
     let mut player_acted = false;
+    let mut action = None;
     let mut move_result: Option<MoveResult> = None;
 
     for ev in evr_kbd.read() {
@@ -301,12 +385,14 @@ pub(crate) fn handle_player_input(
                     gamelog.entries.push("You rest and recover 1 HP.".to_string());
                 }
                 player_acted = true;
+                action = Some(Action::Wait);
             }
 
             // Pickup
             KeyCode::KeyG => {
                 if get_item(&mut commands, &mut gamelog, player_entity, player_x, player_y, &items) {
                     player_acted = true;
+                    action = Some(Action::UseItem);
                 }
             }
 
@@ -376,8 +462,30 @@ pub(crate) fn handle_player_input(
             if target == (player_x, player_y) {
                 if items.iter().any(|(_, pos)| (pos.x, pos.y) == target) {
                     player_acted = get_item(&mut commands, &mut gamelog, player_entity, player_x, player_y, &items);
+                    action = Some(Action::UseItem);
                 } else if map.tiles[xy_idx(player_x, player_y)] == TileType::DownStairs {
                     next_state.set_if_different(RunState::NextLevel);
+                }
+            } else if matches!(*mode, Mode::Combat { .. }) {
+                // One action: a move within range, or an attack or a door beside the hero.
+                let beside = (target.0 - player_x).abs() <= 1 && (target.1 - player_y).abs() <= 1;
+                if let Some(ap) = range.ap(target) {
+                    let to = if confused.contains(player_entity) {
+                        gamelog.entries.push("You are confused and stumble.".to_string());
+                        let reachable = |cell| range.ap(cell).is_some();
+                        confused_step(&map, (player_x, player_y), reachable, |n| rng.0.random_range(0..n))
+                    } else {
+                        Some(target)
+                    };
+                    if let Some((new_x, new_y)) = to {
+                        move_result = Some(MoveResult::Moved { new_x, new_y });
+                    }
+                    player_acted = true;
+                    action = Some(Action::moving(ap));
+                } else if beside {
+                    step = Some((target.0 - player_x, target.1 - player_y));
+                } else {
+                    gamelog.entries.push("Out of range.".to_string());
                 }
             } else if let Some(path) = walk_path(&map, (player_x, player_y), target) {
                 step = walk_step((player_x, player_y), &path, false);
@@ -410,6 +518,7 @@ pub(crate) fn handle_player_input(
             MoveResult::Attacked { .. } | MoveResult::Blocked => *walk = WalkPath::default(),
         }
         player_acted = !matches!(result, MoveResult::Blocked);
+        action = Some(if matches!(result, MoveResult::Attacked { .. }) { Action::Attack } else { Action::Move });
         move_result = Some(result);
     }
 
@@ -463,6 +572,7 @@ pub(crate) fn handle_player_input(
     }
 
     if player_acted {
+        hero_action.0 = action;
         next_state.set_if_different(RunState::PartyAction);
     }
 }

@@ -14,6 +14,9 @@ pub struct Mob {
     /// Gold carried, rolled in this inclusive range at spawn, dropped on death.
     #[serde(default)]
     pub gold: Option<(i32, i32)>,
+    /// Melee hits poison: `[damage per turn, turns]`.
+    #[serde(default)]
+    pub poison: Option<(i32, i32)>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -22,4 +25,7 @@ pub struct MobStats {
     pub hp: i32,
     pub power: i32,
     pub defense: i32,
+    /// Tiles per action point; `tactics::DEFAULT_MOVEMENT` when missing.
+    #[serde(default)]
+    pub movement: Option<i32>,
 }

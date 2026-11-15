@@ -146,7 +146,7 @@ fn setup_hud(mut commands: Commands, font: Res<UiFont>) {
 }
 
 /// Each row shows its hero's hit points and hunger in the hero's colour; a
-/// `>` marks the active unit, and in combat "done" a hero who has acted this
+/// `>` marks the active unit, and in combat the action points it has left this
 /// round. A fallen hero's row is blank.
 fn update_party_rows(
     active: Res<ActiveUnit>,
@@ -160,9 +160,12 @@ fn update_party_rows(
             continue;
         };
         let marker = if active.0 == Some(entity) { '>' } else { ' ' };
-        let done = if mode.can_act(entity) { "    " } else { "done" };
+        let ap = match *mode {
+            Mode::Combat { .. } => format!("AP {}", mode.ap_left(entity)),
+            Mode::Explore => String::new(),
+        };
         **text = format!(
-            "{marker} {:<7} HP {:>2}/{:<2} {done} {}",
+            "{marker} {:<7} HP {:>2}/{:<2} {ap:<4} {}",
             name.name,
             stats.hp,
             stats.max_hp,

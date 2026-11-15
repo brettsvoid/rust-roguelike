@@ -10,13 +10,14 @@ use crate::models::Model;
 use crate::components::{
     AreaOfEffect, BlocksTile, BlocksVisibility, CausesConfusion, Consumable, DefenseBonus,
     Door, EntryTrigger, EquipmentSlot, Equippable, Hidden, InflictsDamage, Item, MagicMapper,
-    MeleePowerBonus, Name, ProvidesFood, ProvidesHealing, Ranged, RenderableBundle,
-    SingleActivation, Targeting,
+    MeleePowerBonus, Name, Poison, PoisonsOnHit, ProvidesFood, ProvidesHealing, Ranged,
+    RenderableBundle, SingleActivation, Targeting,
 };
 use crate::lighting::LightSource;
 use crate::map::Position;
 use crate::monsters::Monster;
 use crate::rng::RandomTable;
+use crate::tactics::DEFAULT_MOVEMENT;
 use crate::viewshed::Viewshed;
 
 use super::Raws;
@@ -266,6 +267,7 @@ pub fn spawn_named_mob(
             hp: mob_template.stats.hp,
             defense: mob_template.stats.defense,
             power: mob_template.stats.power,
+            movement: mob_template.stats.movement.unwrap_or(DEFAULT_MOVEMENT),
         },
         Viewshed {
             range: mob_template.vision_range,
@@ -286,6 +288,10 @@ pub fn spawn_named_mob(
 
     if mob_template.blocks_tile {
         entity.insert(BlocksTile);
+    }
+
+    if let Some((damage, turns)) = mob_template.poison {
+        entity.insert(PoisonsOnHit(Poison { damage, turns }));
     }
 
     if let Some(range) = mob_template.gold {

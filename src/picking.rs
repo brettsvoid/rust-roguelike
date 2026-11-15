@@ -116,6 +116,9 @@ pub struct TileMarks {
     pub area: Handle<StandardMaterial>,
     pub range: Handle<StandardMaterial>,
     pub path: Handle<StandardMaterial>,
+    /// The combat move range: tiles one AP away, and those only a dash reaches.
+    pub move_one: Handle<StandardMaterial>,
+    pub move_two: Handle<StandardMaterial>,
 }
 
 impl TileMarks {
@@ -169,6 +172,8 @@ fn setup_tile_marks(
         area: translucent(&mut materials, Color::srgba(1.0, 0.5, 0.0, 0.4)),
         range: translucent(&mut materials, Color::srgba(0.7, 0.7, 0.7, 0.7)),
         path: translucent(&mut materials, Color::srgba(1.0, 0.85, 0.3, 0.35)),
+        move_one: translucent(&mut materials, Color::srgba(0.2, 0.55, 1.0, 0.4)),
+        move_two: translucent(&mut materials, Color::srgba(0.1, 1.0, 0.45, 0.25)),
     };
     commands.spawn((
         HoverHighlight,

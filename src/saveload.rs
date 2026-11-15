@@ -22,6 +22,7 @@ use crate::map_render::{spawn_map_tiles, TileReveal};
 use crate::monsters::Monster;
 use crate::party::{ActiveUnit, PartyMember};
 use crate::resources::UiFont;
+use crate::tactics::DEFAULT_MOVEMENT;
 use crate::viewshed::Viewshed;
 
 #[cfg(all(not(target_arch = "wasm32"), not(test)))]
@@ -174,6 +175,8 @@ pub struct SerializedMember {
     pub hp: i32,
     pub defense: i32,
     pub power: i32,
+    #[serde(default = "default_movement")]
+    pub movement: i32,
     pub viewshed_range: i32,
     #[serde(default)]
     pub hunger_state: HungerState,
@@ -183,6 +186,10 @@ pub struct SerializedMember {
 
 fn default_hunger_duration() -> i32 {
     20
+}
+
+fn default_movement() -> i32 {
+    DEFAULT_MOVEMENT
 }
 
 #[derive(Serialize, Deserialize)]
@@ -195,6 +202,8 @@ pub struct SerializedMonster {
     pub hp: i32,
     pub defense: i32,
     pub power: i32,
+    #[serde(default = "default_movement")]
+    pub movement: i32,
     pub viewshed_range: i32,
     pub confusion_turns: Option<i32>,
     #[serde(default)]
@@ -279,6 +288,7 @@ pub fn save_game(
             hp: stats.hp,
             defense: stats.defense,
             power: stats.power,
+            movement: stats.movement,
             viewshed_range: viewshed.range,
             hunger_state: hunger.state,
             hunger_duration: hunger.duration,
@@ -305,6 +315,7 @@ pub fn save_game(
                 hp: stats.hp,
                 defense: stats.defense,
                 power: stats.power,
+                movement: stats.movement,
                 viewshed_range: viewshed.range,
                 confusion_turns: confusion.map(|c| c.turns),
                 gold: gold.map(|g| g.amount),
@@ -544,6 +555,7 @@ fn restore_game(
                     hp: member.hp,
                     defense: member.defense,
                     power: member.power,
+                    movement: member.movement,
                 },
                 Viewshed {
                     range: member.viewshed_range,
@@ -581,6 +593,7 @@ fn restore_game(
                 hp: monster.hp,
                 defense: monster.defense,
                 power: monster.power,
+                movement: monster.movement,
             },
             Viewshed {
                 range: monster.viewshed_range,
@@ -743,6 +756,7 @@ mod tests {
             hp: 30 - slot as i32,
             defense: 2,
             power: 5,
+            movement: DEFAULT_MOVEMENT,
             viewshed_range: 8,
             hunger_state: HungerState::Normal,
             hunger_duration: 20,
@@ -770,6 +784,7 @@ mod tests {
                 hp: 16,
                 defense: 1,
                 power: 4,
+                movement: DEFAULT_MOVEMENT,
                 viewshed_range: 8,
                 confusion_turns: None,
                 gold: Some(6),

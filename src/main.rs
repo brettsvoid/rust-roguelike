@@ -41,6 +41,7 @@ mod rng;
 mod saveload;
 mod shapes;
 mod spawner;
+mod tactics;
 mod traps;
 mod ui;
 mod viewshed;
