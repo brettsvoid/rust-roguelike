@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use serde::Deserialize;
 
+use crate::economy::town::Sector;
+
 #[derive(Deserialize, Debug, Clone)]
 pub struct Item {
     pub name: String,
@@ -11,6 +13,11 @@ pub struct Item {
     /// Quality band, starting at 1. Gates vendor stock and depth of loot.
     #[allow(dead_code)] // first read by tiered stock (E05)
     pub tier: i32,
+    /// The town sector whose stock this item joins when sold. Only gold has
+    /// none.
+    #[serde(default)]
+    #[allow(dead_code)] // first read by vendors (E02)
+    pub sector: Option<Sector>,
     /// A gold pile: rolls an amount in this inclusive range when spawned.
     #[serde(default)]
     pub gold: Option<(i32, i32)>,

@@ -46,6 +46,32 @@ mod tests {
     }
 
     #[test]
+    fn every_item_but_gold_belongs_to_a_sector() {
+        use crate::economy::town::Sector::*;
+        let sectors: Vec<_> = shipped_raws()
+            .items
+            .into_iter()
+            .map(|i| (i.name, i.sector))
+            .collect();
+        let expected = [
+            ("Gold", None),
+            ("Health Potion", Some(Alchemy)),
+            ("Rations", Some(Provisions)),
+            ("Magic Missile Scroll", Some(Arcana)),
+            ("Fireball Scroll", Some(Arcana)),
+            ("Confusion Scroll", Some(Arcana)),
+            ("Scroll of Magic Mapping", Some(Arcana)),
+            ("Dagger", Some(Smithing)),
+            ("Longsword", Some(Smithing)),
+            ("Battleaxe", Some(Smithing)),
+            ("Shield", Some(Smithing)),
+            ("Tower Shield", Some(Smithing)),
+        ]
+        .map(|(n, s)| (n.to_string(), s));
+        assert_eq!(sectors, expected);
+    }
+
+    #[test]
     fn gold_is_an_item_monsters_carry_and_the_spawn_table_rolls() {
         let raws = shipped_raws();
         let gold = raws.items.iter().find(|i| i.name == "Gold").unwrap();

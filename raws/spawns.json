@@ -16,6 +16,7 @@
       "name": "Health Potion",
       "base_value": 25,
       "tier": 1,
+      "sector": "alchemy",
       "renderable": {
         "glyph": "!",
         "fg": "#FF00FF",
@@ -30,6 +31,7 @@
       "name": "Rations",
       "base_value": 5,
       "tier": 1,
+      "sector": "provisions",
       "renderable": {
         "glyph": "%",
         "fg": "#00FF00",
@@ -44,6 +46,7 @@
       "name": "Magic Missile Scroll",
       "base_value": 40,
       "tier": 1,
+      "sector": "arcana",
       "renderable": {
         "glyph": ")",
         "fg": "#00FFFF",
@@ -62,6 +65,7 @@
       "name": "Fireball Scroll",
       "base_value": 75,
       "tier": 1,
+      "sector": "arcana",
       "renderable": {
         "glyph": ")",
         "fg": "#FFA500",
@@ -80,6 +84,7 @@
       "name": "Confusion Scroll",
       "base_value": 40,
       "tier": 1,
+      "sector": "arcana",
       "renderable": {
         "glyph": ")",
         "fg": "#FFC0CB",
@@ -98,6 +103,7 @@
       "name": "Scroll of Magic Mapping",
       "base_value": 50,
       "tier": 1,
+      "sector": "arcana",
       "renderable": {
         "glyph": ")",
         "fg": "#6495ED",
@@ -112,6 +118,7 @@
       "name": "Dagger",
       "base_value": 15,
       "tier": 1,
+      "sector": "smithing",
       "renderable": {
         "glyph": "/",
         "fg": "#00FFFF",
@@ -127,6 +134,7 @@
       "name": "Longsword",
       "base_value": 60,
       "tier": 1,
+      "sector": "smithing",
       "renderable": {
         "glyph": "/",
         "fg": "#FFFF00",
@@ -142,6 +150,7 @@
       "name": "Battleaxe",
       "base_value": 90,
       "tier": 1,
+      "sector": "smithing",
       "renderable": {
         "glyph": "¶",
         "fg": "#FF5500",
@@ -157,6 +166,7 @@
       "name": "Shield",
       "base_value": 20,
       "tier": 1,
+      "sector": "smithing",
       "renderable": {
         "glyph": "(",
         "fg": "#00FFFF",
@@ -171,6 +181,7 @@
       "name": "Tower Shield",
       "base_value": 70,
       "tier": 1,
+      "sector": "smithing",
       "renderable": {
         "glyph": "(",
         "fg": "#FFFF00",
