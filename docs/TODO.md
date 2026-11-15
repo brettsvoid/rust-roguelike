@@ -150,7 +150,7 @@ Settled questions (owner, 15 November 2026):
   `CLAUDE.md` controls text is updated.
 
 ### F06 Wall occlusion
-- Status: in progress
+- Status: done
 - Needs: F03
 - In an isometric view, walls nearer the camera hide the floor behind them.
   Walls that would occlude a visible floor tile or a party member are drawn
