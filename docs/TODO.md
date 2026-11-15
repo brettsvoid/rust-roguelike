@@ -322,7 +322,7 @@ and adds the `model` names to `raws/spawns.json`.
   matches where a unit can go.
 
 ### C04 Hit chance, ranged attacks and criticals
-- Status: in progress
+- Status: done
 - Needs: C03
 - Replace the deterministic melee in `combat.rs`. A pure `hit_chance`
   function from attacker aim, target defence, range, cover and height.
@@ -332,7 +332,7 @@ and adds the `model` names to `raws/spawns.json`.
   cases, and bows and spells work on the same rules.
 
 ### C05 Cover and flanking
-- Status: todo
+- Status: in progress
 - Needs: C04
 - Walls and tall props give full cover, low props half cover, per direction.
   Props get a `cover` value in the raws. A flanked target gets no cover and
