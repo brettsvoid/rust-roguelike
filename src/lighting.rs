@@ -3,7 +3,8 @@
 //!
 //! Anything with a `LightSource` (props with a raws `light` entry, and the
 //! hero's torch) gets a child `PointLight` and, unless it is a hero, a
-//! small glowing flame that blooms. Lights flicker on `Time`, which the
+//! small glowing teardrop flame that blooms and licks up and down with the
+//! light's flicker. Lights flicker on `Time`, which the
 //! screenshot harness steps by a fixed amount per frame, so screenshots stay
 //! byte-identical. Only the `MAX_SHADOW_LIGHTS` lights nearest the active hero
 //! cast shadows. `apply_environment` sets the ambient light, fog and sun for
@@ -131,13 +132,11 @@ fn attach_lights(
         if is_hero {
             continue;
         }
-        let mesh = flame_mesh
-            .get_or_insert_with(|| meshes.add(Sphere::new(0.07).mesh().ico(1).unwrap()))
-            .clone();
+        let mesh = flame_mesh.get_or_insert_with(|| meshes.add(flame())).clone();
         let material = materials.add(StandardMaterial {
             base_color: source.colour,
             // Far above 1.0 in HDR, so the bloom pass makes it glow.
-            emissive: source.colour.to_linear() * 400.0,
+            emissive: source.colour.to_linear() * 60.0,
             ..default()
         });
         parent.with_child((
@@ -146,21 +145,46 @@ fn attach_lights(
             Transform::from_translation(local),
             // The flame sits on its own light; casting would black out the light.
             NotShadowCaster,
+            Flicker {
+                base: 1.0,
+                amount: source.flicker,
+                phase,
+            },
         ));
     }
 }
 
-fn flicker_lights(time: Res<Time>, mut lights: Query<(&mut PointLight, &Flicker)>) {
+/// A teardrop: a round base with a cone drawn up to a point.
+fn flame() -> Mesh {
+    let mut flame = Sphere::new(0.09).mesh().ico(2).unwrap();
+    let tip = Cone::new(0.09, 0.3).mesh().resolution(8).build();
+    flame.merge(&tip.translated_by(Vec3::Y * 0.15)).expect("sphere and cone share attributes");
+    flame
+}
+
+/// Flickers each light's intensity and stretches its flame on the same wave.
+fn flicker_lights(
+    time: Res<Time>,
+    mut lights: Query<(&mut PointLight, &Flicker)>,
+    mut flames: Query<(&mut Transform, &Flicker), Without<PointLight>>,
+) {
     let t = time.elapsed_secs();
+    // Three detuned sines read as an uneven flame rather than a pulse.
+    let wave = |f: &Flicker| {
+        0.5 * (t * 7.0 + f.phase).sin() + 0.3 * (t * 13.0 + f.phase * 2.3).sin() + 0.2 * (t * 23.0 + f.phase * 4.1).sin()
+    };
     for (mut light, f) in &mut lights {
         if f.amount == 0.0 {
             continue;
         }
-        // Three detuned sines read as an uneven flame rather than a pulse.
-        let wave = 0.5 * (t * 7.0 + f.phase).sin()
-            + 0.3 * (t * 13.0 + f.phase * 2.3).sin()
-            + 0.2 * (t * 23.0 + f.phase * 4.1).sin();
-        light.intensity = f.base * (1.0 - f.amount * (0.5 + 0.5 * wave));
+        light.intensity = f.base * (1.0 - f.amount * (0.5 + 0.5 * wave(f)));
+    }
+    for (mut transform, f) in &mut flames {
+        if f.amount == 0.0 {
+            continue;
+        }
+        let w = wave(f);
+        transform.scale = Vec3::new(1.0 - 0.1 * w, 1.0 + 0.3 * w, 1.0 - 0.1 * w);
     }
 }
 

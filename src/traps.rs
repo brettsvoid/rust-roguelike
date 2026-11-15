@@ -6,7 +6,7 @@ use crate::{
     components::{EntryTrigger, Hidden, InflictsDamage, Name, SingleActivation},
     gamelog::GameLog,
     map::{Map, Position},
-    particle::ParticleBuilder,
+    effects::{EffectKind, Effects},
     party::PartyMember,
     rng::GameRng,
     viewshed::Viewshed,
@@ -15,7 +15,7 @@ use crate::{
 pub fn trap_trigger_system(
     mut commands: Commands,
     mut gamelog: ResMut<GameLog>,
-    mut particle_builder: ResMut<ParticleBuilder>,
+    mut effects: ResMut<Effects>,
     map: Res<Map>,
     moved_query: Query<(Entity, &Position, &Name), Changed<Position>>,
     just_spawned: Query<Entity, Added<Position>>,
@@ -43,14 +43,7 @@ pub fn trap_trigger_system(
                     victim_name.name, trap_name.name, damage.damage
                 ));
 
-                // Spawn particle
-                particle_builder.request(
-                    trap_pos.x,
-                    trap_pos.y,
-                    "‼",
-                    Color::srgb(1.0, 0.5, 0.0),
-                    200.0,
-                );
+                effects.play(EffectKind::HitSpark, trap_pos.x, trap_pos.y);
 
                 // Remove Hidden component (now visible)
                 commands.entity(trap_ent).remove::<Hidden>();

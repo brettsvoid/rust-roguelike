@@ -5,7 +5,7 @@ use crate::{
     components::{Confusion, Name},
     gamelog::GameLog,
     map::{Map, Position, TileType, MAP_HEIGHT, MAP_WIDTH},
-    particle::ParticleBuilder,
+    effects::{EffectKind, Effects},
     pathfinding,
     party::PartyMember,
     viewshed::Viewshed,
@@ -59,7 +59,7 @@ pub fn monster_ai(
     mut commands: Commands,
     mut map: ResMut<Map>,
     mut gamelog: ResMut<GameLog>,
-    mut particle_builder: ResMut<ParticleBuilder>,
+    mut effects: ResMut<Effects>,
     mut monster_query: Query<
         (Entity, &mut Position, &mut Viewshed, &Name, &CombatStats, Option<&mut Confusion>),
         (With<Monster>, Without<PartyMember>),
@@ -84,14 +84,7 @@ pub fn monster_ai(
             } else {
                 gamelog.entries.push(format!("{} is confused and stumbles around.", name.name));
 
-                // Spawn confusion particle
-                particle_builder.request(
-                    pos.x,
-                    pos.y,
-                    "?",
-                    Color::srgb(1.0, 0.0, 1.0), // Magenta
-                    200.0,
-                );
+                effects.play(EffectKind::Confusion, pos.x, pos.y);
             }
             continue; // Skip normal AI while confused
         }

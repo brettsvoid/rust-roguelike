@@ -14,6 +14,7 @@ mod components;
 mod debug;
 mod distance;
 mod economy;
+mod effects;
 mod entity_render;
 mod game_flow;
 mod gamelog;
@@ -30,7 +31,6 @@ mod mapgen_viz;
 mod models;
 mod monsters;
 mod occlusion;
-mod particle;
 mod party;
 mod pathfinding;
 mod picking;
@@ -85,7 +85,6 @@ fn main() {
         .init_resource::<gamelog::GameLog>()
         .init_resource::<economy::Purse>()
         .init_resource::<rng::GameRng>()
-        .init_resource::<particle::ParticleBuilder>()
         // Core game plugins
         .add_plugins((
             resources::ResourcesPlugin,
@@ -102,6 +101,7 @@ fn main() {
             occlusion::OcclusionPlugin,
             economy::town::TownPlugin,
             lighting::LightingPlugin,
+            effects::EffectsPlugin,
         ))
         // UI plugins
         .add_plugins((
@@ -122,8 +122,6 @@ fn main() {
             Update,
             (
                 map_indexing::map_indexing_system,
-                particle::particle_spawn_system,
-                particle::particle_cull_system,
                 traps::reveal_hidden_system,
             )
                 .run_if(not(in_state(RunState::MapGeneration))),

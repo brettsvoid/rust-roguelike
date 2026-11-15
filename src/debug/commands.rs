@@ -3,7 +3,8 @@ use bevy::prelude::*;
 use crate::combat::CombatStats;
 use crate::economy::town::{Sector, TownState};
 use crate::economy::trade;
-use crate::map::{Position, MAP_HEIGHT, MAP_WIDTH};
+use crate::effects::{EffectKind, Effects};
+use crate::map::{Map, Position, MAP_HEIGHT, MAP_WIDTH};
 use crate::monsters::Monster;
 use crate::party::PartyMember;
 
@@ -32,6 +33,7 @@ pub fn execute_command(
         Some("kill_all") => cmd_kill_all(commands, monster_query),
         Some("teleport") => cmd_teleport(&parts, party, active),
         Some("spawn") => cmd_spawn(&parts, commands, party, active),
+        Some("effect") => cmd_effect(&parts, commands, party, active),
         Some("town") => cmd_town(&parts, town),
         Some(cmd) => format!("Unknown command: {}", cmd),
         None => String::new(),
@@ -39,7 +41,7 @@ pub fn execute_command(
 }
 
 fn cmd_help() -> String {
-    "Commands: spawn <item>, teleport <x> <y>, godmode, reveal, nofog, heal, kill_all, town sell <sector> <value>, town days <n>, town level <sector> <n>".to_string()
+    "Commands: spawn <item>, effect <spark|fireball|missile|heal|confusion|blood>, teleport <x> <y>, godmode, reveal, nofog, heal, kill_all, town sell <sector> <value>, town days <n>, town level <sector> <n>".to_string()
 }
 
 fn cmd_godmode(god_mode: &mut GodMode) -> String {
@@ -183,4 +185,38 @@ fn cmd_spawn(
         }
         None => format!("Unknown item: {}", item_name),
     }
+}
+
+/// Plays an effect on the player's tile; the missile flies in from five tiles
+/// east. `blood` stains the player's tile and the two east of it instead.
+fn cmd_effect(
+    parts: &[&str],
+    commands: &mut Commands,
+    party: &mut Query<(Entity, &mut Position, &mut CombatStats), With<PartyMember>>,
+    active: Option<Entity>,
+) -> String {
+    let Some((_, pos, _)) = active.and_then(|unit| party.get(unit).ok()) else {
+        return "No active unit".to_string();
+    };
+    let (x, y) = (pos.x, pos.y);
+    let kind = match parts.get(1).copied() {
+        Some("spark") => EffectKind::HitSpark,
+        Some("fireball") => EffectKind::Fireball { radius: 3.0 },
+        Some("missile") => EffectKind::MagicMissile { from: (x + 5, y) },
+        Some("heal") => EffectKind::Healing,
+        Some("confusion") => EffectKind::Confusion,
+        Some("blood") => {
+            commands.queue(move |world: &mut World| {
+                let mut map = world.resource_mut::<Map>();
+                for dx in 0..3 {
+                    let idx = map.xy_idx(x + dx, y);
+                    map.bloodstains.insert(idx);
+                }
+            });
+            return format!("Bloodied ({x}, {y}) and two tiles east");
+        }
+        _ => return "Usage: effect <spark|fireball|missile|heal|confusion|blood>".to_string(),
+    };
+    commands.queue(move |world: &mut World| world.resource_mut::<Effects>().play(kind, x, y));
+    format!("Playing {kind:?} at ({x}, {y})")
 }

@@ -1,5 +1,5 @@
 //! Grey-box 3D bodies for everything that stands on the map: creatures,
-//! items, props, particles and bloodstains.
+//! items, props and bloodstains.
 //!
 //! Spawn an entity with an `EntityShape`, a `Renderable` and a `Position`;
 //! `attach_entity_mesh` dresses it in a shared mesh and material and
@@ -21,7 +21,6 @@ pub enum EntityShape {
     Prop,
     Door,
     OpenDoor,
-    Particle,
     Stain,
 }
 
@@ -33,8 +32,7 @@ impl EntityShape {
             EntityShape::Prop => Cuboid::from_length(0.6).into(),
             EntityShape::Door => Cuboid::new(0.9, 1.8, 0.9).into(),
             EntityShape::OpenDoor => Cuboid::new(0.9, 0.05, 0.9).into(),
-            EntityShape::Particle => Cuboid::from_length(0.25).into(),
-            EntityShape::Stain => Plane3d::default().mesh().size(0.8, 0.8).into(),
+            EntityShape::Stain => blood_splat(),
         }
     }
 
@@ -46,11 +44,22 @@ impl EntityShape {
             EntityShape::Prop => 0.3,
             EntityShape::Door => 0.9,
             EntityShape::OpenDoor => 0.025,
-            EntityShape::Particle => 1.7,
             // Just clear of the floor quad so the two never fight over depth.
             EntityShape::Stain => 0.01,
         }
     }
+}
+
+/// A flat blood decal: a pool with droplets flung round it, lying on the floor.
+fn blood_splat() -> Mesh {
+    let flat = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+    let mut splat = Circle::new(0.24).mesh().resolution(10).build().rotated_by(flat);
+    for (x, z, r) in [(0.2, 0.08, 0.12), (-0.12, 0.18, 0.09), (-0.2, -0.14, 0.07), (0.08, -0.26, 0.05), (0.33, -0.12, 0.04)] {
+        let drop = Circle::new(r).mesh().resolution(8).build();
+        let drop = drop.transformed_by(Transform::from_xyz(x, 0.0, z).with_rotation(flat));
+        splat.merge(&drop).expect("circle meshes share attributes");
+    }
+    splat
 }
 
 /// The glyph and colour from the raws. The colour tints the 3D body; the
@@ -66,8 +75,8 @@ pub struct Renderable {
 #[derive(Resource, Default)]
 pub struct EntityAssets {
     meshes: HashMap<EntityShape, Handle<Mesh>>,
-    /// Keyed by sRGBA bytes and whether the material is unlit (particles glow).
-    materials: HashMap<([u8; 4], bool), Handle<StandardMaterial>>,
+    /// Keyed by sRGBA bytes.
+    materials: HashMap<[u8; 4], Handle<StandardMaterial>>,
 }
 
 pub fn entity_transform(shape: EntityShape, pos: Position) -> Transform {
@@ -116,7 +125,6 @@ pub fn attach_entity_mesh(
             .with_child((ModelScene, scene, Transform::from_xyz(0.0, -shape.lift(), 0.0)));
         return;
     }
-    let unlit = shape == EntityShape::Particle;
     let mesh = assets
         .meshes
         .entry(shape)
@@ -124,12 +132,11 @@ pub fn attach_entity_mesh(
         .clone();
     let material = assets
         .materials
-        .entry((renderable.fg.to_srgba().to_u8_array(), unlit))
+        .entry(renderable.fg.to_srgba().to_u8_array())
         .or_insert_with(|| {
             materials.add(StandardMaterial {
                 base_color: renderable.fg,
                 perceptual_roughness: 1.0,
-                unlit,
                 ..default()
             })
         })

@@ -33,6 +33,9 @@ cargo run -- --screenshot fog.png --seed 42 --depth 3 --click 45,20 --frames 120
 # Select the third hero (Tab twice) and walk them; at seed 42 depth 3 the party
 # stands on (40,21) (41,21) (39,21) (40,22):
 cargo run -- --screenshot tab.png --seed 42 --depth 3 --keys nn --click 43,25 --frames 150
+# Play an effect on the active hero's tile (spark, fireball, missile, heal, confusion; blood
+# stains the active hero's tile and two east). It starts about frame 3, so frame 12 is ~0.15 s in:
+cargo run -- --screenshot fx.png --depth 3 --console "effect missile" --frames 12
 ```
 
 Verify every visible change with a harness screenshot that you look at.
@@ -92,6 +95,7 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
 - **GuiPlugin** (`gui.rs`) - Main menu and builder-select menu (other UI lives in `ui/`)
 - **LightingPlugin** (`lighting.rs`) - `LightSource` point lights, flicker, the shadow caster cap,
   and the per-depth ambient light, fog, bloom and town sun (see Lighting)
+- **EffectsPlugin** (`effects.rs`) - Combat and spell effects (see Effects)
 
 Non-plugin modules worth knowing:
 
@@ -100,7 +104,8 @@ Non-plugin modules worth knowing:
   (looks in `tile_style`, shared meshes and a bright and a dim material per `TileType` in the
   `TileAssets` resource) and `Text2d` glyphs for the visualiser (`TileReveal::Preview`, looks in
   `tile_glyph`)
-- `entity_render.rs` - 3D bodies for creatures, items, props, particles and bloodstains. An entity
+- `entity_render.rs` - 3D bodies for creatures, items, props and bloodstains (a flat splat mesh,
+  turned per tile). An entity
   with `EntityShape` + `Renderable` (raws glyph and colour) gets a shared mesh per shape and a
   shared material per colour from `EntityAssets` via the `attach_entity_mesh` observer. Spawn
   map entities with `RenderableBundle`; re-inserting `EntityShape` re-dresses (doors opening)
@@ -198,7 +203,7 @@ of the same logic. The build should stay at zero warnings.
 - Tile overlays (hover, path preview, targeting range, area, target) are `TileMarks::mark` quads
   just above the floor, never 2D sprites
 - `translate_positions` moves a 3D entity (`EntityShape`) to `grid_to_world` plus its shape's lift
-  whenever its `Position` changes. Tiles are placed once at spawn. Particles and bloodstains have
+  whenever its `Position` changes. Tiles are placed once at spawn. Effects and bloodstains have
   no `Position` (they are not on the tile for gameplay) and get their transform at spawn
 - 2D: `translate_glyphs` places the visualiser's `Text2d` tiles in screen pixels
 
@@ -221,7 +226,8 @@ of the same logic. The build should stay at zero warnings.
   Props get one from the raws `light` entry (Candle, Lamp Post, Wall Torch); every hero gets
   `PLAYER_TORCH` from an observer on `PartyMember`
 - `attach_lights` gives each `LightSource` a child `PointLight` (always visible, so light spills
-  past the fog of war) and, except for heroes, an emissive flame mesh that blooms. A light on
+  past the fog of war) and, except for heroes, an emissive teardrop flame that blooms and
+  stretches on the same flicker wave. A light on
   a wall tile hangs just off the wall face on the open side. Intensity scales with radius squared
 - Flicker runs on `Time`. The harness sets `TimeUpdateStrategy::ManualDuration` (1/60 s per frame),
   so screenshots stay byte-identical. Don't drive visuals from wall-clock time any other way.
@@ -234,6 +240,18 @@ of the same logic. The build should stay at zero warnings.
   the default TonyMcMapface tonemapping and linear distance fog that darkens the far side of view
 - `WallTorches` (`map_builders/wall_torches.rs`) is appended to every dungeon chain in
   `level_builder`; it hangs torches on one-sided walls, spaced apart
+
+### Effects
+
+- Gameplay asks for one with `ResMut<Effects>` and `effects.play(EffectKind, x, y)` at the target
+  tile: `HitSpark` (melee and trap hits), `Fireball { radius }`, `MagicMissile { from }` (a bolt
+  from the caster's tile), `Healing`, `Confusion`
+- `EffectKind::style` is the one table of how each kind looks: mesh, HDR colour, lifetime, piece
+  count, `Motion` and an optional point light. `piece_transform` places every piece as a pure
+  function of progress (0 to 1) and `envelope` sets the brightness, so new kinds are a table row
+- Pieces share one unlit additive material per effect, whose alpha fades it; colours above 1
+  bloom. Effects age on `Time` (fixed per frame in the harness) and despawn at the end of life
+- Effects have no `Position`, so they show through the fog of war like their light
 
 ### Key Resources
 

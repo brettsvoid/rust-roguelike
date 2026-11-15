@@ -5,7 +5,7 @@ use crate::debug::GodMode;
 use crate::gamelog::GameLog;
 use crate::economy::Gold;
 use crate::map::{Map, Position};
-use crate::particle::ParticleBuilder;
+use crate::effects::{EffectKind, Effects};
 use crate::party::{next_unit, ActiveUnit, PartyMember};
 use crate::raws::{spawn_named_item, RAWS};
 use crate::saveload;
@@ -40,7 +40,7 @@ impl SufferDamage {
 pub fn melee_combat_system(
     mut commands: Commands,
     mut log: ResMut<GameLog>,
-    mut particle_builder: ResMut<ParticleBuilder>,
+    mut effects: ResMut<Effects>,
     query: Query<(Entity, &WantsToMelee, &Name, &CombatStats)>,
     targets: Query<(&Name, &CombatStats, &Position)>,
     melee_bonus_query: Query<(&Equipped, &MeleePowerBonus)>,
@@ -97,14 +97,7 @@ pub fn melee_combat_system(
                 ));
                 SufferDamage::new_damage(&mut commands, wants_melee.target, damage);
 
-                // Spawn hit particle
-                particle_builder.request(
-                    target_pos.x,
-                    target_pos.y,
-                    "!",
-                    Color::srgb(1.0, 0.5, 0.0), // Orange
-                    200.0,
-                );
+                effects.play(EffectKind::HitSpark, target_pos.x, target_pos.y);
             }
         }
 

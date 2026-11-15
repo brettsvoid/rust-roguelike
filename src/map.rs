@@ -583,7 +583,8 @@ fn update_bloodstains(
             };
             commands.spawn((
                 BloodstainMarker,
-                entity_transform(EntityShape::Stain, pos),
+                // Turned per tile, so neighbouring splats don't match.
+                entity_transform(EntityShape::Stain, pos).with_rotation(Quat::from_rotation_y(idx as f32 * 2.4)),
                 EntityShape::Stain,
                 Renderable {
                     glyph: String::new(),

@@ -11,7 +11,7 @@ use crate::{
     economy::{Gold, Purse},
     gamelog::GameLog,
     map::Position,
-    particle::ParticleBuilder,
+    effects::{EffectKind, Effects},
     PendingMagicMap,
 };
 
@@ -58,7 +58,7 @@ pub fn item_collection_system(
 pub fn item_use_system(
     mut commands: Commands,
     mut gamelog: ResMut<GameLog>,
-    mut particle_builder: ResMut<ParticleBuilder>,
+    mut effects: ResMut<Effects>,
     mut pending_magic_map: ResMut<PendingMagicMap>,
     use_query: Query<(Entity, &WantsToUseItem, &Position)>,
     consumable_query: Query<&Consumable>,
@@ -115,14 +115,7 @@ pub fn item_use_system(
                     item_name.name, healing.heal_amount
                 ));
 
-                // Spawn healing particle
-                particle_builder.request(
-                    user_pos.x,
-                    user_pos.y,
-                    "♥",
-                    Color::srgb(0.0, 1.0, 0.0), // Green
-                    200.0,
-                );
+                effects.play(EffectKind::Healing, user_pos.x, user_pos.y);
             }
         }
 
@@ -149,23 +142,8 @@ pub fn item_use_system(
             if let Ok((inflicts, item_name)) = damage_query.get(wants_use.item) {
                 // Check if this is an AoE item
                 if let Ok(aoe) = aoe_query.get(wants_use.item) {
-                    // Spawn AOE particles for the blast zone
-                    let radius = aoe.radius;
-                    for dx in -radius..=radius {
-                        for dy in -radius..=radius {
-                            let distance = DistanceAlg::Euclidean
-                                .distance2d(Vec2::ZERO, Vec2::new(dx as f32, dy as f32));
-                            if distance <= aoe.radius as f32 {
-                                particle_builder.request(
-                                    target_x + dx,
-                                    target_y + dy,
-                                    "░",
-                                    Color::srgb(1.0, 0.5, 0.0), // Orange
-                                    200.0,
-                                );
-                            }
-                        }
-                    }
+                    let radius = aoe.radius as f32;
+                    effects.play(EffectKind::Fireball { radius }, target_x, target_y);
 
                     // Find all entities within the AoE radius
                     let mut hit_count = 0;
@@ -198,14 +176,8 @@ pub fn item_use_system(
                                 item_name.name, target_name.name, inflicts.damage
                             ));
 
-                            // Spawn damage particle
-                            particle_builder.request(
-                                pos.x,
-                                pos.y,
-                                "‼",
-                                Color::srgb(1.0, 0.0, 0.0), // Red
-                                200.0,
-                            );
+                            let from = (user_pos.x, user_pos.y);
+                            effects.play(EffectKind::MagicMissile { from }, pos.x, pos.y);
                             break;
                         }
                     }
@@ -225,14 +197,7 @@ pub fn item_use_system(
                             item_name.name, target_name.name, causes_confusion.turns
                         ));
 
-                        // Spawn confusion particle
-                        particle_builder.request(
-                            pos.x,
-                            pos.y,
-                            "?",
-                            Color::srgb(1.0, 0.0, 1.0), // Magenta
-                            200.0,
-                        );
+                        effects.play(EffectKind::Confusion, pos.x, pos.y);
                         break;
                     }
                 }
