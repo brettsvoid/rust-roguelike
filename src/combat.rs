@@ -12,6 +12,7 @@ use crate::debug::GodMode;
 use crate::gamelog::GameLog;
 use crate::economy::Gold;
 use crate::map::{Map, Position};
+use crate::overwatch::{Hunkered, Overwatch, OVERWATCH_AIM_PENALTY};
 use crate::effects::{EffectKind, Effects};
 use crate::party::{next_unit, ActiveUnit, PartyMember};
 use crate::raws::{spawn_named_item, RAWS};
@@ -95,8 +96,8 @@ pub fn in_reach(map: &Map, weapon: &Weapon, from: (i32, i32), to: (i32, i32)) ->
 }
 
 /// The chance to hit a target at `to` with `defence` and how its cover
-/// stands against `from`, or why it cannot be attacked. Height is neutral
-/// until a map with height.
+/// stands against `from` (doubled if it is `hunkered`), or why it cannot be
+/// attacked. Height is neutral until a map with height.
 pub fn aim_at(
     map: &Map,
     weapon: &Weapon,
@@ -104,9 +105,10 @@ pub fn aim_at(
     from: (i32, i32),
     defence: i32,
     to: (i32, i32),
+    hunkered: bool,
 ) -> Result<(i32, Exposure), Refusal> {
     let distance = in_reach(map, weapon, from, to)?;
-    let cover = exposure(map, to, from);
+    let cover = exposure(map, to, from).hunker(hunkered);
     Ok((hit_chance(aim, defence, distance, weapon, cover.aim_penalty(), LEVEL_GROUND), cover))
 }
 
@@ -189,66 +191,109 @@ impl SufferDamage {
     }
 }
 
-/// Resolves every `WantsToAttack`: rolls to hit (less the target's cover),
-/// for a critical (more on a flank) and for damage, and logs the outcome
-/// with the chance and any cover.
-#[allow(clippy::too_many_arguments)]
-pub fn attack_system(
-    mut commands: Commands,
-    mut log: ResMut<GameLog>,
-    mut effects: ResMut<Effects>,
-    mut rng: ResMut<GameRng>,
-    map: Res<Map>,
-    arms: Arms,
-    query: Query<(Entity, &WantsToAttack, &Name, &CombatStats, &Position)>,
-    targets: Query<(&Name, &CombatStats, &Position)>,
-    hunger_query: Query<&HungerClock>,
-    poisoners: Query<&PoisonsOnHit>,
-) {
-    for (entity, wants, name, stats, pos) in &query {
-        commands.entity(entity).remove::<WantsToAttack>();
-        let Ok((target_name, target_stats, target_pos)) = targets.get(wants.target) else {
-            continue;
-        };
-        if stats.hp <= 0 || target_stats.hp <= 0 {
-            continue;
+/// One side of an attack: who, and where they stand at that moment.
+#[derive(Clone, Copy)]
+pub struct Fighter<'a> {
+    pub entity: Entity,
+    pub name: &'a str,
+    pub stats: &'a CombatStats,
+    pub at: (i32, i32),
+}
+
+/// Everything an attack touches, so normal attacks and overwatch reactions
+/// resolve the same way (`Strikes::strike`).
+#[derive(SystemParam)]
+pub struct Strikes<'w, 's> {
+    pub commands: Commands<'w, 's>,
+    pub log: ResMut<'w, GameLog>,
+    pub effects: ResMut<'w, Effects>,
+    pub rng: ResMut<'w, GameRng>,
+    pub arms: Arms<'w, 's>,
+    god_mode: Res<'w, GodMode>,
+    party: Query<'w, 's, (), With<PartyMember>>,
+    hunkered: Query<'w, 's, (), With<Hunkered>>,
+    hunger: Query<'w, 's, &'static HungerClock>,
+    poisoners: Query<'w, 's, &'static PoisonsOnHit>,
+}
+
+impl Strikes<'_, '_> {
+    /// Whether `unit` is a hero.
+    pub fn is_party(&self, unit: Entity) -> bool {
+        self.party.contains(unit)
+    }
+
+    /// One attack from `attacker` on `target` with whatever the attacker
+    /// holds: rolls to hit (less the target's cover, doubled if hunkered), for
+    /// a critical (more on a flank) and for damage, and logs the outcome with
+    /// the chance and any cover. A `reaction` is an overwatch shot, at
+    /// `OVERWATCH_AIM_PENALTY` less aim. Returns the damage the target will
+    /// take (queued as `SufferDamage`; 0 for a hero under god mode), or `None`
+    /// when no attack was made.
+    pub fn strike(&mut self, map: &Map, attacker: &Fighter, target: &Fighter, reaction: bool) -> Option<i32> {
+        if attacker.stats.hp <= 0 || target.stats.hp <= 0 {
+            return None;
         }
-        let (from, to) = ((pos.x, pos.y), (target_pos.x, target_pos.y));
-        let weapon = arms.weapon(entity);
-        let (chance, cover) = match aim_at(&map, &weapon, stats.aim, from, target_stats.defence, to) {
+        let (from, to) = (attacker.at, target.at);
+        let weapon = self.arms.weapon(attacker.entity);
+        let aim = attacker.stats.aim - if reaction { OVERWATCH_AIM_PENALTY } else { 0 };
+        let hunkered = self.hunkered.contains(target.entity);
+        let (chance, cover) = match aim_at(map, &weapon, aim, from, target.stats.defence, to, hunkered) {
             Ok(aimed) => aimed,
             Err(refusal) => {
-                log.entries.push(refusal.message(&target_name.name));
-                continue;
+                self.log.entries.push(refusal.message(target.name));
+                return None;
             }
         };
         let ranged = weapon.range > 1;
         if ranged {
-            effects.play(EffectKind::MagicMissile { from }, to.0, to.1);
+            self.effects.play(EffectKind::MagicMissile { from }, to.0, to.1);
         }
         let verb = if ranged { "shoots" } else { "attacks" };
-        let (attacker, target) = (&name.name, &target_name.name);
-        let outcome = roll_attack(&mut rng, chance, weapon.crit_chance + cover.crit_bonus());
+        let prefix = if reaction { "Overwatch! " } else { "" };
+        let (who, whom) = (attacker.name, target.name);
+        let outcome = roll_attack(&mut self.rng, chance, cover.crit_chance(weapon.crit_chance));
         let odds = odds(chance, cover);
         if outcome == Outcome::Miss {
-            log.entries.push(format!("{attacker} {verb} {target}: miss ({odds})"));
-            continue;
+            self.log.entries.push(format!("{prefix}{who} {verb} {whom}: miss ({odds})"));
+            return Some(0);
         }
-        let well_fed = hunger_query.get(entity).is_ok_and(|h| h.state == HungerState::WellFed);
-        let bonus = stats.power + i32::from(well_fed);
-        let armour = target_stats.armour + arms.armour(wants.target);
+        let well_fed = self.hunger.get(attacker.entity).is_ok_and(|h| h.state == HungerState::WellFed);
+        let bonus = attacker.stats.power + i32::from(well_fed);
+        let armour = target.stats.armour + self.arms.armour(target.entity);
         let crit = outcome == Outcome::Crit;
-        let damage = roll_damage(&mut rng, weapon.damage, bonus, armour, crit);
+        let damage = roll_damage(&mut self.rng, weapon.damage, bonus, armour, crit);
         let what = if crit { "critical hit" } else { "hit" };
-        log.entries.push(format!("{attacker} {verb} {target}: {what} for {damage} ({odds})"));
-        if damage > 0 {
-            SufferDamage::new_damage(&mut commands, wants.target, damage);
-            if let Ok(PoisonsOnHit(poison)) = poisoners.get(entity) {
-                commands.entity(wants.target).insert(*poison);
-                log.entries.push(format!("{target} is poisoned!"));
-            }
-            effects.play(EffectKind::HitSpark, to.0, to.1);
+        self.log.entries.push(format!("{prefix}{who} {verb} {whom}: {what} for {damage} ({odds})"));
+        if damage == 0 {
+            return Some(0);
         }
+        SufferDamage::new_damage(&mut self.commands, target.entity, damage);
+        if let Ok(PoisonsOnHit(poison)) = self.poisoners.get(attacker.entity) {
+            self.commands.entity(target.entity).insert(*poison);
+            self.log.entries.push(format!("{whom} is poisoned!"));
+        }
+        self.effects.play(EffectKind::HitSpark, to.0, to.1);
+        let spared = self.god_mode.0 && self.party.contains(target.entity);
+        Some(if spared { 0 } else { damage })
+    }
+}
+
+/// Resolves every `WantsToAttack` through `Strikes::strike`.
+pub fn attack_system(
+    mut strikes: Strikes,
+    map: Res<Map>,
+    query: Query<(Entity, &WantsToAttack, &Name, &CombatStats, &Position)>,
+    targets: Query<(&Name, &CombatStats, &Position)>,
+) {
+    for (entity, wants, name, stats, pos) in &query {
+        strikes.commands.entity(entity).remove::<WantsToAttack>();
+        let Ok((target_name, target_stats, target_pos)) = targets.get(wants.target) else {
+            continue;
+        };
+        let attacker = Fighter { entity, name: &name.name, stats, at: (pos.x, pos.y) };
+        let (to, name) = ((target_pos.x, target_pos.y), &target_name.name);
+        let target = Fighter { entity: wants.target, name, stats: target_stats, at: to };
+        strikes.strike(&map, &attacker, &target, false);
     }
 }
 
@@ -278,14 +323,15 @@ pub fn damage_system(
     }
 }
 
-/// The start of a side's turn for every living unit `F` picks: poison bites
-/// and confusion wears down.
+/// The start of a side's turn for every unit `F` picks: overwatch and
+/// hunkering end, poison bites and confusion wears down.
 pub fn start_of_turn<F: QueryFilter>(
     mut commands: Commands,
     mut log: ResMut<GameLog>,
     mut units: Query<(Entity, &Name, &CombatStats, Option<&mut Poison>, Option<&mut Confusion>), F>,
 ) {
     for (entity, name, stats, poison, confusion) in &mut units {
+        commands.entity(entity).remove::<(Overwatch, Hunkered)>();
         if stats.hp <= 0 {
             continue;
         }
@@ -504,7 +550,7 @@ mod tests {
         assert_eq!(in_reach(&map, &BOW, (0, 1), (9, 1)), Err(Refusal::OutOfRange));
         assert_eq!(in_reach(&map, &SWORD, (0, 1), (1, 0)), Ok(1), "diagonal melee reaches");
         // Walls north and south, the shot from the west: flanked, no cover.
-        assert_eq!(aim_at(&map, &BOW, 65, (0, 1), 10, (7, 1)), Ok((35, Exposure::Flanked)));
+        assert_eq!(aim_at(&map, &BOW, 65, (0, 1), 10, (7, 1), false), Ok((35, Exposure::Flanked)));
         let idx = map.xy_idx(4, 1);
         map.tiles[idx] = crate::map::TileType::Wall;
         assert_eq!(in_reach(&map, &BOW, (0, 1), (7, 1)), Err(Refusal::NoLineOfSight));
@@ -522,11 +568,14 @@ mod tests {
         }
         let table = map.xy_idx(6, 1);
         map.prop_cover.insert(table, Cover::Half);
-        let (chance, cover) = aim_at(&map, &BOW, 65, (8, 1), 0, (5, 1)).unwrap();
+        let (chance, cover) = aim_at(&map, &BOW, 65, (8, 1), 0, (5, 1), false).unwrap();
         assert_eq!((chance, odds(chance, cover)), (45, "45%, half cover".to_string()));
-        let (chance, cover) = aim_at(&map, &BOW, 65, (2, 1), 0, (5, 1)).unwrap();
+        let (chance, cover) = aim_at(&map, &BOW, 65, (2, 1), 0, (5, 1), false).unwrap();
         assert_eq!((chance, odds(chance, cover)), (65, "65%, flanked".to_string()));
         assert_eq!(odds(65, Exposure::Open), "65%");
+        // Hunkered behind the table: the half cover counts as 40.
+        let (chance, cover) = aim_at(&map, &BOW, 65, (8, 1), 0, (5, 1), true).unwrap();
+        assert_eq!((chance, odds(chance, cover)), (25, "25%, half cover, hunkered".to_string()));
     }
 
     #[test]

@@ -20,6 +20,7 @@ use crate::{
     map::{is_stairs, tile_walkable, xy_idx, Map, Position},
     map_indexing,
     monsters::Monster,
+    overwatch::{Hunkered, Overwatch, WantsToMove},
     party::{follow, next_unit, ActiveUnit, PartyMember},
     pathfinding::a_star_explored,
     picking::{self, HoveredTile, TileMarks, FULL_TILE},
@@ -320,7 +321,7 @@ pub(crate) fn handle_player_input(
     map: Res<Map>,
     mut gamelog: ResMut<GameLog>,
     mut active: ResMut<ActiveUnit>,
-    mut party: Query<(Entity, &PartyMember, &mut CombatStats, &HungerClock, &Viewshed)>,
+    mut party: Query<(Entity, &PartyMember, &mut CombatStats, &HungerClock, &Name, &Viewshed)>,
     mut next_state: ResMut<NextState<RunState>>,
     other_combat_stats: Query<&CombatStats, Without<PartyMember>>,
     items: Query<(Entity, &Position), (With<Item>, Without<PartyMember>, Without<Bystander>)>,
@@ -362,7 +363,7 @@ pub(crate) fn handle_player_input(
         .map(|(entity, pos, name)| (entity, (pos.x, pos.y), name))
         .collect();
     let hostile_in_view = !seen_hostiles.is_empty();
-    let Ok((_, _, mut player_stats, hunger, _)) = party.get_mut(player_entity) else {
+    let Ok((_, _, mut player_stats, hunger, hero_name, _)) = party.get_mut(player_entity) else {
         return;
     };
     let mut select = None;
@@ -436,6 +437,26 @@ pub(crate) fn handle_player_input(
                 select = next_unit(&roster, Some(player_entity));
             }
 
+            // Overwatch (O) or hunker down (H): end the hero's turn in that stance
+            KeyCode::KeyO | KeyCode::KeyH => {
+                let (stance, status) = if ev.key_code == KeyCode::KeyO {
+                    (Action::Overwatch, "goes on overwatch")
+                } else {
+                    (Action::Hunker, "hunkers down")
+                };
+                if !matches!(*mode, Mode::Combat { .. }) {
+                    gamelog.entries.push("That is for combat.".to_string());
+                } else {
+                    match stance {
+                        Action::Overwatch => commands.entity(player_entity).insert(Overwatch),
+                        _ => commands.entity(player_entity).insert(Hunkered),
+                    };
+                    gamelog.entries.push(format!("{} {status}.", hero_name.name));
+                    player_acted = true;
+                    action = Some(stance);
+                }
+            }
+
             // End the party phase; outside combat nothing happens
             KeyCode::KeyE => {
                 turn_ended.0 = true;
@@ -491,16 +512,17 @@ pub(crate) fn handle_player_input(
                         Err(refusal) => gamelog.entries.push(refusal.message(&foe_name.name)),
                     }
                 } else if let Some(ap) = range.ap(target) {
-                    let to = if confused.contains(player_entity) {
+                    // Walked by `overwatch::move_system`, where overwatch can cut it short.
+                    let path = if confused.contains(player_entity) {
                         gamelog.entries.push("You are confused and stumble.".to_string());
                         let reachable = |cell| range.ap(cell).is_some();
                         confused_step(&map, (player_x, player_y), reachable, |n| rng.0.random_range(0..n))
+                            .into_iter()
+                            .collect()
                     } else {
-                        Some(target)
+                        range.path(target)
                     };
-                    if let Some((new_x, new_y)) = to {
-                        move_result = Some(MoveResult::Moved { new_x, new_y });
-                    }
+                    commands.entity(player_entity).insert(WantsToMove { path });
                     player_acted = true;
                     action = Some(Action::moving(ap));
                 } else if beside {

@@ -14,6 +14,7 @@ use crate::{
     economy::{Gold, Purse},
     gamelog::GameLog,
     cover::exposure,
+    overwatch::Hunkered,
     map::{Map, Position},
     effects::{EffectKind, Effects},
     rng::GameRng,
@@ -66,7 +67,7 @@ pub fn item_collection_system(
 pub fn item_use_system(
     mut commands: Commands,
     mut gamelog: ResMut<GameLog>,
-    (mut effects, mut rng, map): (ResMut<Effects>, ResMut<GameRng>, Res<Map>),
+    (mut effects, mut rng, map, hunkered): (ResMut<Effects>, ResMut<GameRng>, Res<Map>, Query<(), With<Hunkered>>),
     mut pending_magic_map: ResMut<PendingMagicMap>,
     use_query: Query<(Entity, &WantsToUseItem, &Position)>,
     consumable_query: Query<&Consumable>,
@@ -189,7 +190,7 @@ pub fn item_use_system(
                             effects.play(EffectKind::MagicMissile { from }, pos.x, pos.y);
                             let defence = stats_query.get(target_entity).map_or(0, |s| s.defence);
                             let distance = chebyshev(from, (pos.x, pos.y));
-                            let cover = exposure(&map, (pos.x, pos.y), from);
+                            let cover = exposure(&map, (pos.x, pos.y), from).hunker(hunkered.contains(target_entity));
                             let chance = hit_chance(aim, defence, distance, &spell, cover.aim_penalty(), LEVEL_GROUND);
                             let odds = odds(chance, cover);
                             let (item, target) = (&item_name.name, &target_name.name);

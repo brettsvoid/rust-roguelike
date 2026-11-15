@@ -32,7 +32,8 @@ cargo run -- --screenshot out.png --depth 2 --reveal-map --cursor 720,430 \
 # --click X,Y left-clicks grid cell X,Y (repeatable; the next input waits for the
 # walk to end; a click on another hero selects them). --keys presses keys through the
 # real input: g . (pick up, take the stairs), i (inventory), t (town ledger), n (Tab:
-# select the next hero), e (end the party phase in combat), w a s d (pan), c (recentre),
+# select the next hero), e (end the party phase in combat), o (overwatch), h (hunker down),
+# w a s d (pan), c (recentre),
 # + and - (scroll to zoom). Input is fed only while the game waits for it, a shop is
 # open or the inventory is open (a to j use that line). They run in the order given,
 # e.g. walk five tiles east so explored-but-unseen tiles show:
@@ -81,6 +82,20 @@ cargo run -- --screenshot loop.png --reveal-map --console "spawn dagger" \
 cargo run -- --screenshot cover.png --depth 2 --reveal-map --console godmode \
   --console "place 5 0 Goblin" --console "place 1 0 Table" --console "place 1 -1 Table" \
   --console "place 1 1 Table" --click 40,20 --keys e --click 41,21 --keys n --click 40,21 --click 41,21 --frames 120
+# Overwatch: Aldric equips a bow, goes on overwatch (o), E ends the phase and the goblin
+# walking in draws a reaction shot ("Overwatch! Aldric shoots Goblin: miss (45%)"):
+cargo run -- --screenshot ow.png --depth 2 --reveal-map --console godmode --console "spawn bow" \
+  --console "place 6 0 Goblin" --keys .gia.oe --frames 120
+# A goblin hemmed in behind three others goes on overwatch ("Goblin goes on overwatch.") and
+# reacts when Aldric walks up beside it ("Overwatch! Goblin attacks Aldric: miss (45%)"):
+cargo run -- --screenshot ow_monster.png --depth 2 --reveal-map --console godmode \
+  --console "place 7 0 Goblin" --console "place 6 -1 Goblin" --console "place 6 0 Goblin" \
+  --console "place 6 1 Goblin" --keys ee --click 46,20 --frames 90
+# Hunker down: in the cover staging Aldric hunkers (h) and the goblin's attack shows the
+# doubled cover ("Goblin attacks Aldric: miss (25%, half cover, hunkered)"):
+cargo run -- --screenshot hunker.png --depth 2 --reveal-map --console godmode \
+  --console "place 5 0 Goblin" --console "place 1 0 Table" --console "place 1 -1 Table" \
+  --console "place 1 1 Table" --click 40,20 --keys he --frames 90
 # "spawn heart" drops a stand-in Heart of the Abyss; carrying it, the portal is refused:
 cargo run -- --screenshot heart.png --depth 4 --console "spawn portal" \
   --console "spawn heart" --keys gggia --frames 300
@@ -113,7 +128,8 @@ for that overhaul. Key points:
   (no turn passes; in combat only heroes with AP left).
   WASD pans the camera, the scroll wheel zooms, C recentres. G picks up, I inventory, X drops
   (D pans), R removes equipment, `.` takes the stairs, Space waits (in combat it ends that hero's
-  turn), E ends the party phase in combat, T opens the ledger in town, Q saves and quits
+  turn), O puts the active hero on overwatch and H hunkers them down (combat only; each ends
+  that hero's turn), E ends the party phase in combat, T opens the ledger in town, Q saves and quits
 - **Mechanics**: Hunger/survival, items/equipment
 
 The Architecture section below describes the code as it is now. The current
@@ -172,8 +188,8 @@ Non-plugin modules worth knowing:
   map entities with `RenderableBundle`; re-inserting `EntityShape` re-dresses (doors opening)
 - `models.rs` - The model pipeline (see Models below)
 - `tactics.rs` - The pure action point rules: `AP_PER_ROUND` (2), `DEFAULT_MOVEMENT` (4 tiles per
-  AP), `Action` and `Action::spend` (move and item 1 AP, dash 2, attack and wait spend the rest
-  and need at least 1), `move_range` (cheapest-first flood fill over `Map::get_available_exits`,
+  AP), `Action` and `Action::spend` (move and item 1 AP, dash 2; attack, wait, overwatch and
+  hunker spend the rest and need at least 1), `move_range` (cheapest-first flood fill over `Map::get_available_exits`,
   diagonals 1.45 like the pathfinder, giving each reachable tile its AP cost and path) and
   `confused_step`. Movement is `CombatStats::movement`, from the raws `stats.movement` for
   monsters (Giant Bat 6)
@@ -184,19 +200,23 @@ Non-plugin modules worth knowing:
   shields. `exposure(map, target, attacker)` is the XCOM rule: a side counts when the attacker is
   strictly beyond it (a diagonal attacker faces two), the best counting one wins (`Covered`); a
   target with cover none of which counts is `Flanked`; none at all is `Open`. Cover applies to
-  melee and ranged alike. `Exposure::aim_penalty` (half 20, full 40) feeds `hit_chance`,
-  `crit_bonus` (+30 flanked) adds to the weapon's crit chance, `note` is the log text.
+  melee and ranged alike. `Exposure::hunker(hunkered)` turns `Covered` into `Hunkered` for a
+  hunkered target (open and flanked stay as they are). `Exposure::aim_penalty` (half 20, full
+  40, doubled when hunkered: 40 and 80) feeds `hit_chance`, `crit_chance(base)` adds +30
+  flanked and is 0 against a hunkered target, `note` is the log text ("half cover, hunkered").
   Raws props: `"cover": "none" | "half" | "full"` (doors leave it out)
 - `combat.rs` - Attacks, damage and death. The pure rules: `hit_chance(aim, defence, distance,
   weapon, cover, height)` is `aim - defence - cover - 10 per tile past the weapon's optimal range
   + 10 per level above the target`, clamped to 5..95, and 0 past the weapon's range. Callers pass
   `cover::Exposure::aim_penalty` and `LEVEL_GROUND` until a map with height. `in_reach` checks range
   (Chebyshev) and `viewshed::line_of_sight` (Bresenham, walls and `BlocksVisibility` block);
-  `aim_at` combines both with `cover::exposure` and returns the chance and the `Exposure`. `roll_attack` rolls hit then crit, `roll_damage` rolls the weapon's
+  `aim_at` combines both with `cover::exposure` (hunkered or not) and returns the chance and the `Exposure`. `roll_attack` rolls hit then crit, `roll_damage` rolls the weapon's
   damage + power (+1 well fed), +half rounded up on a crit, less armour, never below 0. All
-  rolls go through `GameRng`. `attack_system` resolves `WantsToAttack` (melee or ranged alike)
-  and logs "Aldric shoots Goblin #0: hit for 5 (55%)", or "(35%, half cover)" / "(65%, flanked)"
-  when cover applied (`odds`). `Arms` (a `SystemParam`) gives a unit's
+  rolls go through `GameRng`. Every attack resolves in `Strikes::strike` (`Strikes` is a
+  `SystemParam`; `Fighter` is a unit and the cell it attacks from or is hit on), which logs
+  "Aldric shoots Goblin #0: hit for 5 (55%)", or "(35%, half cover)" / "(65%, flanked)"
+  when cover applied (`odds`), and returns the damage dealt. `attack_system` resolves
+  `WantsToAttack` (melee or ranged alike) through it. `Arms` (a `SystemParam`) gives a unit's
   equipped `Weapon` or `Weapon::NATURAL` (power -1..+1, range 1, 5% crit) and its worn armour.
   `CombatStats`: `armour` (raws and saves call it `defense`) cuts damage, `defence` cuts hit
   chance, `aim` defaults to `DEFAULT_AIM` (65)
@@ -205,6 +225,21 @@ Non-plugin modules worth knowing:
   the weapon hand like "melee". Damage scrolls roll `spell_damage` (a quarter either side of
   their `damage`) and ignore armour; Magic Missile rolls to hit with aim +25 (`SPELL_AIM_BONUS`) less cover,
   area scrolls hit everything in the radius, Confusion always lands
+- `overwatch.rs` - Overwatch and hunker down. `Overwatch` and `Hunkered` are components put on
+  by the O and H keys (or the monster AI) and removed at the start of the unit's next turn
+  (`combat::start_of_turn`). The pure rule `reactions(watchers, mover_party, path, sight)`:
+  each watcher of the other side fires once, at the first path cell within its weapon range
+  and line of sight (the `in_reach` rule; melee is the cells beside it); a unit that does not
+  move triggers nothing. `walk_under_watch` walks a mover along its path, resolving each
+  reaction through `Strikes::strike` at the cell it triggers on with `OVERWATCH_AIM_PENALTY`
+  (20) less aim, logged "Overwatch! Aldric shoots Goblin: ..."; the watcher's overwatch is spent
+  and a mover it kills stops there. A hero's combat move inserts `WantsToMove { path }`
+  (`MoveRange::path`), walked by `move_system` first in the `PartyAction` chain; monster moves
+  call `walk_under_watch` from `monster_ai`. Stand-in monster rules until C07: in combat, a
+  monster at a third of its hit points or less in cover from the hero it targets hunkers
+  ("Goblin hunkers down."), and one that sees a hero but can neither attack it nor take a step
+  towards it with AP left goes on overwatch ("Goblin goes on overwatch."). The HUD party row
+  shows "Overwatch" or "Hunkered" after the AP
 - `levels.rs` - New-game setup and level changes (`change_level`, run in `RunState::NextLevel`).
   The town is depth 0 (`TOWN_DEPTH`), the dungeon depths 1 to 12. Down stairs go one level
   deeper, or from town to the deepest depth reached; the up stairs (only on depth 1, at the start)
@@ -294,7 +329,8 @@ of the same logic. The build should stay at zero warnings.
 - Saves on quit (Q key), loads on Continue from main menu
 - The save holds the whole party (`SaveData::party`, in slot order), the active hero's slot, and
   each backpack item's owner by slot, and the `Delve` (deepest depth, levels since town)
-- Not saved yet (P01): `Poison` on a unit and a mob's poison bite (`PoisonsOnHit`)
+- Not saved yet (P01): `Poison` on a unit, a mob's poison bite (`PoisonsOnHit`), and
+  `Overwatch` and `Hunkered`
 - Permadeath: save file deleted on load and when the last hero dies. A fallen hero leaves play
   and drops what they carried; the selection moves to the next living hero
 - WASM: save/load disabled (no filesystem access)

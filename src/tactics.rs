@@ -29,6 +29,12 @@ pub enum Action {
     UseItem,
     /// End this unit's turn, keeping nothing.
     Wait,
+    /// End this unit's turn on watch: one reaction shot at the first hostile
+    /// that moves into reach before its next turn (`overwatch`).
+    Overwatch,
+    /// End this unit's turn hunkered down: its cover counts double until its
+    /// next turn (`cover::Exposure::Hunkered`).
+    Hunker,
 }
 
 impl Action {
@@ -38,13 +44,13 @@ impl Action {
     }
 
     /// The AP left after taking this action with `ap`, or `None` if the unit
-    /// cannot afford it. Attacking and waiting need at least one AP and spend
-    /// the rest.
+    /// cannot afford it. Attacking, waiting, overwatch and hunkering need at
+    /// least one AP and spend the rest.
     pub fn spend(self, ap: u8) -> Option<u8> {
         match self {
             Action::Move | Action::UseItem => ap.checked_sub(1),
             Action::Dash => ap.checked_sub(2),
-            Action::Attack | Action::Wait => (ap > 0).then_some(0),
+            Action::Attack | Action::Wait | Action::Overwatch | Action::Hunker => (ap > 0).then_some(0),
         }
     }
 }
@@ -165,6 +171,9 @@ mod tests {
         assert_eq!(Action::Attack.spend(1), Some(0));
         assert_eq!(Action::Attack.spend(0), None);
         assert_eq!(Action::Wait.spend(2), Some(0));
+        for turn_ender in [Action::Overwatch, Action::Hunker] {
+            assert_eq!((turn_ender.spend(2), turn_ender.spend(1), turn_ender.spend(0)), (Some(0), Some(0), None));
+        }
         assert_eq!(Action::moving(1), Action::Move);
         assert_eq!(Action::moving(2), Action::Dash);
     }

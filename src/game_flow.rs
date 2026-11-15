@@ -26,7 +26,7 @@ use crate::party::{next_unit, ActiveUnit, PartyMember};
 use crate::player::WalkPath;
 use crate::tactics::{Action, AP_PER_ROUND};
 use crate::viewshed::{self, Viewshed};
-use crate::{combat, hunger, inventory, levels, monsters, traps};
+use crate::{combat, hunger, inventory, levels, monsters, overwatch, traps};
 
 #[derive(States, Clone, Copy, Default, Eq, PartialEq, Debug, Hash)]
 pub enum RunState {
@@ -186,7 +186,8 @@ impl Plugin for GameFlowPlugin {
             .add_systems(
                 Update,
                 (
-                    traps::trap_trigger_system,
+                    // A hero's move first, so traps see where it ended.
+                    (overwatch::move_system, traps::trap_trigger_system).chain(),
                     inventory::item_collection_system,
                     levels::use_town_portal,
                     inventory::item_use_system,

@@ -11,7 +11,7 @@
 //! input in the order given, fed through the real input systems one at a time
 //! while the game waits for input: `--keys` presses keys (`g`, `.`, `i` for the
 //! inventory, `t` for the town ledger, `n` for Tab to select the next hero, `e`
-//! to end the party phase in combat, `w` `a` `s` `d` to pan, `c` to recentre, `+` and `-` scroll the
+//! to end the party phase in combat, `o` overwatch and `h` hunker down, `w` `a` `s` `d` to pan, `c` to recentre, `+` and `-` scroll the
 //! wheel to zoom in and out); `--click X,Y` left-clicks grid cell X,Y as if the mouse hovered it (a click on another
 //! hero selects them), and the next input waits until the walk it starts ends;
 //! `--shop VENDOR` clicks that vendor (e.g. `blacksmith`), so the active hero
@@ -133,6 +133,7 @@ fn key_input(c: char) -> Option<HarnessInput> {
         'e' => KeyCode::KeyE,
         'f' => KeyCode::KeyF,
         'h' => KeyCode::KeyH,
+        'o' => KeyCode::KeyO,
         'j' => KeyCode::KeyJ,
         'g' => KeyCode::KeyG,
         '.' => KeyCode::Period,

@@ -7,6 +7,7 @@ use crate::entity_render::Renderable;
 use crate::game_flow::Mode;
 use crate::gamelog::GameLog;
 use crate::map::Map;
+use crate::overwatch::{Hunkered, Overwatch};
 use crate::party::{ActiveUnit, PartyMember, PARTY_SIZE};
 use crate::picking::BlocksPicking;
 use crate::resources::UiFont;
@@ -149,15 +150,17 @@ fn setup_hud(mut commands: Commands, font: Res<UiFont>) {
 
 /// Each row shows its hero's hit points and hunger in the hero's colour; a
 /// `>` marks the active unit, and in combat the action points it has left this
-/// round. A fallen hero's row is blank.
+/// round and whether it is on overwatch or hunkered. A fallen hero's row is blank.
 fn update_party_rows(
     active: Res<ActiveUnit>,
     mode: Res<Mode>,
-    party: Query<(Entity, &PartyMember, &Name, &CombatStats, &HungerClock, &Renderable)>,
+    party: Query<(Entity, &PartyMember, &Name, &CombatStats, &HungerClock, &Renderable, Has<Overwatch>, Has<Hunkered>)>,
     mut rows: Query<(&PartyRow, &mut Text, &mut TextColor)>,
 ) {
     for (PartyRow(slot), mut text, mut colour) in &mut rows {
-        let Some((entity, _, name, stats, hunger, renderable)) = party.iter().find(|m| m.1.slot == *slot) else {
+        let Some((entity, _, name, stats, hunger, renderable, watching, hunkered)) =
+            party.iter().find(|m| m.1.slot == *slot)
+        else {
             text.clear();
             continue;
         };
@@ -166,8 +169,13 @@ fn update_party_rows(
             Mode::Combat { .. } => format!("AP {}", mode.ap_left(entity)),
             Mode::Explore => String::new(),
         };
+        let stance = match (watching, hunkered) {
+            (true, _) => "Overwatch ",
+            (_, true) => "Hunkered ",
+            _ => "",
+        };
         **text = format!(
-            "{marker} {:<7} HP {:>2}/{:<2} {ap:<4} {}",
+            "{marker} {:<7} HP {:>2}/{:<2} {ap:<4} {stance}{}",
             name.name,
             stats.hp,
             stats.max_hp,

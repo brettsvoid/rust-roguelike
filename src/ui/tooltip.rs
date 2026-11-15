@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use crate::combat::{aim_at, Arms, CombatStats};
+use crate::overwatch::Hunkered;
 use crate::components::Name;
 use crate::game_flow::Mode;
 use crate::map::{Map, Position};
@@ -35,7 +36,7 @@ fn update_tooltip(
     map: Res<Map>,
     font: Res<UiFont>,
     (mode, active, arms): (Res<Mode>, Res<ActiveUnit>, Arms),
-    entities_query: Query<(&Position, &Name, Option<&CombatStats>, Has<Monster>)>,
+    entities_query: Query<(&Position, &Name, Option<&CombatStats>, Has<Monster>, Has<Hunkered>)>,
     tooltip_query: Query<Entity, With<Tooltip>>,
 ) {
     for entity in &tooltip_query {
@@ -58,17 +59,17 @@ fn update_tooltip(
     let attacker = active
         .0
         .filter(|&unit| matches!(*mode, Mode::Combat { .. }) && mode.can_act(unit))
-        .and_then(|unit| entities_query.get(unit).ok().and_then(|(pos, _, stats, _)| Some((unit, pos, stats?))));
-    let chance = |target: &Position, defence: i32| {
+        .and_then(|unit| entities_query.get(unit).ok().and_then(|(pos, _, stats, ..)| Some((unit, pos, stats?))));
+    let chance = |target: &Position, defence: i32, hunkered: bool| {
         let (unit, from, stats) = attacker?;
-        aim_at(&map, &arms.weapon(unit), stats.aim, (from.x, from.y), defence, (target.x, target.y)).ok()
+        aim_at(&map, &arms.weapon(unit), stats.aim, (from.x, from.y), defence, (target.x, target.y), hunkered).ok()
     };
 
     // Find entities at this position (using world coordinates)
     let mut tooltip_names: Vec<String> = Vec::new();
-    for (pos, name, stats, monster) in &entities_query {
+    for (pos, name, stats, monster, hunkered) in &entities_query {
         if pos.x == map_x && pos.y == map_y {
-            match stats.filter(|_| monster).and_then(|s| chance(pos, s.defence)) {
+            match stats.filter(|_| monster).and_then(|s| chance(pos, s.defence, hunkered)) {
                 Some((chance, cover)) => match cover.note() {
                     Some(note) => tooltip_names.push(format!("{} ({chance}% to hit, {note})", name.name)),
                     None => tooltip_names.push(format!("{} ({chance}% to hit)", name.name)),

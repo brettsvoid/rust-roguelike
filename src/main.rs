@@ -31,6 +31,7 @@ mod map_render;
 mod mapgen_viz;
 mod models;
 mod monsters;
+mod overwatch;
 mod occlusion;
 mod party;
 mod pathfinding;

@@ -71,6 +71,9 @@ pub enum Exposure {
     Covered { cover: Cover, side: (i32, i32) },
     /// Cover, but none of it faces the attacker: no cover, and a crit bonus.
     Flanked,
+    /// `Covered`, and the target is hunkered down: the cover counts double
+    /// (half 20 becomes 40, full 40 becomes 80) and it cannot be crit.
+    Hunkered { cover: Cover, side: (i32, i32) },
 }
 
 impl Exposure {
@@ -78,13 +81,28 @@ impl Exposure {
     pub fn aim_penalty(self) -> i32 {
         match self {
             Exposure::Covered { cover, .. } => cover.penalty(),
+            Exposure::Hunkered { cover, .. } => 2 * cover.penalty(),
             _ => 0,
         }
     }
 
-    /// Added to the attacker's crit chance.
-    pub fn crit_bonus(self) -> i32 {
-        if self == Exposure::Flanked { FLANK_CRIT_BONUS } else { 0 }
+    /// The attacker's crit chance `base` against this target: more on a
+    /// flank, none against a hunkered target.
+    pub fn crit_chance(self, base: i32) -> i32 {
+        match self {
+            Exposure::Flanked => base + FLANK_CRIT_BONUS,
+            Exposure::Hunkered { .. } => 0,
+            _ => base,
+        }
+    }
+
+    /// The exposure of a target that is hunkered down, if `hunkered`: cover
+    /// facing the attacker doubles; open or flanked stays as it is.
+    pub fn hunker(self, hunkered: bool) -> Exposure {
+        match self {
+            Exposure::Covered { cover, side } if hunkered => Exposure::Hunkered { cover, side },
+            exposure => exposure,
+        }
     }
 
     /// A short note for the attack log, if cover or a flank applied.
@@ -94,6 +112,8 @@ impl Exposure {
             Exposure::Covered { cover: Cover::Half, .. } => Some("half cover"),
             Exposure::Covered { .. } => Some("full cover"),
             Exposure::Flanked => Some("flanked"),
+            Exposure::Hunkered { cover: Cover::Half, .. } => Some("half cover, hunkered"),
+            Exposure::Hunkered { .. } => Some("full cover, hunkered"),
         }
     }
 }
@@ -198,9 +218,26 @@ mod tests {
         prop(&mut map, (4, 3), Cover::Full);
         let flanked = exposure(&map, T, (4, 7));
         assert_eq!(flanked, Exposure::Flanked);
-        assert_eq!((flanked.aim_penalty(), flanked.crit_bonus()), (0, FLANK_CRIT_BONUS));
-        assert_eq!(exposure(&map, T, (4, 1)).crit_bonus(), 0);
+        assert_eq!((flanked.aim_penalty(), flanked.crit_chance(10)), (0, 10 + FLANK_CRIT_BONUS));
+        assert_eq!(exposure(&map, T, (4, 1)).crit_chance(10), 10);
         assert_eq!(flanked.note(), Some("flanked"));
+    }
+
+    #[test]
+    fn hunkering_doubles_facing_cover_stops_crits_and_leaves_a_flank_alone() {
+        let mut map = room();
+        prop(&mut map, (4, 3), Cover::Half);
+        prop(&mut map, (5, 4), Cover::Full);
+        let half = exposure(&map, T, (4, 1)).hunker(true);
+        let full = exposure(&map, T, (7, 4)).hunker(true);
+        assert_eq!((half.aim_penalty(), full.aim_penalty()), (2 * HALF_COVER_PENALTY, 2 * FULL_COVER_PENALTY));
+        assert_eq!((half.crit_chance(10), full.crit_chance(10)), (0, 0));
+        assert_eq!((half.note(), full.note()), (Some("half cover, hunkered"), Some("full cover, hunkered")));
+        // From the south-west nothing faces the attacker: still flanked, crit bonus and all.
+        let flanked = exposure(&map, T, (1, 7)).hunker(true);
+        assert_eq!((flanked, flanked.crit_chance(10)), (Exposure::Flanked, 10 + FLANK_CRIT_BONUS));
+        assert_eq!(exposure(&room(), T, (7, 4)).hunker(true), Exposure::Open, "no cover stays none");
+        assert_eq!(exposure(&map, T, (4, 1)).hunker(false), exposure(&map, T, (4, 1)));
     }
 
     #[test]
@@ -235,7 +272,7 @@ mod tests {
                         Some(cover)
                     }
                     Exposure::Flanked => None,
-                    Exposure::Open => panic!("the target has cover"),
+                    Exposure::Open | Exposure::Hunkered { .. } => panic!("the target has cover and is not hunkered"),
                 };
                 assert_eq!(used, facing, "attacker at ({x}, {y})");
             }
