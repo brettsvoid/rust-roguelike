@@ -446,7 +446,11 @@ fn translate_positions(
     let half_width = window.width() / 2.;
 
     for (entity, position, render_order) in &query {
-        let z = render_order.map(|r| r.0 as f32 * 0.1).unwrap_or(0.0);
+        // Glyphs overlap their neighbours, and Bevy draws equal z in an unstable order,
+        // so every cell gets its own z (below 0.004) and anything with a RenderOrder
+        // is lifted 0.01 clear of the tiles. Screenshots then match run to run.
+        let tiebreak = xy_idx(position.x, position.y) as f32 * 1e-6;
+        let z = tiebreak + render_order.map(|r| 0.01 + r.0 as f32 * 0.1).unwrap_or(0.0);
 
         // Convert world position to screen position using camera
         let (screen_x, screen_y) = camera.world_to_screen(position.x, position.y);
