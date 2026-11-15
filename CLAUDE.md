@@ -19,6 +19,8 @@ cargo run --features file_watcher
 
 # Screenshot harness: start a seeded new game, wait N frames, save a PNG, exit.
 # Depth 1 is the town. Same seed and flags give a byte-identical PNG.
+# Known exception: while a lit effect (missile, fireball) is mid-flight, one or two
+# pixels can differ between runs. Cause not found yet.
 # Defaults: --seed 42 --depth 1 --frames 60, fog on unless --reveal-map.
 cargo run -- --screenshot out.png --seed 42 --depth 3 --reveal-map --frames 60
 # Fake the mouse at a window point (logical pixels) and enter targeting with an item:
