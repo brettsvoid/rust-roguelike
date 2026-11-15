@@ -259,7 +259,7 @@ and adds the `model` names to `raws/spawns.json`.
 - Done when: each item on the floor shows its model.
 
 ### A07 Effects
-- Status: in progress
+- Status: done
 - Needs: F07
 - 3D replacements for the text particles: hit sparks, fireball, magic missile,
   healing, confusion, blood decals, flame for torches.
@@ -409,7 +409,7 @@ and adds the `model` names to `raws/spawns.json`.
   item has a value.
 
 ### E02 Vendors and the shop screen
-- Status: todo
+- Status: in progress
 - Needs: E01, F05
 - The blacksmith, alchemist, clothier, barkeep and priest become vendors.
   Clicking one opens a buy and sell screen built on the modal menu toolkit in
