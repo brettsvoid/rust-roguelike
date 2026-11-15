@@ -206,7 +206,7 @@ Settled questions (owner, 15 November 2026):
   the WASM outcome is recorded in `CLAUDE.md`.
 
 ### F11 Smooth camera
-- Status: todo
+- Status: in progress
 - Needs: F05
 - From the owner's playtest: WASD panning snaps a tile at a time and feels
   janky, and touchpad zoom feels reversed. Make the camera focus a continuous
