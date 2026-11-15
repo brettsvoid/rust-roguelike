@@ -63,6 +63,17 @@ Assumed defaults (the owner can overrule; change the ticket if so):
 - A Town Portal scroll and the up stairs return the party to town. Coming back
   to the dungeon regenerates the level at the deepest depth reached.
 
+Open questions for the owner (found while writing design.md):
+
+1. Depth numbering. In the code the town is depth 1 and the dungeon starts at
+   depth 2, but the design's 12-level table starts at depth 1. Either the
+   dungeon runs from depth 2 to 13 or the town becomes depth 0. Settle before
+   E07.
+2. May the party use a Town Portal while carrying the Heart? If so the escape
+   back to the surface can be skipped. Settle before E07.
+3. How poison and confusion interact with action points. Settle before C03.
+4. The action point cost of using an item. Default: 1 AP. Settle in C03.
+
 ---
 
 ## F: Foundations (3D rendering and input)
@@ -476,7 +487,7 @@ and adds the `model` names to `raws/spawns.json`.
 - Done when: a test saves mid-combat and loads to an identical state.
 
 ### P02 Update the design and project docs
-- Status: in progress
+- Status: done
 - Needs: none
 - Rewrite `docs/design.md` for the decisions above (party, tactics, living
   town, 3D presentation). Remove the "Sprite graphics" section from
