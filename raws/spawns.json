@@ -1565,5 +1565,21 @@
     { "name": "Staff of the Archmage", "weight": 1, "min_depth": 8, "max_depth": 100 },
     { "name": "Scroll of Meteor Storm", "weight": 2, "min_depth": 8, "max_depth": 100 },
     { "name": "Bear Trap", "weight": 2, "min_depth": 0, "max_depth": 100 }
+  ],
+  "classes": [
+    { "name": "Fighter", "stats": { "max_hp": 34, "power": 3, "armour": 2, "aim": 65, "defence": 5, "movement": 4 }, "gear": ["Longsword", "Shield"], "abilities": ["Cleave", "Second Wind"] },
+    { "name": "Ranger", "stats": { "max_hp": 28, "power": 2, "armour": 1, "aim": 75, "defence": 10, "movement": 5 }, "gear": ["Shortbow", "Dagger"], "abilities": ["Aimed Shot", "Snare"] },
+    { "name": "Mage", "stats": { "max_hp": 22, "power": 1, "armour": 0, "aim": 70, "defence": 5, "movement": 4 }, "gear": ["Dagger"], "abilities": ["Fireball", "Magic Missile"] },
+    { "name": "Cleric", "stats": { "max_hp": 30, "power": 2, "armour": 2, "aim": 65, "defence": 0, "movement": 4 }, "gear": ["Blessed Mace"], "abilities": ["Heal", "Smite"] }
+  ],
+  "abilities": [
+    { "name": "Cleave", "cooldown": 3, "effect": "cleave" },
+    { "name": "Second Wind", "cooldown": 5, "effect": { "spell": { "provides_healing": "8" } } },
+    { "name": "Aimed Shot", "cooldown": 3, "effect": { "aimed_shot": { "aim_bonus": 20 } } },
+    { "name": "Snare", "cooldown": 4, "effect": { "spell": { "ranged": "6", "confusion": "2", "targeting": "single_entity" } } },
+    { "name": "Fireball", "cooldown": 4, "effect": { "spell": { "ranged": "6", "damage": "12", "area_of_effect": "2" } } },
+    { "name": "Magic Missile", "cooldown": 2, "effect": { "spell": { "ranged": "6", "damage": "6", "targeting": "single_entity" } } },
+    { "name": "Heal", "cooldown": 3, "effect": { "spell": { "ranged": "4", "provides_healing": "10", "targeting": "ally" } } },
+    { "name": "Smite", "cooldown": 2, "effect": { "spell": { "ranged": "5", "damage": "8", "targeting": "single_entity" } } }
   ]
 }

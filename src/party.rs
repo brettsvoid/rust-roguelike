@@ -12,12 +12,12 @@ use crate::map::{tile_walkable, Map};
 
 pub const PARTY_SIZE: usize = 4;
 
-/// Name and colour of each hero, by slot.
-pub const HEROES: [(&str, Srgba); PARTY_SIZE] = [
-    ("Aldric", basic::YELLOW),
-    ("Brenna", basic::AQUA),
-    ("Corin", basic::LIME),
-    ("Dagny", basic::FUCHSIA),
+/// Name, colour and class (a raws `classes` name) of each hero, by slot.
+pub const HEROES: [(&str, Srgba, &str); PARTY_SIZE] = [
+    ("Aldric", basic::YELLOW, "Fighter"),
+    ("Brenna", basic::AQUA, "Ranger"),
+    ("Corin", basic::LIME, "Mage"),
+    ("Dagny", basic::FUCHSIA, "Cleric"),
 ];
 
 /// A hero in the party. `slot` fixes the order for the HUD and Tab.

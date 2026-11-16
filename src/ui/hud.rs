@@ -6,6 +6,7 @@
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
 
+use crate::abilities::{update_active_abilities, ActiveAbilities, HeroAbility, HeroClass};
 use crate::combat::{in_reach, Arms, CombatStats};
 use crate::components::{Confusion, HungerClock, HungerState, Name, Poison};
 use crate::economy::Purse;
@@ -42,7 +43,7 @@ impl Plugin for HudPlugin {
                 Update,
                 (
                     update_cards,
-                    update_action_bar.after(update_hovered_tile),
+                    update_action_bar.after(update_hovered_tile).after(update_active_abilities),
                     click_hud
                         .run_if(in_state(RunState::AwaitingInput))
                         .after(update_action_bar)
@@ -77,6 +78,8 @@ struct CardStripe(usize);
 struct CardDisc(usize);
 #[derive(Component)]
 struct CardName(usize);
+#[derive(Component)]
+struct CardClass(usize);
 #[derive(Component)]
 struct CardHealth(usize);
 #[derive(Component)]
@@ -243,6 +246,13 @@ fn spawn_card(cards: &mut ChildSpawnerCommands, f: &Handle<Font>, slot: usize) {
                 CardName(slot),
             ));
             card.spawn((
+                Node { width: Val::Px(40.0), flex_shrink: 0.0, ..default() },
+                Text::new(""),
+                font(f, style::FONT_SMALL),
+                TextColor(style::TEXT_DIM),
+                CardClass(slot),
+            ));
+            card.spawn((
                 Node {
                     width: Val::Px(52.0),
                     height: Val::Px(6.0),
@@ -332,6 +342,7 @@ type CardHero<'a> = (
     Has<Hunkered>,
     Has<Poison>,
     Has<Confusion>,
+    Option<&'a HeroClass>,
 );
 
 /// Each card shows its hero's health, AP pips (in combat), hunger and
@@ -350,6 +361,7 @@ fn update_cards(
     mut names: Query<(&CardName, &mut TextColor), (Without<CardHealthText>, Without<CardBadge>)>,
     mut health: Query<(&CardHealth, &mut Node, &mut BackgroundColor), (Without<HudTarget>, Without<CardPip>)>,
     mut health_text: Query<(&CardHealthText, &mut Text), Without<CardBadge>>,
+    mut classes: Query<(&CardClass, &mut Text), (Without<CardHealthText>, Without<CardBadge>)>,
     mut pips: Query<(&CardPip, &mut BackgroundColor, &mut Visibility), (Without<HudTarget>, Without<CardHealth>)>,
     mut badges: Query<(&CardBadge, &mut Node, &mut Text, &mut TextColor, &mut BorderColor), Without<CardHealth>>,
 ) {
@@ -379,6 +391,12 @@ fn update_cards(
         node.width = Val::Percent(100.0 * fraction);
         colour.0 = if fraction <= 0.34 { style::HEALTH_LOW } else { style::HEALTH };
     }
+    for (CardClass(slot), mut text) in &mut classes {
+        let class = hero(*slot).and_then(|h| h.8).map_or("", |c| c.0.as_str());
+        if **text != class {
+            **text = class.to_string();
+        }
+    }
     for (CardHealthText(slot), mut text) in &mut health_text {
         let label = hero(*slot).map_or_else(|| "Fallen".to_string(), |h| format!("{}/{}", h.2.hp, h.2.max_hp));
         if **text != label {
@@ -391,7 +409,7 @@ fn update_cards(
         colour.0 = if left.is_some_and(|ap| *pip < ap) { style::AP } else { style::AP_SPENT };
     }
     for (CardBadge(slot, badge), mut node, mut text, mut colour, mut border) in &mut badges {
-        let shown = hero(*slot).and_then(|(_, _, _, hunger, watching, hunkered, poisoned, confused)| match badge {
+        let shown = hero(*slot).and_then(|(_, _, _, hunger, watching, hunkered, poisoned, confused, _)| match badge {
             Badge::Overwatch => watching.then_some(("Watch", style::BADGE_OVERWATCH)),
             Badge::Hunkered => hunkered.then_some(("Hunker", style::BADGE_HUNKERED)),
             Badge::Poisoned => poisoned.then_some(("Poison", style::BADGE_POISON)),
@@ -451,9 +469,10 @@ fn update_action_bar(
         &mut BorderColor,
         &mut Enabled,
     )>,
-    mut labels: Query<(&ButtonLabel, &mut TextColor), Without<ButtonCaption>>,
+    mut labels: Query<(&ButtonLabel, &mut Text, &mut TextColor), (Without<ButtonCaption>, Without<ActionHint>)>,
     mut captions: Query<(&ButtonCaption, &mut Text, &mut TextColor), (Without<ButtonLabel>, Without<ActionHint>)>,
-    mut hint: Query<&mut Text, (With<ActionHint>, Without<ButtonCaption>)>,
+    mut hint: Query<&mut Text, (With<ActionHint>, Without<ButtonCaption>, Without<ButtonLabel>)>,
+    (abilities, ability_names): (Res<ActiveAbilities>, Query<&Name, With<HeroAbility>>),
 ) {
     let hero = active.0.and_then(|unit| heroes.get(unit).ok().map(|(pos, name)| (unit, pos, name)));
     let combat = matches!(*mode, Mode::Combat { .. });
@@ -462,7 +481,8 @@ fn update_action_bar(
         let target_in_reach = seen_hostiles(&monsters, &views)
             .iter()
             .any(|&(_, at)| in_reach(&map, &weapon, (pos.x, pos.y), at).is_ok());
-        action_bar(ActionContext { combat, ap_left: mode.ap_left(unit), target_in_reach })
+        let abilities = abilities.0.map(|a| a.map(|a| a.status));
+        action_bar(ActionContext { combat, ap_left: mode.ap_left(unit), target_in_reach, abilities })
     });
     let bar = bar.unwrap_or_default();
     let refusal = |action: HudAction| bar.iter().find(|b| b.action == action).map(|b| b.refusal);
@@ -481,16 +501,30 @@ fn update_action_bar(
         };
         *border = BorderColor::all(if hover { style::ACCENT } else { style::BUTTON_EDGE });
     }
-    for (ButtonLabel(action), mut colour) in &mut labels {
+    for (ButtonLabel(action), mut text, mut colour) in &mut labels {
         colour.0 = if refusal(*action) == Some(None) { style::TEXT } else { style::TEXT_FAINT };
+        // An ability button names the ability.
+        let HudAction::Ability(slot) = *action else { continue };
+        let Some(ability) = abilities.0[slot] else { continue };
+        let name = ability_names.get(ability.entity).map_or("", |n| n.name.as_str());
+        if **text != name {
+            **text = name.to_string();
+        }
     }
     for (ButtonCaption(action), mut text, mut colour) in &mut captions {
         let (caption, tint) = match refusal(*action).flatten() {
-            Some(reason) => (reason, style::HEALTH_LOW.with_alpha(0.75)),
-            None => (action.hotkey(), style::TEXT_DIM),
+            Some(reason) => (reason.to_string(), style::HEALTH_LOW.with_alpha(0.75)),
+            None => (action.hotkey().to_string(), style::TEXT_DIM),
+        };
+        // A resting ability says how many rounds are left.
+        let caption = match *action {
+            HudAction::Ability(slot) if caption == "Cooldown" => {
+                abilities.0[slot].map_or(caption, |a| format!("Cooldown {}", a.status.left))
+            }
+            _ => caption,
         };
         if **text != caption {
-            **text = caption.to_string();
+            **text = caption;
         }
         colour.0 = tint;
     }

@@ -2,36 +2,38 @@ use bevy::prelude::*;
 use rand::RngExt;
 
 use crate::{
-    combat::{CombatStats, DEFAULT_AIM},
+    abilities::HeroClass,
+    combat::CombatStats,
     components::{HungerClock, HungerState, Name, RenderableBundle},
     entity_render::EntityShape,
     map::{Position, MAP_WIDTH},
     party::{PartyMember, HEROES},
-    raws::{get_spawn_table_for_depth, spawn_named_entity, RAWS},
+    raws::{get_spawn_table_for_depth, spawn_class_kit, spawn_named_entity, Class, RAWS},
     rng::GameRng,
     shapes::Rect,
-    tactics::DEFAULT_MOVEMENT,
     viewshed::Viewshed,
 };
 
 const MAX_MONSTERS: i32 = 4;
 const MAX_ITEMS: i32 = 2;
 
-/// A fresh hero for `slot` at `(x, y)`, with the starting stats.
-pub fn party_member(slot: usize, x: i32, y: i32) -> impl Bundle {
-    let (name, colour) = HEROES[slot];
+/// A fresh hero for `slot` at `(x, y)`, with the class's starting stats.
+pub fn party_member(slot: usize, x: i32, y: i32, class: &Class) -> impl Bundle {
+    let (name, colour, _) = HEROES[slot];
+    let stats = &class.stats;
     (
         PartyMember { slot },
         Name { name: name.to_string() },
+        HeroClass(class.name.clone()),
         Position { x, y },
         CombatStats {
-            max_hp: 30,
-            hp: 30,
-            armour: 2,
-            power: 5,
-            movement: DEFAULT_MOVEMENT,
-            aim: DEFAULT_AIM,
-            defence: 0,
+            max_hp: stats.max_hp,
+            hp: stats.max_hp,
+            armour: stats.armour,
+            power: stats.power,
+            movement: stats.movement,
+            aim: stats.aim,
+            defence: stats.defence,
         },
         Viewshed {
             range: 8,
@@ -45,12 +47,19 @@ pub fn party_member(slot: usize, x: i32, y: i32) -> impl Bundle {
     )
 }
 
-/// Spawns one hero per tile, in slot order, and returns them.
+/// Spawns one hero per tile, in slot order, each with their class's gear and
+/// abilities, and returns them.
 pub fn spawn_party(commands: &mut Commands, tiles: &[(i32, i32)]) -> Vec<Entity> {
+    let raws = RAWS.lock().unwrap();
     tiles
         .iter()
         .enumerate()
-        .map(|(slot, &(x, y))| commands.spawn(party_member(slot, x, y)).id())
+        .map(|(slot, &(x, y))| {
+            let class = raws.class(HEROES[slot].2).expect("every hero's class is in the raws");
+            let hero = commands.spawn(party_member(slot, x, y, class)).id();
+            spawn_class_kit(&raws, commands, hero, class);
+            hero
+        })
         .collect()
 }
 
@@ -178,5 +187,59 @@ pub fn spawn_region(
                 spawn_named_entity(&raws, commands, &entity_name, x, y, None);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use bevy::ecs::system::RunSystemOnce;
+
+    use super::*;
+    use crate::abilities::HeroAbility;
+    use crate::components::{Equipped, InBackpack};
+
+    #[test]
+    fn a_new_party_is_one_of_each_class_with_its_stats_gear_and_abilities() {
+        crate::raws::load_raws();
+        let mut world = World::new();
+        world
+            .run_system_once(|mut commands: Commands| {
+                spawn_party(&mut commands, &[(0, 0), (1, 0), (2, 0), (3, 0)]);
+            })
+            .unwrap();
+        // Sorted: query order follows archetypes, not spawn order.
+        let names = |world: &mut World, owned: &dyn Fn(&World, Entity) -> bool| -> Vec<String> {
+            let mut q = world.query::<(Entity, &Name)>();
+            let mut names: Vec<_> = q.iter(world).filter(|(e, _)| owned(world, *e)).map(|(_, n)| n.name.clone()).collect();
+            names.sort();
+            names
+        };
+        let mut heroes = world.query::<(Entity, &PartyMember, &HeroClass, &CombatStats)>();
+        let mut heroes: Vec<_> = heroes
+            .iter(&world)
+            .map(|(e, m, c, s)| (m.slot, e, c.0.clone(), (s.hp, s.power, s.armour, s.aim, s.defence, s.movement)))
+            .collect();
+        heroes.sort_by_key(|h| h.0);
+        let kits: Vec<_> = heroes
+            .into_iter()
+            .map(|(_, hero, class, stats)| {
+                let worn = names(&mut world, &|w, e| w.get::<Equipped>(e).is_some_and(|q| q.owner == hero));
+                let packed = names(&mut world, &|w, e| w.get::<InBackpack>(e).is_some_and(|b| b.owner == hero));
+                let abilities = names(&mut world, &|w, e| {
+                    w.get::<HeroAbility>(e).is_some() && w.get::<ChildOf>(e).is_some_and(|c| c.parent() == hero)
+                });
+                (class, stats, worn, packed, abilities)
+            })
+            .collect();
+        let s = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            kits,
+            vec![
+                ("Fighter".into(), (34, 3, 2, 65, 5, 4), s(&["Longsword", "Shield"]), s(&[]), s(&["Cleave", "Second Wind"])),
+                ("Ranger".into(), (28, 2, 1, 75, 10, 5), s(&["Shortbow"]), s(&["Dagger"]), s(&["Aimed Shot", "Snare"])),
+                ("Mage".into(), (22, 1, 0, 70, 5, 4), s(&["Dagger"]), s(&[]), s(&["Fireball", "Magic Missile"])),
+                ("Cleric".into(), (30, 2, 2, 65, 0, 4), s(&["Blessed Mace"]), s(&[]), s(&["Heal", "Smite"])),
+            ]
+        );
     }
 }

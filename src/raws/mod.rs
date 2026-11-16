@@ -1,9 +1,11 @@
+mod class_structs;
 mod item_structs;
 mod mob_structs;
 mod prop_structs;
 mod rawmaster;
 mod spawn_table_structs;
 
+pub use class_structs::*;
 pub use item_structs::*;
 pub use mob_structs::*;
 pub use prop_structs::*;
@@ -19,6 +21,10 @@ pub struct Raws {
     pub mobs: Vec<Mob>,
     pub props: Vec<Prop>,
     pub spawn_table: Vec<SpawnTableEntry>,
+    #[serde(default)]
+    pub classes: Vec<Class>,
+    #[serde(default)]
+    pub abilities: Vec<Ability>,
 }
 
 pub static RAWS: LazyLock<Mutex<RawMaster>> = LazyLock::new(|| Mutex::new(RawMaster::empty()));

@@ -52,7 +52,7 @@ pub const GAP: f32 = 10.0;
 pub const RADIUS: f32 = 4.0;
 pub const CARD_WIDTH: f32 = 300.0;
 pub const CARD_HEIGHT: f32 = 26.0;
-pub const BUTTON_WIDTH: f32 = 68.0;
+pub const BUTTON_WIDTH: f32 = 88.0;
 pub const BUTTON_GAP: f32 = 4.0;
 pub const BUTTON_HEIGHT: f32 = 50.0;
 /// The log and depth column: a share of the window, within these bounds.

@@ -61,6 +61,7 @@ pub enum Targeting {
     #[default]
     Tile,           // Can target any tile
     SingleEntity,   // Must target an entity
+    Ally,           // Must target a hero (a healing ability)
     // Future: MultiEntity { count: i32 }, Line { length: i32 }, etc.
 }
 

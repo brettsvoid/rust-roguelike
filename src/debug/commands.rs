@@ -33,6 +33,7 @@ pub fn execute_command(
         Some("reveal") => cmd_reveal(debug_state),
         Some("nofog") => cmd_nofog(debug_state),
         Some("heal") => cmd_heal(party),
+        Some("hurt") => cmd_hurt(&parts, party, active),
         Some("kill_all") => cmd_kill_all(commands, monster_query),
         Some("teleport") => cmd_teleport(&parts, party, active),
         Some("spawn") => cmd_spawn(&parts, commands, party, active),
@@ -46,7 +47,7 @@ pub fn execute_command(
 }
 
 fn cmd_help() -> String {
-    "Commands: spawn <item> (portal, heart, ...), effect <spark|fireball|missile|heal|confusion|blood>, place <dx> <dy> <raws name>, teleport <x> <y>, gold <n>, godmode, reveal, nofog, heal, kill_all, town sell <sector> <value>, town days <n>, town level <sector> <n>".to_string()
+    "Commands: spawn <item> (portal, heart, ...), effect <spark|fireball|missile|heal|confusion|blood>, place <dx> <dy> <raws name>, teleport <x> <y>, gold <n>, godmode, reveal, nofog, heal, hurt <n>, kill_all, town sell <sector> <value>, town days <n>, town level <sector> <n>".to_string()
 }
 
 fn cmd_godmode(god_mode: &mut GodMode) -> String {
@@ -111,6 +112,24 @@ fn cmd_gold(parts: &[&str], commands: &mut Commands) -> String {
             format!("Added {amount} gold to the purse")
         }
         _ => "Usage: gold <n>".to_string(),
+    }
+}
+
+/// Takes `n` hit points off the active hero (never below 1), to try out healing.
+fn cmd_hurt(
+    parts: &[&str],
+    party: &mut Query<(Entity, &mut Position, &mut CombatStats), With<PartyMember>>,
+    active: Option<Entity>,
+) -> String {
+    let Some(Ok(n)) = parts.get(1).map(|n| n.parse::<i32>()) else {
+        return "Usage: hurt <n>".to_string();
+    };
+    match active.and_then(|unit| party.get_mut(unit).ok()) {
+        Some((.., mut stats)) => {
+            stats.hp = (stats.hp - n).max(1);
+            format!("Hurt to {}/{}", stats.hp, stats.max_hp)
+        }
+        None => "No active hero".to_string(),
     }
 }
 

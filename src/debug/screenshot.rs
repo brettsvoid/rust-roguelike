@@ -63,6 +63,7 @@ use crate::player::{self, WalkPath};
 use crate::presentation::Presentation;
 use crate::resources::UiFont;
 use crate::ui::menus::{inventory, shop};
+use crate::ui::targeting;
 use crate::rng::GameRng;
 use crate::{RunState, TargetingInfo};
 
@@ -95,12 +96,14 @@ impl Plugin for ScreenshotPlugin {
                         .run_if(
                             in_state(RunState::AwaitingInput)
                                 .or_else(in_state(RunState::ShowShop))
-                                .or_else(in_state(RunState::ShowInventory)),
+                                .or_else(in_state(RunState::ShowInventory))
+                                .or_else(in_state(RunState::ShowTargeting)),
                         )
                         .after(picking::update_hovered_tile)
                         .before(shop::click_vendor)
                         .before(shop::handle_shop_input)
                         .before(inventory::handle_inventory_input)
+                        .before(targeting::handle_targeting)
                         .before(crate::ui::hud::click_hud)
                         .before(player::handle_player_input),
                     // Models load async; starting only once they are in keeps the
@@ -147,11 +150,15 @@ fn key_input(c: char) -> Option<HarnessInput> {
         '+' => return Some(HarnessInput::Scroll(1.0)),
         '-' => return Some(HarnessInput::Scroll(-1.0)),
         '!' => KeyCode::Escape,
+        ' ' => KeyCode::Space,
+        '1' => KeyCode::Digit1,
+        '2' => KeyCode::Digit2,
         'b' => KeyCode::KeyB,
         'e' => KeyCode::KeyE,
         'f' => KeyCode::KeyF,
         'h' => KeyCode::KeyH,
         'o' => KeyCode::KeyO,
+        'r' => KeyCode::KeyR,
         'j' => KeyCode::KeyJ,
         'g' => KeyCode::KeyG,
         '.' => KeyCode::Period,

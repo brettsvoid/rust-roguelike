@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::abilities::HeroAbility;
 use crate::combat::{Arms, CombatStats, Refusal};
 use crate::components::{HungerClock, HungerState, Name};
 use crate::cover::Exposure;
@@ -10,7 +11,7 @@ use crate::overwatch::Hunkered;
 use crate::party::ActiveUnit;
 use crate::picking::{update_hovered_tile, HoveredTile};
 use crate::resources::UiFont;
-use crate::RunState;
+use crate::{RunState, TargetingInfo};
 
 use super::combat_hud::{shot_preview, Mark, Shooter, ShotPreview};
 use super::components::Tooltip;
@@ -56,6 +57,7 @@ fn update_tooltip(
     entities_query: Query<(Entity, &Position, &Name, Option<&CombatStats>, Has<Monster>, Has<Hunkered>)>,
     hunger: Query<&HungerClock>,
     tooltip_query: Query<Entity, With<Tooltip>>,
+    (state, targeting, abilities): (Res<State<RunState>>, Res<TargetingInfo>, Query<&HeroAbility>),
 ) {
     for entity in &tooltip_query {
         commands.entity(entity).despawn();
@@ -68,6 +70,12 @@ fn update_tooltip(
         return;
     }
 
+    // Aiming an ability (Aimed Shot), the preview counts its extra aim.
+    let aim_bonus = targeting
+        .item
+        .filter(|_| *state.get() == RunState::ShowTargeting)
+        .and_then(|item| abilities.get(item).ok())
+        .map_or(0, HeroAbility::aim_bonus);
     let shooter = active
         .0
         .filter(|&unit| matches!(*mode, Mode::Combat { .. }) && mode.can_act(unit))
@@ -75,7 +83,8 @@ fn update_tooltip(
             let (_, at, _, stats, ..) = entities_query.get(unit).ok()?;
             let stats = stats?;
             let well_fed = hunger.get(unit).is_ok_and(|h| h.state == HungerState::WellFed);
-            Some((unit, Shooter { at: (at.x, at.y), aim: stats.aim, bonus: stats.power + i32::from(well_fed) }))
+            let aim = stats.aim + aim_bonus;
+            Some((unit, Shooter { at: (at.x, at.y), aim, bonus: stats.power + i32::from(well_fed) }))
         });
 
     let lines: Vec<Line> = entities_query

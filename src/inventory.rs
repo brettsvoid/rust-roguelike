@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
+    abilities::healed,
     combat::{
         chebyshev, hit_chance, odds, roll_attack, roll_damage, spell_damage, CombatStats, Outcome, SufferDamage, DEFAULT_AIM,
         LEVEL_GROUND, SPELL_AIM_BONUS,
@@ -115,16 +116,27 @@ pub fn item_use_system(
             commands.entity(entity).remove::<WantsToUseItem>();
             continue;
         }
-        // Apply healing if the item provides it
+        let caster = target_query.get(entity).map_or("You", |(.., name)| name.name.as_str());
+        // Apply healing if the item provides it: to the user, or to the unit
+        // on the target tile (a healing ability aimed at a hero).
         if let Ok((healing, item_name)) = healing_query.get(wants_use.item) {
-            if let Ok(mut stats) = stats_query.get_mut(entity) {
-                stats.hp = (stats.hp + healing.heal_amount).min(stats.max_hp);
-                gamelog.entries.push(format!(
-                    "You drink the {}, healing {} hp.",
-                    item_name.name, healing.heal_amount
-                ));
+            let patient = wants_use
+                .target
+                .and_then(|t| target_query.iter().find(|(_, pos, _)| (pos.x, pos.y) == t))
+                .map_or((entity, user_pos, caster), |(e, pos, name)| (e, pos, name.name.as_str()));
+            if let Ok(mut stats) = stats_query.get_mut(patient.0) {
+                let before = stats.hp;
+                stats.hp = healed(stats.hp, stats.max_hp, healing.heal_amount);
+                let item = &item_name.name;
+                gamelog.entries.push(if consumable_query.contains(wants_use.item) {
+                    format!("You drink the {item}, healing {} hp.", healing.heal_amount)
+                } else if patient.0 == entity {
+                    format!("{caster} uses {item}, healing {} hp.", stats.hp - before)
+                } else {
+                    format!("{caster} uses {item} on {}, healing {} hp.", patient.2, stats.hp - before)
+                });
 
-                effects.play(EffectKind::Healing, user_pos.x, user_pos.y);
+                effects.play(EffectKind::Healing, patient.1.x, patient.1.y);
             }
         }
 
@@ -154,6 +166,7 @@ pub fn item_use_system(
                 if let Ok(aoe) = aoe_query.get(wants_use.item) {
                     let radius = aoe.radius as f32;
                     effects.play(EffectKind::Fireball { radius }, target_x, target_y);
+                    gamelog.entries.push(format!("{caster} casts {}.", item_name.name));
 
                     // Find all entities within the AoE radius
                     let mut hit_count = 0;
@@ -180,7 +193,6 @@ pub fn item_use_system(
                 } else {
                     // Single target - find entity at exact position
                     let from = (user_pos.x, user_pos.y);
-                    let caster = target_query.get(entity).map_or("You", |(.., name)| name.name.as_str());
                     let aim = stats_query.get(entity).map_or(DEFAULT_AIM, |s| s.aim) + SPELL_AIM_BONUS;
                     // The targeting screen has already checked the range.
                     let range = ranged.map_or(1, |r| r.range);
@@ -218,7 +230,7 @@ pub fn item_use_system(
                             turns: causes_confusion.turns,
                         });
                         gamelog.entries.push(format!(
-                            "You use {} on {}, confusing them for {} turns.",
+                            "{caster} uses {} on {}, confusing them for {} turns.",
                             item_name.name, target_name.name, causes_confusion.turns
                         ));
 

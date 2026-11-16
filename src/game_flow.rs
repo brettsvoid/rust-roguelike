@@ -26,7 +26,7 @@ use crate::party::{next_unit, ActiveUnit, PartyMember};
 use crate::player::WalkPath;
 use crate::tactics::{Action, AP_PER_ROUND};
 use crate::viewshed::{self, Viewshed};
-use crate::{combat, hunger, inventory, levels, monsters, overwatch, traps};
+use crate::{abilities, combat, hunger, inventory, levels, monsters, overwatch, traps};
 
 #[derive(States, Clone, Copy, Default, Eq, PartialEq, Debug, Hash)]
 pub enum RunState {
@@ -190,6 +190,8 @@ impl Plugin for GameFlowPlugin {
                     (overwatch::move_system, traps::trap_trigger_system).chain(),
                     inventory::item_collection_system,
                     levels::use_town_portal,
+                    // Weapon abilities strike here; spells go on to the item code.
+                    abilities::ability_system,
                     inventory::item_use_system,
                     inventory::item_drop_system,
                     inventory::item_remove_system,
@@ -214,6 +216,7 @@ impl Plugin for GameFlowPlugin {
                     combat::attack_system,
                     hunger::hunger_system,
                     combat::start_of_turn::<With<PartyMember>>,
+                    abilities::tick_cooldowns,
                     combat::damage_system,
                     combat::delete_the_dead,
                     viewshed::update_viewshed,

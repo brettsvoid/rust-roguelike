@@ -2,6 +2,7 @@ use bevy::input::keyboard::KeyboardInput;
 use bevy::input::ButtonState;
 use bevy::prelude::*;
 
+use crate::abilities::HeroClass;
 use crate::components::{Equipped, InBackpack, Item, Name, Ranged, WantsToDropItem, WantsToRemoveItem, WantsToUseItem};
 use crate::party::ActiveUnit;
 use crate::resources::UiFont;
@@ -64,7 +65,7 @@ fn spawn_inventory_menu(
     font: Res<UiFont>,
     mut menu_page: ResMut<MenuPage>,
     active: Res<ActiveUnit>,
-    names: Query<&Name>,
+    names: Query<(&Name, Option<&HeroClass>)>,
     backpack_query: Query<(&InBackpack, &Name), With<Item>>,
 ) {
     menu_page.0 = 0;
@@ -183,7 +184,7 @@ fn spawn_drop_menu(
     font: Res<UiFont>,
     mut menu_page: ResMut<MenuPage>,
     active: Res<ActiveUnit>,
-    names: Query<&Name>,
+    names: Query<(&Name, Option<&HeroClass>)>,
     backpack_query: Query<(&InBackpack, &Name), With<Item>>,
 ) {
     menu_page.0 = 0;
@@ -291,7 +292,7 @@ fn spawn_remove_menu(
     font: Res<UiFont>,
     mut menu_page: ResMut<MenuPage>,
     active: Res<ActiveUnit>,
-    names: Query<&Name>,
+    names: Query<(&Name, Option<&HeroClass>)>,
     equipped_query: Query<(&Equipped, &Name), With<Item>>,
 ) {
     menu_page.0 = 0;
@@ -395,9 +396,11 @@ fn handle_remove_input(
 // ============================================================================
 
 /// A menu title naming the unit it acts for.
-fn titled(title: &str, unit: Option<&Name>) -> String {
+/// "Aldric the Fighter: Inventory".
+fn titled(title: &str, unit: Option<(&Name, Option<&HeroClass>)>) -> String {
     match unit {
-        Some(name) => format!("{}: {title}", name.name),
+        Some((name, Some(class))) => format!("{} the {}: {title}", name.name, class.0),
+        Some((name, None)) => format!("{}: {title}", name.name),
         None => title.to_string(),
     }
 }

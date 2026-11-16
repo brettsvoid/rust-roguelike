@@ -10,6 +10,7 @@
 
 use bevy::prelude::*;
 
+use crate::abilities::{self, AbilityStatus, ABILITY_SLOTS};
 use crate::combat::{aim_at, Refusal};
 use crate::components::Weapon;
 use crate::cover::Exposure;
@@ -27,6 +28,9 @@ pub struct ActionRequest(pub Option<KeyCode>);
 pub enum HudAction {
     /// The nearest hostile in reach (F, `tactics::attack_target`).
     Attack,
+    /// The active hero's ability in this slot (keys 1 and 2), named on the
+    /// button by `update_action_bar`.
+    Ability(usize),
     Overwatch,
     Hunker,
     /// Opens the inventory; using an item there costs 1 AP.
@@ -38,8 +42,10 @@ pub enum HudAction {
 }
 
 impl HudAction {
-    pub const ALL: [HudAction; 6] = [
+    pub const ALL: [HudAction; 8] = [
         HudAction::Attack,
+        HudAction::Ability(0),
+        HudAction::Ability(1),
         HudAction::Overwatch,
         HudAction::Hunker,
         HudAction::UseItem,
@@ -51,6 +57,8 @@ impl HudAction {
     pub fn key(self) -> KeyCode {
         match self {
             HudAction::Attack => KeyCode::KeyF,
+            HudAction::Ability(0) => KeyCode::Digit1,
+            HudAction::Ability(_) => KeyCode::Digit2,
             HudAction::Overwatch => KeyCode::KeyO,
             HudAction::Hunker => KeyCode::KeyH,
             HudAction::UseItem => KeyCode::KeyI,
@@ -63,6 +71,8 @@ impl HudAction {
     pub fn hotkey(self) -> &'static str {
         match self {
             HudAction::Attack => "F",
+            HudAction::Ability(0) => "1",
+            HudAction::Ability(_) => "2",
             HudAction::Overwatch => "O",
             HudAction::Hunker => "H",
             HudAction::UseItem => "I",
@@ -74,6 +84,7 @@ impl HudAction {
     pub fn label(self) -> &'static str {
         match self {
             HudAction::Attack => "Attack",
+            HudAction::Ability(_) => "Ability",
             HudAction::Overwatch => "Overwatch",
             HudAction::Hunker => "Hunker",
             HudAction::UseItem => "Use Item",
@@ -82,10 +93,12 @@ impl HudAction {
         }
     }
 
-    /// The AP rule behind the button, if it spends AP.
+    /// The AP rule behind the button, if it spends AP. An ability's is its own
+    /// (`abilities::refusal` decides it).
     fn action(self) -> Option<Action> {
         match self {
             HudAction::Attack => Some(Action::Attack),
+            HudAction::Ability(_) => None,
             HudAction::Overwatch => Some(Action::Overwatch),
             HudAction::Hunker => Some(Action::Hunker),
             HudAction::UseItem => Some(Action::UseItem),
@@ -103,6 +116,8 @@ pub struct ActionContext {
     pub ap_left: u8,
     /// A hostile the party sees is within the active hero's weapon reach.
     pub target_in_reach: bool,
+    /// The active hero's abilities by slot.
+    pub abilities: [Option<AbilityStatus>; ABILITY_SLOTS],
 }
 
 /// A button to show, and why it cannot be used if it cannot.
@@ -112,13 +127,20 @@ pub struct ActionButton {
     pub refusal: Option<&'static str>,
 }
 
-/// The buttons for the active hero, in bar order. Exploring, only the item
-/// and wait buttons show; the rest are combat actions.
+/// The buttons for the active hero, in bar order. Exploring, only the
+/// ability, item and wait buttons show; the rest are combat actions. A hero
+/// gets a button per ability they have.
 pub fn action_bar(ctx: ActionContext) -> Vec<ActionButton> {
     HudAction::ALL
         .into_iter()
-        .filter(|&action| ctx.combat || matches!(action, HudAction::UseItem | HudAction::Wait))
-        .map(|action| {
+        .filter_map(|action| {
+            if let HudAction::Ability(slot) = action {
+                let refusal = abilities::refusal(ctx.combat, ctx.ap_left, ctx.abilities[slot]?);
+                return Some(ActionButton { action, refusal });
+            }
+            if !ctx.combat && !matches!(action, HudAction::UseItem | HudAction::Wait) {
+                return None;
+            }
             let affordable = !ctx.combat || action.action().is_none_or(|a| a.spend(ctx.ap_left).is_some());
             let refusal = if !affordable {
                 Some(if ctx.ap_left == 0 { "No AP" } else { "Needs 1 AP" })
@@ -127,7 +149,7 @@ pub fn action_bar(ctx: ActionContext) -> Vec<ActionButton> {
             } else {
                 None
             };
-            ActionButton { action, refusal }
+            Some(ActionButton { action, refusal })
         })
         .collect()
 }
@@ -203,7 +225,7 @@ mod tests {
     use crate::map::TileType;
 
     fn bar(combat: bool, ap_left: u8, target_in_reach: bool) -> Vec<(HudAction, Option<&'static str>)> {
-        action_bar(ActionContext { combat, ap_left, target_in_reach })
+        action_bar(ActionContext { combat, ap_left, target_in_reach, ..default() })
             .into_iter()
             .map(|b| (b.action, b.refusal))
             .collect()
@@ -264,6 +286,8 @@ mod tests {
             keys,
             vec![
                 (KeyCode::KeyF, "F"),
+                (KeyCode::Digit1, "1"),
+                (KeyCode::Digit2, "2"),
                 (KeyCode::KeyO, "O"),
                 (KeyCode::KeyH, "H"),
                 (KeyCode::KeyI, "I"),
@@ -271,6 +295,40 @@ mod tests {
                 (KeyCode::KeyE, "E"),
             ]
         );
+    }
+
+    #[test]
+    fn ability_buttons_follow_the_attack_and_say_why_they_are_refused() {
+        let cleave = AbilityStatus { action: Action::Attack, left: 2, has_target: true };
+        let heal = AbilityStatus { action: Action::UseItem, left: 0, has_target: true };
+        let ctx = |combat, ap_left| ActionContext {
+            combat,
+            ap_left,
+            target_in_reach: true,
+            abilities: [Some(cleave), Some(heal)],
+        };
+        let bar = |ctx| action_bar(ctx).into_iter().map(|b| (b.action, b.refusal)).collect::<Vec<_>>();
+        assert_eq!(
+            bar(ctx(true, 2))[..3],
+            [
+                (HudAction::Attack, None),
+                (HudAction::Ability(0), Some("Cooldown")),
+                (HudAction::Ability(1), None),
+            ]
+        );
+        // Exploring, the heal still works and the attack ability waits for combat.
+        assert_eq!(
+            bar(ctx(false, 2)),
+            vec![
+                (HudAction::Ability(0), Some("Combat only")),
+                (HudAction::Ability(1), None),
+                (HudAction::UseItem, None),
+                (HudAction::Wait, None),
+            ]
+        );
+        // A hero with one ability gets one button.
+        let one = ActionContext { abilities: [Some(heal), None], ..ctx(true, 0) };
+        assert_eq!(bar(one)[..2], [(HudAction::Attack, Some("No AP")), (HudAction::Ability(0), Some("No AP"))]);
     }
 
     /// A 9 by 9 room of floor inside a wall ring.

@@ -14,7 +14,8 @@ use crate::RunState;
 use super::components::{RangeIndicator, TargetBorder, TargetHighlight, TargetingMenu};
 
 /// What the active unit is currently aiming: set when a ranged item is selected
-/// from the inventory, read while the targeting overlay is up.
+/// from the inventory or a targeted ability's hotkey is pressed (`item` is
+/// then the ability entity), read while the targeting overlay is up.
 #[derive(Resource, Default)]
 pub struct TargetingInfo {
     pub range: i32,
@@ -107,17 +108,18 @@ fn spawn_target_borders(
     let Some(item) = targeting_info.item else {
         return;
     };
-    let targeting = targeting_query.get(item).copied().unwrap_or_default();
-    if targeting != Targeting::SingleEntity {
-        return;
-    }
+    let candidates: Vec<&Position> = match targeting_query.get(item).copied().unwrap_or_default() {
+        Targeting::SingleEntity => monster_query.iter().collect(),
+        Targeting::Ally => party.iter().collect(),
+        Targeting::Tile => return,
+    };
 
     let Some(player_pos) = active.0.and_then(|unit| party.get(unit).ok()) else {
         return;
     };
 
-    // Find all monsters within range and on visible tiles
-    for monster_pos in &monster_query {
+    // Find all candidates within range and on visible tiles
+    for monster_pos in candidates {
         let idx = map.xy_idx(monster_pos.x, monster_pos.y);
         if !map.visible_tiles[idx] {
             continue;
@@ -205,8 +207,8 @@ fn update_target_highlight(
     };
 
     match targeting_query.get(item).copied().unwrap_or_default() {
-        Targeting::SingleEntity => {
-            if monster_query.iter().any(|pos| pos.x == map_x && pos.y == map_y) {
+        targeting @ (Targeting::SingleEntity | Targeting::Ally) => {
+            if holds_target(targeting, (map_x, map_y), &party, &monster_query) {
                 commands.spawn((
                     marks.mark(&marks.target, &map, (map_x, map_y), FULL_TILE, 0.01),
                     TargetHighlight,
@@ -234,6 +236,22 @@ fn update_target_highlight(
     }
 }
 
+/// Whether `cell` holds what an item aims at: a single-entity item needs a
+/// monster on it, an ally item a hero; a tile item takes any.
+fn holds_target(
+    targeting: Targeting,
+    cell: (i32, i32),
+    party: &Query<&Position, With<PartyMember>>,
+    monsters: &Query<&Position, With<Monster>>,
+) -> bool {
+    let on = |pos: &Position| (pos.x, pos.y) == cell;
+    match targeting {
+        Targeting::Tile => true,
+        Targeting::SingleEntity => monsters.iter().any(on),
+        Targeting::Ally => party.iter().any(on),
+    }
+}
+
 /// The hovered tile when it is a visible tile within the item's range.
 fn valid_target(
     hovered: &HoveredTile,
@@ -246,7 +264,7 @@ fn valid_target(
     })
 }
 
-fn handle_targeting(
+pub fn handle_targeting(
     mut commands: Commands,
     mut evr_kbd: MessageReader<KeyboardInput>,
     mouse_button: Res<ButtonInput<MouseButton>>,
@@ -281,8 +299,7 @@ fn handle_targeting(
     };
 
     let targeting = targeting_query.get(item).copied().unwrap_or_default();
-    // A single-entity item needs a monster on the tile; a tile item takes any.
-    if targeting == Targeting::SingleEntity && !monster_query.iter().any(|pos| pos.x == map_x && pos.y == map_y) {
+    if !holds_target(targeting, (map_x, map_y), &party, &monster_query) {
         return;
     }
     commands.entity(player_entity).insert(WantsToUseItem {

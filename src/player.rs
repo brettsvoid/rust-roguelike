@@ -8,10 +8,14 @@ use bevy::{
 use rand::RngExt;
 
 use crate::{
+    abilities::{self, ActiveAbilities, HeroAbility},
     bystander::Bystander,
     combat::{in_reach, Arms, CombatStats, WantsToAttack},
     cover::cover_sides,
-    components::{BlocksTile, BlocksVisibility, Confusion, Door, HungerClock, HungerState, Item, Name, WantsToPickupItem},
+    components::{
+        BlocksTile, BlocksVisibility, Confusion, Door, HungerClock, HungerState, Item, Name, WantsToPickupItem,
+        WantsToUseItem,
+    },
     debug::DebugMode,
     economy::town::Vendor,
     entity_render::{EntityShape, Renderable},
@@ -29,7 +33,7 @@ use crate::{
     tactics::{attack_target, confused_step, move_range, Action, MoveRange},
     ui::ActionRequest,
     viewshed::Viewshed,
-    RunState,
+    RunState, TargetingInfo,
 };
 
 /// Result of attempting to move the active unit
@@ -330,7 +334,7 @@ pub(crate) fn handle_player_input(
     monsters: Query<(Entity, &Position, &Name), (With<Monster>, Without<PartyMember>, Without<Bystander>)>,
     mut doors: Query<(Entity, &mut Door, &mut Renderable), Without<PartyMember>>,
     mut positions: Query<&mut Position, Or<(With<Bystander>, With<PartyMember>)>>,
-    (debug_mode, mode, mut turn_ended, mut hero_action, range, confused, mut rng, arms, mut request, mut presentation): (
+    (debug_mode, mode, mut turn_ended, mut hero_action, range, confused, mut rng, arms, mut request, mut presentation, abilities, mut targeting, ability_names): (
         Res<DebugMode>,
         Res<Mode>,
         ResMut<TurnEnded>,
@@ -341,6 +345,9 @@ pub(crate) fn handle_player_input(
         Arms,
         ResMut<ActionRequest>,
         ResMut<Presentation>,
+        Res<ActiveAbilities>,
+        ResMut<TargetingInfo>,
+        Query<&Name, With<HeroAbility>>,
     ),
 ) {
     // Don't process player input if debug console is open
@@ -474,6 +481,27 @@ pub(crate) fn handle_player_input(
                         action = Some(Action::Attack);
                     }
                     None => gamelog.entries.push("No target in reach.".to_string()),
+                }
+            }
+
+            // The active hero's first or second ability: aimed in the
+            // targeting screen, or used at once when there is nothing to pick.
+            KeyCode::Digit1 | KeyCode::Digit2 => {
+                let slot = usize::from(key_code == KeyCode::Digit2);
+                let Some(ability) = abilities.0[slot] else {
+                    continue;
+                };
+                let combat = matches!(*mode, Mode::Combat { .. });
+                let name = ability_names.get(ability.entity).map_or("", |n| n.name.as_str());
+                if let Some(why) = abilities::refusal(combat, mode.ap_left(player_entity), ability.status) {
+                    gamelog.entries.push(format!("{name}: {why}."));
+                } else if let Some(range) = ability.target.range(&arms.weapon(player_entity)) {
+                    *targeting = TargetingInfo { range, item: Some(ability.entity) };
+                    next_state.set_if_different(RunState::ShowTargeting);
+                } else {
+                    commands.entity(player_entity).insert(WantsToUseItem { item: ability.entity, target: None });
+                    player_acted = true;
+                    action = Some(ability.status.action);
                 }
             }
 

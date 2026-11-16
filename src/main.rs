@@ -7,6 +7,7 @@ use bevy::prelude::*;
 
 use map::{GRID_PX, MAP_WIDTH};
 
+mod abilities;
 mod bystander;
 mod camera;
 mod combat;
@@ -127,6 +128,7 @@ fn main() {
             ui::ShopPlugin,
             debug::DebugPlugin,
             presentation::PresentationPlugin,
+            abilities::AbilitiesPlugin,
         ))
         .add_systems(Startup, setup)
         .add_systems(Update, saveload::save_on_quit)

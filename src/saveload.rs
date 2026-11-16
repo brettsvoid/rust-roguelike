@@ -7,9 +7,10 @@ use std::fs;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
 
+use crate::abilities::HeroClass;
 use crate::combat::{CombatStats, DEFAULT_AIM};
 use crate::components::{
-    AreaOfEffect, BlocksTile, CausesConfusion, Confusion, Consumable, EntryTrigger, Hidden,
+    AreaOfEffect, BlocksTile, CausesConfusion, Confusion, Consumable, EntryTrigger, Equipped, Hidden,
     HungerClock, HungerState, InBackpack, InflictsDamage, Item, MagicMapper, Name, ProvidesFood, TownPortal,
     ProvidesHealing, Ranged, RenderableBundle, SingleActivation, Targeting,
 };
@@ -22,6 +23,7 @@ use crate::map::{tile_walkable, Map, Position, Tile, TileType, FONT_SIZE};
 use crate::map_render::{spawn_map_tiles, TileReveal};
 use crate::monsters::Monster;
 use crate::party::{ActiveUnit, PartyMember};
+use crate::raws::{spawn_class_kit, RAWS};
 use crate::resources::UiFont;
 use crate::tactics::DEFAULT_MOVEMENT;
 use crate::viewshed::Viewshed;
@@ -51,6 +53,7 @@ pub type PartySaveQuery<'w, 's> = Query<
         &'static Viewshed,
         &'static HungerClock,
         &'static Renderable,
+        Option<&'static HeroClass>,
     ),
 >;
 
@@ -89,7 +92,8 @@ pub type ItemSaveQuery<'w, 's> = Query<
         // Nested: Bevy query tuples stop at 15 elements.
         (Option<&'static MagicMapper>, Option<&'static Gold>, Option<&'static TownPortal>),
     ),
-    With<Item>,
+    // Equipment is not saved yet (P01): a loaded hero gets their class's gear afresh.
+    (With<Item>, Without<Equipped>),
 >;
 
 pub type TrapSaveQuery<'w, 's> = Query<
@@ -190,6 +194,9 @@ pub struct SerializedMember {
     pub hunger_state: HungerState,
     #[serde(default = "default_hunger_duration")]
     pub hunger_duration: i32,
+    /// The raws class; missing in saves from before classes.
+    #[serde(default)]
+    pub class: Option<String>,
 }
 
 fn default_hunger_duration() -> i32 {
@@ -297,7 +304,7 @@ pub fn save_game(
 ) {
     let mut party: Vec<SerializedMember> = party_query
         .iter()
-        .map(|(_, member, pos, name, stats, viewshed, hunger, renderable)| SerializedMember {
+        .map(|(_, member, pos, name, stats, viewshed, hunger, renderable, class)| SerializedMember {
             slot: member.slot,
             x: pos.x,
             y: pos.y,
@@ -313,6 +320,7 @@ pub fn save_game(
             viewshed_range: viewshed.range,
             hunger_state: hunger.state,
             hunger_duration: hunger.duration,
+            class: class.map(|c| c.0.clone()),
         })
         .collect();
     if party.is_empty() {
@@ -403,6 +411,7 @@ pub fn save_game(
                         targeting: targeting.map(|t| match t {
                             Targeting::Tile => "Tile".to_string(),
                             Targeting::SingleEntity => "SingleEntity".to_string(),
+                            Targeting::Ally => "Ally".to_string(),
                         }),
                         causes_confusion: causes_confusion.map(|c| c.turns),
                         magic_mapper: magic_mapper.is_some(),
@@ -601,6 +610,13 @@ fn restore_game(
                 ),
             ))
             .id();
+        // Not saved yet (P01): equipment and cooldowns. The class's starting
+        // gear comes back equipped and its abilities ready.
+        let raws = RAWS.lock().unwrap();
+        if let Some(class) = member.class.as_deref().and_then(|name| raws.class(name)) {
+            commands.entity(entity).insert(HeroClass(class.name.clone()));
+            spawn_class_kit(&raws, commands, entity, class);
+        }
         party.push((member.slot, entity));
     }
     let member_in = |slot: usize| party.iter().find(|m| m.0 == slot).map(|m| m.1);
@@ -693,6 +709,7 @@ fn restore_game(
         if let Some(ref targeting_str) = item.properties.targeting {
             let targeting = match targeting_str.as_str() {
                 "SingleEntity" => Targeting::SingleEntity,
+                "Ally" => Targeting::Ally,
                 _ => Targeting::Tile,
             };
             entity_commands.insert(targeting);
@@ -796,6 +813,7 @@ mod tests {
             viewshed_range: 8,
             hunger_state: HungerState::Normal,
             hunger_duration: 20,
+            class: None,
         }
     }
 
