@@ -288,6 +288,51 @@
         "Aldric is dead",
         "You cannot afford Halvard (60 gold)."
       ]
+    },
+    {
+      "name": "items_1",
+      "note": "Gold, Health Potion, Rations, Magic Missile Scroll, Fireball Scroll, Confusion Scroll, Town Portal, Scroll of Magic Mapping in two rows north of the party, torchlit, gameplay zoom.",
+      "args": "--seed 42 --depth 2 --console godmode --console \"place 3 0 Gold\" --console \"place 1 -2 Health Potion\" --console \"place 3 -2 Rations\" --console \"place 5 -2 Magic Missile Scroll\" --console \"place -1 -4 Fireball Scroll\" --console \"place 1 -4 Confusion Scroll\" --console \"place 3 -4 Town Portal\" --console \"place 5 -4 Scroll of Magic Mapping\" --frames 120"
+    },
+    {
+      "name": "items_1_zoom",
+      "note": "Gold, Health Potion, Rations, Magic Missile Scroll, Fireball Scroll, Confusion Scroll, Town Portal, Scroll of Magic Mapping in two rows north of the party, torchlit, zoomed in.",
+      "args": "--seed 42 --depth 2 --console godmode --console \"place 3 0 Gold\" --console \"place 1 -2 Health Potion\" --console \"place 3 -2 Rations\" --console \"place 5 -2 Magic Missile Scroll\" --console \"place -1 -4 Fireball Scroll\" --console \"place 1 -4 Confusion Scroll\" --console \"place 3 -4 Town Portal\" --console \"place 5 -4 Scroll of Magic Mapping\" --keys \"++++++++\" --frames 180"
+    },
+    {
+      "name": "items_2_zoom",
+      "note": "Dagger, Shortbow, Longsword, Battleaxe, Shield, Tower Shield, Chain Mail, Warhammer in two rows north of the party, torchlit, zoomed in.",
+      "args": "--seed 42 --depth 2 --console godmode --console \"place 3 0 Dagger\" --console \"place 1 -2 Shortbow\" --console \"place 3 -2 Longsword\" --console \"place 5 -2 Battleaxe\" --console \"place -1 -4 Shield\" --console \"place 1 -4 Tower Shield\" --console \"place 3 -4 Chain Mail\" --console \"place 5 -4 Warhammer\" --keys \"++++++++\" --frames 180"
+    },
+    {
+      "name": "items_3_zoom",
+      "note": "Kite Shield, Scale Mail, Dwarven Greataxe, Plate Armour, Mithril Sword, Mithril Plate, Padded Tunic, Wool Cloak in two rows north of the party, torchlit, zoomed in.",
+      "args": "--seed 42 --depth 2 --console godmode --console \"place 3 0 Kite Shield\" --console \"place 1 -2 Scale Mail\" --console \"place 3 -2 Dwarven Greataxe\" --console \"place 5 -2 Plate Armour\" --console \"place -1 -4 Mithril Sword\" --console \"place 1 -4 Mithril Plate\" --console \"place 3 -4 Padded Tunic\" --console \"place 5 -4 Wool Cloak\" --keys \"++++++++\" --frames 180"
+    },
+    {
+      "name": "items_4",
+      "note": "Leather Armour, Studded Leather, Elven Cloak, Spidersilk Robe, Shadow Cloak, Greater Health Potion, Alchemist's Fire, Superior Health Potion in two rows north of the party, torchlit, gameplay zoom.",
+      "args": "--seed 42 --depth 2 --console godmode --console \"place 3 0 Leather Armour\" --console \"place 1 -2 Studded Leather\" --console \"place 3 -2 Elven Cloak\" --console \"place 5 -2 Spidersilk Robe\" --console \"place -1 -4 Shadow Cloak\" --console \"place 1 -4 Greater Health Potion\" --console \"place 3 -4 Alchemist's Fire\" --console \"place 5 -4 Superior Health Potion\" --frames 120"
+    },
+    {
+      "name": "items_4_zoom",
+      "note": "Leather Armour, Studded Leather, Elven Cloak, Spidersilk Robe, Shadow Cloak, Greater Health Potion, Alchemist's Fire, Superior Health Potion in two rows north of the party, torchlit, zoomed in.",
+      "args": "--seed 42 --depth 2 --console godmode --console \"place 3 0 Leather Armour\" --console \"place 1 -2 Studded Leather\" --console \"place 3 -2 Elven Cloak\" --console \"place 5 -2 Spidersilk Robe\" --console \"place -1 -4 Shadow Cloak\" --console \"place 1 -4 Greater Health Potion\" --console \"place 3 -4 Alchemist's Fire\" --console \"place 5 -4 Superior Health Potion\" --keys \"++++++++\" --frames 180"
+    },
+    {
+      "name": "items_5_zoom",
+      "note": "Potion of Restoration, Elixir of Life, Hearty Stew, Waybread, Dwarven Feast, Ambrosia, Holy Water, Prayer Scroll in two rows north of the party, torchlit, zoomed in.",
+      "args": "--seed 42 --depth 2 --console godmode --console \"place 3 0 Potion of Restoration\" --console \"place 1 -2 Elixir of Life\" --console \"place 3 -2 Hearty Stew\" --console \"place 5 -2 Waybread\" --console \"place -1 -4 Dwarven Feast\" --console \"place 1 -4 Ambrosia\" --console \"place 3 -4 Holy Water\" --console \"place 5 -4 Prayer Scroll\" --keys \"++++++++\" --frames 180"
+    },
+    {
+      "name": "items_6_zoom",
+      "note": "Blessed Mace, Ward of the Faithful, Greater Holy Water, Saint's Hammer, Scroll of Divine Light, Runed Staff, Scroll of Lightning, Spellguard Buckler in two rows north of the party, torchlit, zoomed in.",
+      "args": "--seed 42 --depth 2 --console godmode --console \"place 3 0 Blessed Mace\" --console \"place 1 -2 Ward of the Faithful\" --console \"place 3 -2 Greater Holy Water\" --console \"place 5 -2 Saint's Hammer\" --console \"place -1 -4 Scroll of Divine Light\" --console \"place 1 -4 Runed Staff\" --console \"place 3 -4 Scroll of Lightning\" --console \"place 5 -4 Spellguard Buckler\" --keys \"++++++++\" --frames 180"
+    },
+    {
+      "name": "items_7_zoom",
+      "note": "Scroll of Inferno, Staff of the Archmage, Scroll of Meteor Storm and the Heart of the Abyss under the active hero in two rows north of the party, torchlit, zoomed in.",
+      "args": "--seed 42 --depth 2 --console godmode --console \"place 3 0 Scroll of Inferno\" --console \"place 1 -2 Staff of the Archmage\" --console \"place 3 -2 Scroll of Meteor Storm\" --console \"spawn heart\" --console \"teleport 41 23\" --keys \"++++++++\" --frames 180"
     }
   ]
 }

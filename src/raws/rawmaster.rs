@@ -182,6 +182,14 @@ fn insert_effects(entity: &mut EntityCommands, effects: &HashMap<String, String>
     }
 }
 
+impl RawMaster {
+    /// The raws `model` of the item with this name.
+    pub fn item_model(&self, name: &str) -> Option<&str> {
+        let &idx = self.item_index.get(name)?;
+        self.raws.items[idx].renderable.as_ref()?.model.as_deref()
+    }
+}
+
 /// Spawn an item from raw data
 pub fn spawn_named_item(
     raws: &RawMaster,

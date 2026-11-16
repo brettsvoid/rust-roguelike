@@ -21,6 +21,7 @@ use crate::game_flow::RunState;
 use crate::gamelog::GameLog;
 use crate::map::{tile_walkable, Map, Position, Tile, TileType, FONT_SIZE};
 use crate::map_render::{spawn_map_tiles, TileReveal};
+use crate::models::Model;
 use crate::monsters::Monster;
 use crate::experience::{mob_xp, Experience, XpValue};
 use crate::party::{ActiveUnit, PartyMember};
@@ -680,15 +681,12 @@ fn restore_game(
     // Spawn items
     for item in save_data.items {
         let color = Color::srgb(item.color.r, item.color.g, item.color.b);
-        let mut entity_commands = commands.spawn((
-            Item,
-            Name { name: item.name.clone() },
-            RenderableBundle::new(
-                &item.glyph,
-                color,
-                EntityShape::Item,
-            ),
-        ));
+        let mut entity_commands = commands.spawn((Item, Name { name: item.name.clone() }));
+        // The model is not saved: it comes from the raws, and goes in before the shape that reads it.
+        if let Some(model) = RAWS.lock().unwrap().item_model(&item.name) {
+            entity_commands.insert(Model(model.to_string()));
+        }
+        entity_commands.insert(RenderableBundle::new(&item.glyph, color, EntityShape::Item));
 
         // Add location
         match item.location {
@@ -928,6 +926,7 @@ mod tests {
         use crate::entity_render::{attach_entity_mesh, EntityAssets};
         use bevy::ecs::system::RunSystemOnce;
 
+        crate::raws::load_raws();
         let mut app = App::new();
         app.init_resource::<Assets<Mesh>>()
             .init_resource::<Assets<StandardMaterial>>()
@@ -966,6 +965,13 @@ mod tests {
                 ("Gold".into(), Vec3::new(2.0, 0.15, 2.0), true),
             ]
         );
+        let mut models: Vec<(String, String)> = world
+            .query_filtered::<(&Name, &Model), With<Item>>()
+            .iter(world)
+            .map(|(name, Model(model))| (name.name.clone(), model.clone()))
+            .collect();
+        models.sort();
+        assert_eq!(models, vec![("Dagger".into(), "dagger".into()), ("Gold".into(), "gold".into())]);
 
         // The active unit and the dagger's owner are the restored Corin.
         let corin = world

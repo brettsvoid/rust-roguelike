@@ -454,6 +454,17 @@ scans the folder once at startup, so restart after adding a file).
   and `leg_l1` to `_r4` (the spider). Size tells rank, from the rat (0.55 m) to the demon lord
   (2.9 m to the horns); the wraith and bat hover. 170 to 530 triangles. Colours are dark and
   saturated (the torch washes pale ones out); silhouettes do most of the telling apart
+- Items kit (A06, A08): `art/build_items_kit.py` builds one model per raws item in
+  `art/items_kit.blend`, importing the monsters script and reusing the held weapons and shields
+  (`sword`, `bow`, `axe`, `big_axe`, `hammer`, `mace`, `staff`, `shield`; `recoloured` swaps
+  their materials, e.g. steel to gold). The raws `model` is the item name in snake case
+  (`Alchemist's Fire` is `alchemists_fire`), plus `heart_of_the_abyss` for the debug-spawned
+  Heart, which is not in the raws. Each `Item` is rested on the floor, centred and grown by
+  `GROW` (1.25) to at most `MAX_SPAN` (1.05 m) at `finish`. Long things lie along the north-east
+  diagonal, across the camera's view; shields lean towards the camera. Potions, the Heart, the
+  portal seal and magic trims glow; steel here is brighter and not metallic, as metal with
+  nothing to reflect reads near black. 32 to 190 triangles. A loaded game puts each item's
+  model back from the raws (`RawMaster::item_model`)
 - Facing: a creature's model scene (not the entity, so a hero's torch stays put) turns to the
   way it last moved, struck or was struck from, eased over `presentation::TURN_SECS`
   (`presentation::heading`, `Facing`, `turn_models`)

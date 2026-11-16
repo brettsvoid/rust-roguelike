@@ -4,10 +4,12 @@ use crate::combat::CombatStats;
 use crate::economy::town::{Sector, TownState};
 use crate::economy::trade;
 use crate::economy::Purse;
-use crate::components::{Item, Name};
+use crate::components::{Item, Name, RenderableBundle};
 use crate::effects::{EffectKind, Effects};
+use crate::entity_render::EntityShape;
 use crate::levels::HEART_OF_THE_ABYSS;
 use crate::map::{Map, Position, MAP_HEIGHT, MAP_WIDTH};
+use crate::models::Model;
 use crate::monsters::Monster;
 use crate::party::PartyMember;
 
@@ -247,8 +249,14 @@ fn cmd_spawn(
         "gold" => Some("Gold"),
         "portal" | "town_portal" => Some("Town Portal"),
         "heart" => {
-            // Not in the raws yet: a bare named item, enough to test the portal rule.
-            commands.spawn((Item, Name { name: HEART_OF_THE_ABYSS.to_string() }, Position { x, y }));
+            // Not in the raws yet: a named item with its model, enough to test the portal rule.
+            commands.spawn((
+                Item,
+                Name { name: HEART_OF_THE_ABYSS.to_string() },
+                Position { x, y },
+                Model("heart_of_the_abyss".to_string()),
+                RenderableBundle::new("*", Color::srgb(0.9, 0.05, 0.1), EntityShape::Item),
+            ));
             return format!("Spawned {HEART_OF_THE_ABYSS} at ({x}, {y})");
         }
         _ => None,
