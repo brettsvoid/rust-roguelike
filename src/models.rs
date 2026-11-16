@@ -12,8 +12,7 @@ use bevy::asset::io::file::FileAssetReader;
 use bevy::prelude::*;
 use bevy::world_serialization::WorldInstanceReady;
 
-use crate::components::Door;
-use crate::entity_render::ModelScene;
+use crate::entity_render::{EntityShape, ModelScene};
 use crate::levels::TOWN_DEPTH;
 use crate::lighting::wall_offset;
 use crate::map::{Map, Position, Revealed, RevealedState, TileType};
@@ -153,21 +152,29 @@ pub fn tile_variant(x: i32, y: i32) -> u32 {
     h % 3 + 1
 }
 
-/// How far to turn a prop's model about the vertical axis. Models face south
-/// (+z); a prop on a wall (a wall torch) turns to its open side, the side
+/// How far to turn a model about the vertical axis. Models face south (+z); a
+/// prop on a wall (a wall torch) turns to its open side, the side
 /// `lighting::wall_offset` hangs the flame on, and a door between walls to
-/// its north and south turns a quarter so it spans the passage.
-pub fn model_yaw(map: &Map, pos: Position, is_door: bool) -> f32 {
+/// its north and south turns a quarter so it spans the passage. Furniture
+/// beside a wall turns its back to it, trying the wall north, west, east,
+/// then south (so it faces the camera's sides first).
+pub fn model_yaw(map: &Map, pos: Position, shape: EntityShape) -> f32 {
     let is_wall = |x: i32, y: i32| {
         x >= 0 && y >= 0 && x < map.width && y < map.height && map.tiles[map.xy_idx(x, y)] == TileType::Wall
     };
     let open = wall_offset(map, pos);
     if open != Vec2::ZERO {
-        open.x.atan2(open.y)
-    } else if is_door && is_wall(pos.x, pos.y - 1) && is_wall(pos.x, pos.y + 1) {
-        std::f32::consts::FRAC_PI_2
-    } else {
-        0.0
+        return open.x.atan2(open.y);
+    }
+    match shape {
+        EntityShape::Door | EntityShape::OpenDoor if is_wall(pos.x, pos.y - 1) && is_wall(pos.x, pos.y + 1) => {
+            std::f32::consts::FRAC_PI_2
+        }
+        EntityShape::Prop => [(0, -1), (-1, 0), (1, 0), (0, 1)]
+            .into_iter()
+            .find(|&(dx, dy)| is_wall(pos.x + dx, pos.y + dy))
+            .map_or(0.0, |(dx, dy)| ((-dx) as f32).atan2((-dy) as f32)),
+        _ => 0.0,
     }
 }
 
@@ -175,15 +182,15 @@ pub fn model_yaw(map: &Map, pos: Position, is_door: bool) -> f32 {
 /// gets a new model scene, so it is turned again.
 fn face_prop_models(
     mut scenes: Query<(&ChildOf, &mut Transform), Added<ModelScene>>,
-    props: Query<(&Position, Has<Door>)>,
+    props: Query<(&Position, &EntityShape)>,
     map: Option<Res<Map>>,
 ) {
     let Some(map) = map else {
         return;
     };
     for (child_of, mut transform) in &mut scenes {
-        if let Ok((&pos, is_door)) = props.get(child_of.parent()) {
-            transform.rotation = Quat::from_rotation_y(model_yaw(&map, pos, is_door));
+        if let Ok((&pos, &shape)) = props.get(child_of.parent()) {
+            transform.rotation = Quat::from_rotation_y(model_yaw(&map, pos, shape));
         }
     }
 }
@@ -340,10 +347,34 @@ mod tests {
             map.tiles[idx] = TileType::Floor;
         }
         let quarter = std::f32::consts::FRAC_PI_2;
-        assert_eq!(model_yaw(&map, Position { x: 1, y: 1 }, false), 0.0, "torch faces south");
-        assert_eq!(model_yaw(&map, Position { x: 0, y: 2 }, false), quarter, "torch faces east");
-        assert_eq!(model_yaw(&map, Position { x: 3, y: 2 }, true), quarter, "door between north and south walls");
-        assert_eq!(model_yaw(&map, Position { x: 1, y: 2 }, true), 0.0, "door between east and west walls");
+        let prop = EntityShape::Prop;
+        let door = EntityShape::Door;
+        assert_eq!(model_yaw(&map, Position { x: 1, y: 1 }, prop), 0.0, "torch faces south");
+        assert_eq!(model_yaw(&map, Position { x: 0, y: 2 }, prop), quarter, "torch faces east");
+        assert_eq!(model_yaw(&map, Position { x: 3, y: 2 }, door), quarter, "door between north and south walls");
+        assert_eq!(model_yaw(&map, Position { x: 1, y: 2 }, door), 0.0, "door between east and west walls");
+    }
+
+    #[test]
+    fn furniture_turns_its_back_to_a_wall() {
+        // A 3 by 3 room of floor, (1, 1) to (3, 3), inside walls.
+        let mut map = Map::new(5, 5, 2);
+        for y in 1..=3 {
+            for x in 1..=3 {
+                let idx = map.xy_idx(x, y);
+                map.tiles[idx] = TileType::Floor;
+            }
+        }
+        let yaw = |x, y, shape| model_yaw(&map, Position { x, y }, shape);
+        let quarter = std::f32::consts::FRAC_PI_2;
+        let prop = EntityShape::Prop;
+        assert_eq!(yaw(2, 1, prop), 0.0, "north wall: faces south");
+        assert_eq!(yaw(1, 1, prop), 0.0, "north-west corner: the north wall wins");
+        assert_eq!(yaw(1, 2, prop), quarter, "west wall: faces east");
+        assert_eq!(yaw(3, 2, prop), -quarter, "east wall: faces west");
+        assert!((yaw(2, 3, prop) - std::f32::consts::PI).abs() < 1e-6, "south wall: faces north");
+        assert_eq!(yaw(2, 2, prop), 0.0, "mid-room: faces south");
+        assert_eq!(yaw(1, 2, EntityShape::Creature), 0.0, "creatures are not turned");
     }
 
     #[test]
