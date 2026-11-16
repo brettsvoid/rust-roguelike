@@ -433,6 +433,17 @@ scans the folder once at startup, so restart after adding a file).
   triangles. Colour is mostly one white `dye` material tinted by the vertex colour (`"dye.red"`
   in the script is the `dye` material with `DYES["red"]`); `humanoid` and the hat and item
   helpers are there for the monsters (A05)
+- Monsters kit (A05, A08): `art/build_monsters_kit.py` builds one model per monster in
+  `art/monsters_kit.blend`, importing the characters script for `humanoid`, `Figure`, the hat and
+  item helpers and the `dye` tints (it adds its own, and two glowing materials, `ember` and
+  `ghost`, for eyes, jaws, the flaming sword and the lich's orb). Raws `model` on each mob: `rat`,
+  `kobold`, `goblin`, `hobgoblin`, `orc`, `orc_warrior`, `orc_shaman`, `skeleton`, `wraith`,
+  `lich`, `imp`, `hellhound`, `demon_lord`, `giant_bat`, `giant_spider`. Humanoids keep the
+  characters' parts; beasts are a `Beast` (a `Figure` with no parts) built from `rod` (a prism
+  between two points), with parts `body`, `head`, `leg_fl`/`_fr`/`_bl`/`_br`, `tail`, `wing_l`/`_r`
+  and `leg_l1` to `_r4` (the spider). Size tells rank, from the rat (0.55 m) to the demon lord
+  (2.9 m to the horns); the wraith and bat hover. 170 to 530 triangles. Colours are dark and
+  saturated (the torch washes pale ones out); silhouettes do most of the telling apart
 - Facing: a creature's model scene (not the entity, so a hero's torch stays put) turns to the
   way it last moved, struck or was struck from, eased over `presentation::TURN_SECS`
   (`presentation::heading`, `Facing`, `turn_models`)

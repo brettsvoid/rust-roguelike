@@ -847,6 +847,7 @@
       "gold": [2, 8],
       "renderable": {
         "glyph": "g",
+        "model": "goblin",
         "fg": "#FF0000",
         "bg": "#000000",
         "order": 1
@@ -866,6 +867,7 @@
       "gold": [5, 15],
       "renderable": {
         "glyph": "o",
+        "model": "orc",
         "fg": "#FF0000",
         "bg": "#000000",
         "order": 1
@@ -885,6 +887,7 @@
       "gold": [1, 4],
       "renderable": {
         "glyph": "k",
+        "model": "kobold",
         "fg": "#FF5500",
         "bg": "#000000",
         "order": 1
@@ -903,6 +906,7 @@
       "archetype": "coward",
       "renderable": {
         "glyph": "r",
+        "model": "rat",
         "fg": "#A52A2A",
         "bg": "#000000",
         "order": 1
@@ -1093,6 +1097,7 @@
       "archetype": "skirmisher",
       "renderable": {
         "glyph": "b",
+        "model": "giant_bat",
         "fg": "#8B6914",
         "bg": "#000000",
         "order": 1
@@ -1115,6 +1120,7 @@
       "gold": [1, 5],
       "renderable": {
         "glyph": "s",
+        "model": "giant_spider",
         "fg": "#556B2F",
         "bg": "#000000",
         "order": 1
@@ -1134,6 +1140,7 @@
       "gold": [5, 12],
       "renderable": {
         "glyph": "g",
+        "model": "hobgoblin",
         "fg": "#FF8C00",
         "bg": "#000000",
         "order": 1
@@ -1153,6 +1160,7 @@
       "gold": [8, 20],
       "renderable": {
         "glyph": "o",
+        "model": "orc_warrior",
         "fg": "#B22222",
         "bg": "#000000",
         "order": 1
@@ -1173,6 +1181,7 @@
       "gold": [10, 25],
       "renderable": {
         "glyph": "o",
+        "model": "orc_shaman",
         "fg": "#9370DB",
         "bg": "#000000",
         "order": 1
@@ -1192,6 +1201,7 @@
       "gold": [5, 15],
       "renderable": {
         "glyph": "z",
+        "model": "skeleton",
         "fg": "#F5F5DC",
         "bg": "#000000",
         "order": 1
@@ -1211,6 +1221,7 @@
       "gold": [15, 30],
       "renderable": {
         "glyph": "W",
+        "model": "wraith",
         "fg": "#708090",
         "bg": "#000000",
         "order": 1
@@ -1230,6 +1241,7 @@
       "gold": [40, 80],
       "renderable": {
         "glyph": "L",
+        "model": "lich",
         "fg": "#7FFFD4",
         "bg": "#000000",
         "order": 1
@@ -1249,6 +1261,7 @@
       "gold": [10, 25],
       "renderable": {
         "glyph": "i",
+        "model": "imp",
         "fg": "#FF4500",
         "bg": "#000000",
         "order": 1
@@ -1268,6 +1281,7 @@
       "gold": [15, 35],
       "renderable": {
         "glyph": "d",
+        "model": "hellhound",
         "fg": "#8B0000",
         "bg": "#000000",
         "order": 1
@@ -1287,6 +1301,7 @@
       "gold": [100, 200],
       "renderable": {
         "glyph": "&",
+        "model": "demon_lord",
         "fg": "#FF0000",
         "bg": "#000000",
         "order": 1
