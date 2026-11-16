@@ -225,17 +225,18 @@ Settled questions (owner, 15 November 2026):
   pan landing between tiles, and the owner confirms the feel.
 
 ### F10 Performance pass
-- Status: in progress
-- Notes from a first attempt (not finished; run it alone on a quiet machine):
-  the unfocused-window 60 Hz cap made early timings worthless
-  (`WinitSettings::continuous()` under `FRAME_TIME_LOG=1` fixes that, on branch
-  `agent-a829db22923c893c8`, commit 0ea18c7, not merged). One profile under
-  heavy load points at the render thread: 4 hero torches x 6 cube faces = 24
-  shadow views, each drawing every shadow-casting tile. First lever to measure:
-  floors and water do not cast shadows. Determinism lead to test: GPU light
-  clustering builds per-cluster light lists with atomics, so the light order
-  can change run to run (`GlobalClusterSettings::gpu_clustering = None`).
-  Scripts and a work-in-progress patch are in the session scratchpad `f10/`.
+- Status: done
+- Result (measured, release build, M1, depth 12 with a full party and 20
+  monsters; median / p95 frame time): at 1600x1000, 9.8 / 13.3 ms, so 60 fps
+  holds. At 3200x2000 (more pixels than a Retina window), 14.0 / 17.9 ms: the
+  median holds 60 fps, the p95 does not. Not measured in a real window.
+  Kept: ground tiles cast no shadows, MSAA 4 to 2 on the 3D camera and off on
+  the UI camera. The four shadow-casting hero torches cost about 2.2 ms each
+  and are the next lever (merge tile meshes per chunk, or merge the torches).
+  The harness now holds two GPU frames in flight, which ended the scene
+  starvation. Captures still differ by 10 to 92 pixels run to run; CPU light
+  clustering did not fix it. Measure with `tools/frametime.py`; see
+  Performance in `CLAUDE.md`.
 - Needs: F07, F08
 - Measure first. Then, as needed: merge static tile meshes per chunk, cull
   lights outside the view, cap shadow casters.
