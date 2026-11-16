@@ -72,6 +72,11 @@ fn main() {
                 primary_window: Some(Window {
                     title: "Rust Roguelike".into(),
                     resolution: RESOLUTION.as_uvec2().into(),
+                    // The harness draws into an off-screen image, so its window
+                    // would only flash up empty. Unfocused, so the app does not
+                    // take keyboard focus from whatever the owner is doing.
+                    visible: !screenshot,
+                    focused: !screenshot,
                     present_mode: if frame_time_log {
                         bevy::window::PresentMode::AutoNoVsync
                     } else {
