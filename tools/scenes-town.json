@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "seed": 1635866590449709560,
+  "day": 0,
+  "treasury": 0,
+  "sectors": {
+    "smithing": {
+      "stock": 0,
+      "level": 1,
+      "progress": 0
+    },
+    "alchemy": {
+      "stock": 0,
+      "level": 1,
+      "progress": 0
+    },
+    "textiles": {
+      "stock": 0,
+      "level": 1,
+      "progress": 0
+    },
+    "provisions": {
+      "stock": 0,
+      "level": 1,
+      "progress": 0
+    },
+    "faith": {
+      "stock": 0,
+      "level": 1,
+      "progress": 0
+    },
+    "arcana": {
+      "stock": 0,
+      "level": 1,
+      "progress": 0
+    }
+  },
+  "vendor_stock": {
+    "blacksmith": {
+      "Dagger": 3,
+      "Shield": 3
+    },
+    "alchemist": {
+      "Confusion Scroll": 3,
+      "Health Potion": 3,
+      "Magic Missile Scroll": 3
+    },
+    "clothier": {
+      "Padded Tunic": 3,
+      "Wool Cloak": 3
+    },
+    "barkeep": {
+      "Rations": 3
+    },
+    "priest": {
+      "Holy Water": 3,
+      "Prayer Scroll": 3
+    }
+  },
+  "news": []
+}

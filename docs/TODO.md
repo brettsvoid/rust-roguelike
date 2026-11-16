@@ -13,8 +13,13 @@ squad tactics and a town that grows from trade. The game design lives in
 - Read `CLAUDE.md` first. UK English. Zero compiler and clippy warnings.
   Keep "Toolbox:" dead code. Commit as one line, `feat: add ...`.
 - A ticket is done when every `Done when` line is true and you ran the check
-  yourself. Pure logic gets a unit test. Anything visible gets a screenshot
-  from the harness (F01) that you looked at.
+  yourself. Pure logic gets a unit test. Anything visible gets a scene in
+  `tools/scenes.json` and a look at the contact sheet.
+- Work in batches (see "Verifying changes" in `CLAUDE.md`): all the code and
+  unit tests first, then one `tools/scenes.py` run, read the table and logs,
+  look at the sheet once, fix everything, repeat. Do not launch the game after
+  each small change. Run the whole suite once before reporting.
+- Never leave a game, a loop or a build running in the background.
 - Art tickets (`A..`) drive the one live Blender instance, so only one art
   ticket runs at a time.
 - Report back what you changed, what you verified and how, and what you did not

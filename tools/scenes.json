@@ -1,0 +1,161 @@
+{
+  "scenes": [
+    {
+      "name": "dungeon",
+      "note": "A dungeon level, fully revealed.",
+      "args": "--seed 42 --depth 2 --reveal-map --frames 90"
+    },
+    {
+      "name": "town",
+      "note": "The town from the start in the pub, zoomed out.",
+      "args": "--seed 42 --depth 0 --reveal-map --keys \"--\" --frames 150"
+    },
+    {
+      "name": "fog",
+      "note": "Walk five tiles east so explored-but-unseen tiles show.",
+      "args": "--seed 42 --depth 2 --click 45,20 --frames 160"
+    },
+    {
+      "name": "tab",
+      "note": "Tab twice selects the third hero, who walks; the party stands on (40,21) (41,21) (39,21) (40,22).",
+      "args": "--seed 42 --depth 2 --keys nn --click 43,25 --frames 180"
+    },
+    {
+      "name": "targeting",
+      "note": "A fake cursor and the targeting overlay for a scroll.",
+      "args": "--seed 42 --depth 2 --reveal-map --cursor 900,400 --console \"spawn fireball\" --keys .g --target \"Fireball Scroll\" --frames 90"
+    },
+    {
+      "name": "fx",
+      "note": "The missile effect about 0.15 s in.",
+      "args": "--seed 42 --depth 2 --console \"effect missile\" --frames 12"
+    },
+    {
+      "name": "combat",
+      "note": "Walk into two goblins: a move, a dash, End Turn, the enemy phase, an attack.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --click 30,28 --click 34,27 --keys n --click 35,28 --keys enn --click 33,28 --frames 300",
+      "expect": [
+        "Hobgoblin #0 attacks Brenna",
+        "Aldric attacks Goblin #0: hit for 7 (65%)"
+      ]
+    },
+    {
+      "name": "hud",
+      "note": "HUD buttons by --press: Wait starts combat, End Turn, the second card selects Brenna, Attack.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 4 0 Goblin\" --console \"place 3 0 Table\" --press 866,944 --press 1050,944 --press 150,919 --press 406,944 --frames 160",
+      "expect": [
+        "Brenna shoots Goblin: critical hit for 8 (75%, flanked)"
+      ]
+    },
+    {
+      "name": "cleave",
+      "note": "Aldric's Cleave on two adjacent goblins, then its cooldown in round 2.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 1 -1 Goblin\" --console \"place -1 -1 Goblin\" --keys ' 1ennn1' --frames 200",
+      "expect": [
+        "Aldric cleaves.",
+        "Aldric attacks Goblin",
+        "Cleave: Cooldown."
+      ]
+    },
+    {
+      "name": "aimed",
+      "note": "Brenna's Aimed Shot at seven tiles through the targeting screen.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 8 0 Goblin\" --keys ' n1' --click 48,21 --frames 150",
+      "expect": [
+        "Brenna takes an aimed shot.",
+        "Brenna shoots Goblin"
+      ]
+    },
+    {
+      "name": "fireball",
+      "note": "Corin's Fireball between two goblins.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 4 -1 Goblin\" --console \"place 4 1 Goblin\" --keys ' nn1' --click 44,21 --frames 200",
+      "expect": [
+        "Corin casts Fireball.",
+        "Fireball hits Goblin for 15 hp.",
+        "Fireball hits Goblin for 10 hp."
+      ]
+    },
+    {
+      "name": "heal",
+      "note": "Dagny heals a wounded Aldric in combat (20/34 to 30/34).",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"hurt 15\" --console \"place 6 0 Goblin\" --keys ' nnn1' --click 40,21 --frames 150",
+      "expect": [
+        "Dagny uses Heal on Aldric, healing 10 hp."
+      ]
+    },
+    {
+      "name": "bow",
+      "note": "Aldric picks up and equips a bow, then shoots.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"spawn bow\" --keys .gia. --click 30,28 --click 35,26 --click 33,30 --keys ennn --click 33,28 --frames 240",
+      "expect": [
+        "You equip the Shortbow.",
+        "Aldric shoots"
+      ]
+    },
+    {
+      "name": "cover",
+      "note": "Tables give half cover; Brenna flanks.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 5 0 Goblin\" --console \"place 1 0 Table\" --console \"place 1 -1 Table\" --console \"place 1 1 Table\" --click 40,20 --keys e --click 41,21 --keys n --click 40,21 --click 41,21 --frames 120",
+      "expect": [
+        "half cover)",
+        "flanked)"
+      ]
+    },
+    {
+      "name": "overwatch",
+      "note": "Aldric on overwatch with a bow reacts to a goblin walking in.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"spawn bow\" --console \"place 6 0 Goblin\" --keys .gia.oe --frames 120",
+      "expect": [
+        "Aldric goes on overwatch.",
+        "Overwatch! Aldric shoots Goblin"
+      ]
+    },
+    {
+      "name": "ow_monster",
+      "note": "A hemmed-in goblin goes on overwatch and reacts when Aldric walks up.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 7 0 Goblin\" --console \"place 6 -1 Goblin\" --console \"place 6 0 Goblin\" --console \"place 6 1 Goblin\" --keys ee --click 46,20 --frames 260",
+      "expect": [
+        "Goblin goes on overwatch.",
+        "Overwatch! Goblin attacks Aldric"
+      ]
+    },
+    {
+      "name": "hunker",
+      "note": "A hunkered Aldric behind a table: doubled cover in the odds.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 5 0 Goblin\" --console \"place 1 0 Table\" --console \"place 1 -1 Table\" --console \"place 1 1 Table\" --click 40,20 --keys he --frames 90",
+      "expect": [
+        "Aldric hunkers down.",
+        "half cover, hunkered)"
+      ]
+    },
+    {
+      "name": "buy",
+      "note": "Walk to the blacksmith, buy the first item, show the inventory.",
+      "args": "--seed 42 --depth 0 --reveal-map --console \"gold 40\" --shop blacksmith --keys 'a!i' --frames 900",
+      "expect": [
+        "Bought the"
+      ]
+    },
+    {
+      "name": "sell",
+      "note": "Sell a picked-up dagger to the blacksmith.",
+      "args": "--seed 42 --depth 0 --reveal-map --console \"spawn dagger\" --keys gg --shop blacksmith --keys na --frames 900",
+      "expect": [
+        "You pick up the Dagger.",
+        "Sold the Dagger"
+      ]
+    },
+    {
+      "name": "loop",
+      "note": "Sell, take the dungeon entrance (12,28 in the scenes town), read a Town Portal, open the ledger.",
+      "args": "--seed 42 --depth 0 --reveal-map --console \"spawn dagger\" --console \"spawn portal\" --keys ggg --shop blacksmith --keys 'na!' --click 12,28 --keys iat --frames 1500",
+      "expect": [
+        "Sold the Dagger",
+        "You descend to level 1",
+        "pulls the party home",
+        "You return to town after 1 day away"
+      ]
+    }
+  ]
+}

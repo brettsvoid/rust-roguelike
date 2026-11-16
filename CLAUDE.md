@@ -17,135 +17,67 @@ cargo build --release
 # Run with file watcher (hot reloading for assets)
 cargo run --features file_watcher
 
-# Screenshot harness: start a seeded new game, wait N frames, save a PNG, exit.
-# It renders into a fixed 1600x1000 off-screen image, so the picture does not depend on the
-# window size and works with the screen locked or asleep. --cursor points are in that image.
-# Depth 0 is the town, the dungeon is depths 1 to 12. Same seed and flags give a
-# byte-identical PNG.
-# Known exception: two runs can differ by a handful of isolated pixels (about 5 to 20)
-# with identical game state, so compare by eye or with a pixel count, not a hash. The
-# lead is GPU light clustering order (see F10 in docs/TODO.md). The harness window is
-# hidden, so nothing flashes up on screen while it runs.
-# The harness reads and writes town.json in the working directory: copy a baseline
-# back before each run when you compare captures, since sales and purchases change it.
+# Batch check: run every harness scene in tools/scenes.json (or the named ones), each in its
+# own scratch folder, check the game log lines each expects, and build one contact sheet.
+tools/scenes.py                  # all scenes: a pass/fail table, then sheet.png
+tools/scenes.py combat cover     # only these ("abil*" matches a prefix); --list shows them all
+
+# One harness run: a seeded new game, wait N frames, save a PNG, exit. The window is hidden
+# and the picture is a fixed 1600x1000 off-screen image, so nothing shows on screen and it
+# works with the screen locked. Depth 0 is the town, the dungeon is depths 1 to 12.
 # Defaults: --seed 42 --depth 0 --frames 60, fog on unless --reveal-map.
 cargo run -- --screenshot out.png --seed 42 --depth 2 --reveal-map --frames 60
-# Fake the mouse at a window point (logical pixels) and enter targeting with an item:
-cargo run -- --screenshot out.png --depth 2 --reveal-map --cursor 720,430 \
-  --console "spawn fireball" --target "Fireball Scroll"
-# --click X,Y left-clicks grid cell X,Y (repeatable; the next input waits for the
-# walk to end; a click on another hero selects them). --keys presses keys through the
-# real input: g . (pick up, take the stairs), i (inventory), r (remove equipment), t (town
-# ledger), n (Tab: select the next hero), space (wait), e (end the party phase in combat),
-# f (attack the nearest hostile in reach), o (overwatch), h (hunker down), 1 and 2 (the
-# active hero's abilities),
-# w a s d (pan: each holds the key for 10 frames, about 2.3 tiles), c (recentre),
-# + and - (one wheel notch to zoom). The camera eases (about a second to settle), and the
-# capture is taken at the fixed frame --frames, so a short --frames shows it mid-glide.
-# --every N also saves every Nth frame before the last as out-FFFF.png beside out.png, a frame
-# sequence for checking motion (glides, lunges, floaters, falls, the camera).
-# Input is fed only while the game waits for it and nothing plays (`Presentation::busy`), a shop is
-# open, the inventory is open (a to j use that line) or the targeting screen is up (a --click
-# there confirms the target on that cell). They run in the order given,
-# e.g. walk five tiles east so explored-but-unseen tiles show:
-cargo run -- --screenshot fog.png --seed 42 --depth 2 --click 45,20 --frames 120
-# Select the third hero (Tab twice) and walk them; at seed 42 depth 2 the party
-# stands on (40,21) (41,21) (39,21) (40,22):
-cargo run -- --screenshot tab.png --seed 42 --depth 2 --keys nn --click 43,25 --frames 150
-# Play an effect on the active hero's tile (spark, fireball, missile, heal, confusion; blood
-# stains the active hero's tile and two east). It starts about frame 3, so frame 12 is ~0.15 s in:
-cargo run -- --screenshot fx.png --depth 2 --console "effect missile" --frames 12
-# Walk south-west until two goblins see the party (combat, round 1, Aldric on (36,24)).
-# Aldric moves (1 AP, 1 left), Tab, Brenna dashes (2 AP), E ends the phase: the goblins
-# close in (one moves four tiles over two moves; "Hobgoblin #0 attacks Brenna: miss (55%)").
-# Tab twice back to Aldric, who attacks the goblin beside him, which ends his turn
-# ("Aldric attacks Goblin #0: hit for 7 (65%)"):
-cargo run -- --screenshot combat.png --depth 2 --reveal-map --console godmode \
-  --click 30,28 --click 34,27 --keys n --click 35,28 --keys enn --click 33,28 --frames 300
-# --press X,Y left-clicks a point of the 1600x1000 capture through the HUD's own click
-# handling (queued with the other inputs; each press waits a frame for the HUD layout).
-# In the party phase the action buttons sit on y=944 at x=406 Attack, 498 and 590 the two
-# abilities, 682 Overwatch, 774 Hunker, 866 Use Item, 958 Wait, 1050 End Turn; exploring,
-# the abilities, Use Item and Wait sit at 590, 682, 774 and 866 (every class has two
-# abilities, so the bar is the same for every hero); the party cards are at x=150,
-# y=889 + 30 per slot. Wait starts combat with a goblin placed four tiles east, End Turn
-# shows the "Round 2" banner, the second card selects Brenna and Attack shoots the goblin
-# beside her ("Brenna shoots Goblin: critical hit for 8 (75%, flanked)"):
-cargo run -- --screenshot hud.png --depth 2 --reveal-map --console godmode --console "place 4 0 Goblin" \
-  --console "place 3 0 Table" --press 866,944 --press 1050,944 --press 150,919 --press 406,944 --frames 160
-# Abilities (see `abilities.rs`). Space (wait) starts combat with goblins placed beside
-# Aldric; 1 is his Cleave, which attacks both ("Aldric cleaves.", "Aldric attacks Goblin:
-# miss (65%)", "Aldric attacks Goblin: critical hit for 11 (65%, flanked)"). After E and Tab
-# round to him in round 2, its button reads "Cooldown 2" and 1 logs "Cleave: Cooldown.":
-cargo run -- --screenshot cooldown.png --depth 2 --reveal-map --console godmode \
-  --console "place 1 -1 Goblin" --console "place -1 -1 Goblin" --keys ' 1ennn1' --frames 200
-# A targeted ability opens the targeting screen and --click confirms the cell. Brenna's
-# Aimed Shot at seven tiles ("Brenna takes an aimed shot.", "Brenna shoots Goblin: miss
-# (75%, flanked)": +20 aim; add --cursor 1005,612 and drop the click to see the 75% preview):
-cargo run -- --screenshot aimed.png --depth 2 --reveal-map --console godmode \
-  --console "place 8 0 Goblin" --keys ' n1' --click 48,21 --frames 150
-# Corin's Fireball between two goblins ("Corin casts Fireball.", "Fireball hits Goblin for
-# 15 hp.", "... for 10 hp."):
-cargo run -- --screenshot fireball.png --depth 2 --reveal-map --console godmode \
-  --console "place 4 -1 Goblin" --console "place 4 1 Goblin" --keys ' nn1' --click 44,21 --frames 200
-# "hurt N" takes N hit points off the active hero. Dagny heals Aldric in combat ("Dagny uses
-# Heal on Aldric, healing 10 hp.": his card goes from 20/34 to 30/34). Exploring, heals work
-# too: drop the goblin and the space:
-cargo run -- --screenshot heal.png --depth 2 --reveal-map --console godmode --console "hurt 15" \
-  --console "place 6 0 Goblin" --keys ' nnn1' --click 40,21 --frames 150
-# The harness prints the whole game log as "log>" lines when it captures. Keys also reach the
-# inventory: `.gia.` picks up a spawned bow and equips it in place of Aldric's Longsword (the
-# leading and trailing `.` pad the frame where the item spawns and the one where the inventory
-# closes). Aldric shoots ("Aldric shoots Hobgoblin #0: miss (65%)" at seed 42):
-cargo run -- --screenshot bow.png --depth 2 --reveal-map --console godmode --console "spawn bow" \
-  --keys .gia. --click 30,28 --click 35,26 --click 33,30 --keys ennn --click 33,28 --frames 240
-# --shop VENDOR clicks that vendor (blacksmith, alchemist, clothier, barkeep, priest,
-# enchanter): the active hero walks beside them and the shop opens. Inputs after it are
-# fed into the shop: n (Tab: buy or sell), a to j (trade that line), ! (Escape: close).
-# "gold N" fills the purse. A monster in view stops the walk, so add --console kill_all
-# when rats in an advanced town get in the way. Buy the first item, close the shop and
-# show the inventory:
-cargo run -- --screenshot buy.png --reveal-map --console "gold 40" --shop blacksmith \
-  --keys 'a!i' --frames 420
-# Sell a picked-up dagger:
-cargo run -- --screenshot sell.png --reveal-map --console "spawn dagger" --keys g \
-  --shop blacksmith --keys na --frames 420
-# The return-to-town loop. --reveal-map holds on every level reached, and the game log
-# is printed as "log>" lines at capture. A key in the first input frame can miss items
-# the console just spawned, so press g once more than needed. Sell a dagger, take the
-# dungeon entrance (12,28 in a fresh town; it moves with the town's seed), read the
-# Town Portal on depth 1 and open the ledger to see the news of the day away:
-cargo run -- --screenshot loop.png --reveal-map --console "spawn dagger" \
-  --console "spawn portal" --keys ggg --shop blacksmith --keys 'na!' --click 12,28 \
-  --keys iat --frames 900
-# "place DX DY NAME" spawns any raws entry (prop, monster or item, exact name) at an offset
-# from the active hero (at the start, Aldric on 40,21 at depth 2). Stage cover: tables east of
-# Aldric, a goblin closes in and attacks ("Goblin attacks Aldric: miss (40%, half cover)"),
-# Aldric hits it from beside its table ("hit for 7 (45%, half cover)") and Brenna flanks it
-# ("Brenna shoots Goblin: critical hit for 8 (75%, flanked)"):
-cargo run -- --screenshot cover.png --depth 2 --reveal-map --console godmode \
-  --console "place 5 0 Goblin" --console "place 1 0 Table" --console "place 1 -1 Table" \
-  --console "place 1 1 Table" --click 40,20 --keys e --click 41,21 --keys n --click 40,21 --click 41,21 --frames 120
-# Overwatch: Aldric equips a bow, goes on overwatch (o), E ends the phase and the goblin
-# walking in draws a reaction shot ("Overwatch! Aldric shoots Goblin: miss (45%)"):
-cargo run -- --screenshot ow.png --depth 2 --reveal-map --console godmode --console "spawn bow" \
-  --console "place 6 0 Goblin" --keys .gia.oe --frames 120
-# A goblin hemmed in behind three others goes on overwatch ("Goblin goes on overwatch.") and
-# reacts when Aldric walks up beside it ("Overwatch! Goblin attacks Aldric: hit for 1 (40%)"):
-cargo run -- --screenshot ow_monster.png --depth 2 --reveal-map --console godmode \
-  --console "place 7 0 Goblin" --console "place 6 -1 Goblin" --console "place 6 0 Goblin" \
-  --console "place 6 1 Goblin" --keys ee --click 46,20 --frames 260
-# Hunker down: in the cover staging Aldric hunkers (h) and the goblin's attack shows the
-# doubled cover ("Goblin attacks Aldric: miss (20%, half cover, hunkered)"):
-cargo run -- --screenshot hunker.png --depth 2 --reveal-map --console godmode \
-  --console "place 5 0 Goblin" --console "place 1 0 Table" --console "place 1 -1 Table" \
-  --console "place 1 1 Table" --click 40,20 --keys he --frames 90
-# "spawn heart" drops a stand-in Heart of the Abyss; carrying it, the portal is refused:
-cargo run -- --screenshot heart.png --depth 4 --console "spawn portal" \
-  --console "spawn heart" --keys gggia --frames 300
 ```
 
-Verify every visible change with a harness screenshot that you look at.
+### Verifying changes: batch, don't poll
+
+A game run is the expensive step, so work in batches (the owner asked for this):
+
+1. Write all the code and its unit tests first. Loop on `cargo check` and `cargo test`; do not
+   launch the game to see each small change.
+2. Describe what must be seen as scenes in `tools/scenes.json` (name, note, harness `args`,
+   and the game log lines to `expect`, in order). Most rules show up in the log, so most
+   checks need no picture.
+3. Run the batch once: `tools/scenes.py <your scenes>`. Read the pass/fail table and the
+   `.log` files first. Then open the contact sheet once (shrink it if it is big). Open a
+   single capture only when the sheet shows something you must see closer.
+4. Write down everything that is wrong, fix it all, and run the batch again. Three rounds
+   should be enough; if not, say why in the report.
+5. Before reporting, run the whole suite once (`tools/scenes.py`). Every scene must pass, and
+   scenes whose log lines your change moved must be updated in the manifest, not deleted.
+
+The coordinator runs the same suite before every merge.
+
+### Harness flags
+
+```text
+--seed N --depth N --frames N --reveal-map
+--console CMD      a debug console command, repeatable. "town ..." commands run before the
+                   level is built. Useful: godmode, "place DX DY NAME" (any raws entry at an
+                   offset from the active hero), "spawn <item>", "gold N", "hurt N",
+                   "effect <spark|fireball|missile|heal|confusion|blood>", "teleport X Y",
+                   "town level <sector> <1-5>", "town days N". Do not use kill_all: it hangs
+                   the run (a known bug).
+--click X,Y        left-click grid cell X,Y: walk, attack, select a hero, confirm a target
+--press X,Y        left-click a point of the 1600x1000 picture (HUD buttons and cards)
+--cursor X,Y       hover the mouse at a point of the picture
+--keys CHARS       g pick up, . stairs, i inventory, r remove, t ledger, n Tab, space wait,
+                   e end turn, f attack, o overwatch, h hunker, 1 2 abilities, w a s d pan,
+                   c recentre, + - zoom, a to j a menu line, ! Escape
+--shop VENDOR      walk to a vendor and open the shop
+--target ITEM      enter targeting with an item
+--ledger           open the town ledger
+--every N          also save every Nth frame as out-FFFF.png (a sequence for motion)
+```
+
+Inputs run in the order given, one at a time, while the game waits for input and nothing is
+animating. The game log is printed as `log>` lines when the capture is taken. Two runs can
+differ by a handful of isolated pixels with the same game state (see F10), so compare by eye
+or by the log, not by hash. In the party phase the action buttons sit on y=944 at x=406
+Attack, 498 and 590 the abilities, 682 Overwatch, 774 Hunker, 866 Use Item, 958 Wait, 1050
+End Turn (exploring: 590, 682, 774, 866 for the abilities, Use Item, Wait); the party cards
+are at x=150, y=889 + 30 per slot. The scenes in `tools/scenes.json` are the worked examples.
+
 
 ## Game Design
 
