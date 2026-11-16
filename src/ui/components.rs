@@ -42,9 +42,6 @@ pub struct Tooltip;
 // ============================================================================
 
 #[derive(Component)]
-pub struct TargetingMenu;
-
-#[derive(Component)]
 pub struct TargetHighlight;
 
 #[derive(Component)]

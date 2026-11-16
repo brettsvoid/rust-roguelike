@@ -1,4 +1,4 @@
-//! Screenshot harness: `cargo run -- --screenshot out.png [--seed N] [--depth N]
+//! Screenshot harness: `cargo run -- --screenshot out.png [--seed N] [--depth N] [--menu]
 //! [--reveal-map] [--frames N] [--every N] [--console CMD]... [--ledger] [--cursor X,Y]
 //! [--target ITEM] [--keys KEYS]... [--click X,Y]... [--press X,Y]... [--shop VENDOR]...` starts
 //! a seeded new game, waits, saves a PNG of the window and exits. `--depth` 0 (the
@@ -40,6 +40,7 @@
 //! menu instead of starting a new game (a scene's `files` can put a
 //! `savegame.json` beside it); without a save that loads, the capture shows
 //! the main menu.
+//! `--menu` stays on the main menu and captures it instead of starting a game.
 //! Every visual change is verified with it.
 
 use std::path::PathBuf;
@@ -136,6 +137,8 @@ pub struct ScreenshotArgs {
     pub seed: u64,
     pub depth: i32,
     pub reveal_map: bool,
+    /// Capture the main menu rather than start a game.
+    pub menu: bool,
     pub frames: u32,
     pub every: Option<u32>,
     pub console: Vec<String>,
@@ -198,6 +201,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
     let mut seed = 42;
     let mut depth = levels::TOWN_DEPTH;
     let mut reveal_map = false;
+    let mut menu = false;
     let mut frames = 60;
     let mut every = None;
     let mut console = Vec::new();
@@ -223,6 +227,10 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
         }
         if flag == "--load" {
             load = true;
+            continue;
+        }
+        if flag == "--menu" {
+            menu = true;
             continue;
         }
         let value = args.next().ok_or(format!("{flag} needs a value"))?;
@@ -268,6 +276,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
         seed,
         depth,
         reveal_map,
+        menu,
         frames,
         every,
         console,
@@ -336,6 +345,9 @@ fn start_game(
     mut next_state: ResMut<NextState<RunState>>,
 ) {
     commands.insert_resource(Started);
+    if args.menu {
+        return;
+    }
     if args.reveal_map {
         debug_state.reveal_map = true;
         debug_state.no_fog = true;
@@ -604,12 +616,13 @@ mod tests {
     #[test]
     fn all_flags() {
         assert_eq!(
-            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10 --every 2 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger --keys g.in --click 3,-4 --press 800,950.5 --keys wasdc+-e --shop Priest --keys bj! --reload --load"),
+            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --menu --frames 10 --every 2 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger --keys g.in --click 3,-4 --press 800,950.5 --keys wasdc+-e --shop Priest --keys bj! --reload --load"),
             Ok(Some(ScreenshotArgs {
                 path: PathBuf::from("a.png"),
                 seed: 7,
                 depth: 3,
                 reveal_map: true,
+                menu: true,
                 frames: 10,
                 every: Some(2),
                 console: vec!["heal".into(), "godmode".into()],
@@ -651,6 +664,7 @@ mod tests {
                 seed: 42,
                 depth: 0,
                 reveal_map: false,
+                menu: false,
                 frames: 60,
                 every: None,
                 console: vec![],

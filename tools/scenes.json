@@ -371,6 +371,71 @@
       "expect": [
         "The saved game could not be loaded: it is from an older version of the game"
       ]
+    },
+    {
+      "name": "ui_menu",
+      "note": "The main menu over its lit dungeon corner, no save: Continue is disabled, New Game picked.",
+      "args": "--menu --frames 150"
+    },
+    {
+      "name": "ui_menu_hover",
+      "note": "The cursor over Quit picks it.",
+      "args": "--menu --cursor 250,607 --frames 150"
+    },
+    {
+      "name": "ui_inventory",
+      "note": "Aldric's inventory after picking up a potion and a dagger; the cursor picks a row.",
+      "args": "--seed 42 --depth 2 --console \"spawn potion\" --console \"spawn dagger\" --cursor 800,500 --keys \" ggi\" --frames 120",
+      "expect": [
+        "You pick up the Dagger.",
+        "You pick up the Health Potion."
+      ]
+    },
+    {
+      "name": "ui_remove",
+      "note": "The remove-equipment menu lists Aldric's worn gear.",
+      "args": "--seed 42 --depth 2 --keys r --frames 90"
+    },
+    {
+      "name": "ui_shop_buy",
+      "note": "The blacksmith's Buy tab with 40 gold.",
+      "args": "--seed 42 --depth 0 --reveal-map --console \"gold 40\" --shop blacksmith --frames 900"
+    },
+    {
+      "name": "ui_shop_sell",
+      "note": "The Sell tab after selling a dagger: the last trade shows over the footer.",
+      "args": "--seed 42 --depth 0 --reveal-map --console \"spawn dagger\" --console \"spawn dagger\" --keys gg --shop blacksmith --keys na --frames 900",
+      "expect": [
+        "Sold the Dagger"
+      ]
+    },
+    {
+      "name": "ui_shop_hire",
+      "note": "The barkeep's Hire tab.",
+      "args": "--seed 42 --depth 0 --reveal-map --shop barkeep --keys nn --frames 900"
+    },
+    {
+      "name": "ui_ledger",
+      "note": "The town ledger after six days of trade.",
+      "args": "--seed 42 --depth 0 --reveal-map --console \"town days 6\" --ledger --frames 90"
+    },
+    {
+      "name": "ui_game_over",
+      "note": "The whole party killed: the game over panel.",
+      "args": "--seed 42 --depth 2 --console \"kill party\" --frames 90",
+      "expect": [
+        "Your whole party is dead"
+      ]
+    },
+    {
+      "name": "ui_tooltip",
+      "note": "Aldric takes up a bow; in combat the cursor over an orc four tiles east shows the shot preview.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"spawn bow\" --console \"place 4 0 Orc\" --cursor 1005,565 --keys .gia. --frames 150"
+    },
+    {
+      "name": "ui_bars",
+      "note": "Health bars sit just over each model: Rat, Orc Warrior, Lich, Wraith in front, Demon Lord, Giant Bat, Kobold behind; Aldric is hurt so his bar shows, the other heroes' do not.",
+      "args": "--seed 42 --depth 2 --console godmode --console \"hurt 10\" --console \"place -1 -2 Rat\" --console \"place 1 -2 Orc Warrior\" --console \"place 3 -2 Lich\" --console \"place 5 -2 Wraith\" --console \"place -1 -4 Demon Lord\" --console \"place 1 -4 Giant Bat\" --console \"place 3 -4 Kobold\" --keys \"++++\" --frames 150"
     }
   ]
 }

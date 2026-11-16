@@ -201,11 +201,7 @@ pub fn change_level(
     if depth == TOWN_DEPTH && days > 0 {
         let news = trade::simulate(&mut town, days);
         restock(&mut town, &crate::raws::RAWS.lock().unwrap().raws.items);
-        gamelog.entries.push(format!(
-            "You return to town after {days} day{} away. The ledger (T) has {} new entries.",
-            if days == 1 { "" } else { "s" },
-            news.len()
-        ));
+        gamelog.entries.push(return_message(days, news.len()));
     }
 
     let start = build_level(&mut commands, &mut map, &mut rng, &font, &town, depth);
@@ -228,9 +224,25 @@ pub fn change_level(
     next_state.set_if_different(RunState::PreRun);
 }
 
+/// "You return to town after 2 days away. The ledger (T) has 1 new entry."
+fn return_message(days: u32, news: usize) -> String {
+    let plural = |n: usize, one: &str, many: &str| if n == 1 { format!("{n} {one}") } else { format!("{n} {many}") };
+    format!(
+        "You return to town after {} away. The ledger (T) has {}.",
+        plural(days as usize, "day", "days"),
+        plural(news, "new entry", "new entries")
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_return_message_counts_in_words() {
+        assert_eq!(return_message(1, 1), "You return to town after 1 day away. The ledger (T) has 1 new entry.");
+        assert_eq!(return_message(3, 0), "You return to town after 3 days away. The ledger (T) has 0 new entries.");
+    }
 
     #[test]
     fn a_delve_tracks_the_deepest_depth_and_the_days_away() {

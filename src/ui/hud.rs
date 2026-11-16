@@ -26,7 +26,7 @@ use crate::RunState;
 
 use super::combat_hud::{action_bar, ActionContext, ActionRequest, HudAction};
 use super::components::{DepthText, GameLogText, GoldText, ModeText};
-use super::style::{self, font};
+use super::style::{self, font, under_cursor};
 
 pub struct HudPlugin;
 
@@ -40,6 +40,13 @@ impl Plugin for HudPlugin {
 
         app.init_resource::<ActionRequest>()
             .add_systems(Startup, setup_hud)
+            // The main menu shows its scene, not the bar.
+            .add_systems(Update, |state: Res<State<RunState>>, mut bar: Query<&mut Visibility, With<HudBar>>| {
+                let shown = if *state.get() == RunState::MainMenu { Visibility::Hidden } else { Visibility::Inherited };
+                bar.iter_mut().for_each(|mut v| {
+                    v.set_if_neq(shown);
+                });
+            })
             .add_systems(
                 Update,
                 (
@@ -67,12 +74,9 @@ pub enum HudTarget {
     Action(HudAction),
 }
 
-/// Whether the cursor (logical pixels) is over a UI node (physical pixels of
-/// the render target, which is an image at scale 1 in the harness).
-fn under_cursor(cursor: Vec2, camera: &Camera, node: &ComputedNode, transform: &UiGlobalTransform) -> bool {
-    node.contains_point(*transform, cursor * camera.target_scaling_factor().unwrap_or(1.0))
-}
 
+#[derive(Component)]
+struct HudBar;
 #[derive(Component)]
 struct CardStripe(usize);
 #[derive(Component)]
@@ -135,7 +139,7 @@ fn panel_node() -> Node {
 fn setup_hud(mut commands: Commands, font_handle: Res<UiFont>) {
     let f = &font_handle.0;
     commands
-        .spawn((panel_node(), BackgroundColor(style::PANEL), BorderColor::all(style::PANEL_EDGE), BlocksPicking))
+        .spawn((panel_node(), BackgroundColor(style::PANEL), BorderColor::all(style::PANEL_EDGE), BlocksPicking, HudBar))
         .with_children(|bar| {
             // Party cards, in slot order
             bar.spawn(Node {

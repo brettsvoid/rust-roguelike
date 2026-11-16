@@ -2,16 +2,16 @@ use bevy::input::keyboard::KeyboardInput;
 use bevy::input::ButtonState;
 use bevy::prelude::*;
 
-use crate::components::{AreaOfEffect, Targeting, WantsToUseItem};
+use crate::components::{AreaOfEffect, Name, Targeting, WantsToUseItem};
 use crate::distance::DistanceAlg;
 use crate::map::{Map, Position, TileType};
 use crate::monsters::Monster;
-use crate::picking::{tile_edge, update_hovered_tile, BlocksPicking, HoveredTile, TileMarks, FULL_TILE};
+use crate::picking::{tile_edge, update_hovered_tile, HoveredTile, TileMarks, FULL_TILE};
 use crate::party::{ActiveUnit, PartyMember};
-use crate::resources::UiFont;
 use crate::RunState;
 
-use super::components::{RangeIndicator, TargetBorder, TargetHighlight, TargetingMenu};
+use super::components::{RangeIndicator, TargetBorder, TargetHighlight};
+use super::panel::{close_panels, show, spawn_panel, BodyLine, Hint, Panel, PanelSpec, Placement};
 
 /// What the active unit is currently aiming: set when a ranged item is selected
 /// from the inventory or a targeted ability's hotkey is pressed (`item` is
@@ -30,10 +30,10 @@ impl Plugin for TargetingPlugin {
             OnEnter(RunState::ShowTargeting),
             (spawn_targeting_ui, spawn_target_borders, spawn_range_indicator),
         )
-        .add_systems(OnExit(RunState::ShowTargeting), despawn_targeting_ui)
+        .add_systems(OnExit(RunState::ShowTargeting), (despawn_targeting_ui, close_panels))
         .add_systems(
             Update,
-            (update_target_highlight, handle_targeting)
+            (update_target_highlight, handle_targeting, write_targeting_banner)
                 .chain()
                 .after(update_hovered_tile)
                 .run_if(in_state(RunState::ShowTargeting)),
@@ -41,48 +41,44 @@ impl Plugin for TargetingPlugin {
     }
 }
 
-fn spawn_targeting_ui(mut commands: Commands, font: Res<UiFont>, targeting_info: Res<TargetingInfo>) {
-    let range = targeting_info.range;
+fn spawn_targeting_ui(mut commands: Commands) {
+    spawn_panel(&mut commands, Placement::Banner);
+}
 
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                top: Val::Px(10.0),
-                left: Val::Px(10.0),
-                padding: UiRect::all(Val::Px(10.0)),
-                ..default()
-            },
-            BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.9)),
-            TargetingMenu,
-            BlocksPicking,
-        ))
-        .with_children(|parent| {
-            parent.spawn((
-                Text::new(format!(
-                    "Select Target (Range: {})\nClick on a target or press Escape to cancel",
-                    range
-                )),
-                TextFont {
-                    font: font.0.clone().into(),
-                    font_size: FontSize::Px(16.0),
-                    ..default()
-                },
-                TextColor(Color::srgb(1.0, 1.0, 0.0)), // Yellow
-            ));
-        });
+/// The banner over the world: what is aimed, its range, what to click.
+fn targeting_spec(name: &str, range: i32, targeting: Targeting) -> PanelSpec {
+    let what = match targeting {
+        Targeting::SingleEntity => "a foe",
+        Targeting::Ally => "a hero",
+        Targeting::Tile => "a tile",
+    };
+    PanelSpec {
+        title: name.to_string(),
+        aside: format!("Range {range}"),
+        body: vec![BodyLine::Text(format!("Click {what} in range."))],
+        hints: vec![Hint::new("Esc", "Cancel", KeyCode::Escape)],
+        ..default()
+    }
+}
+
+fn write_targeting_banner(
+    targeting_info: Res<TargetingInfo>,
+    items: Query<(&Name, Option<&Targeting>)>,
+    mut panels: Query<(&Panel, &mut PanelSpec)>,
+) {
+    let (name, targeting) = targeting_info
+        .item
+        .and_then(|item| items.get(item).ok())
+        .map_or(("Select a target", Targeting::Tile), |(name, t)| (name.name.as_str(), t.copied().unwrap_or_default()));
+    show(&mut panels, targeting_spec(name, targeting_info.range, targeting));
 }
 
 fn despawn_targeting_ui(
     mut commands: Commands,
-    menu_query: Query<Entity, With<TargetingMenu>>,
     highlight_query: Query<Entity, With<TargetHighlight>>,
     border_query: Query<Entity, With<TargetBorder>>,
     range_query: Query<Entity, With<RangeIndicator>>,
 ) {
-    for entity in &menu_query {
-        commands.entity(entity).despawn();
-    }
     for entity in &highlight_query {
         commands.entity(entity).despawn();
     }
@@ -262,6 +258,19 @@ fn valid_target(
     hovered.tile.filter(|&(x, y)| {
         map.visible_tiles[map.xy_idx(x, y)] && distance(player_pos, x, y) <= targeting_info.range as f32
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_banner_names_the_item_its_range_and_what_to_click() {
+        let spec = targeting_spec("Fireball Scroll", 6, Targeting::Tile);
+        assert_eq!((spec.title.as_str(), spec.aside.as_str()), ("Fireball Scroll", "Range 6"));
+        assert_eq!(spec.body, [BodyLine::Text("Click a tile in range.".into())]);
+        assert_eq!(targeting_spec("Heal", 1, Targeting::Ally).body, [BodyLine::Text("Click a hero in range.".into())]);
+    }
 }
 
 pub fn handle_targeting(

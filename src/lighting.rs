@@ -107,35 +107,39 @@ fn attach_lights(
         let local = Vec3::new(offset.x, source.height - shape.lift(), offset.y);
         // A fixed phase per tile so neighbouring flames don't pulse together.
         let phase = ((pos.x as f32 * 12.989 + pos.y as f32 * 78.233).sin() * 43_758.5).fract() * std::f32::consts::TAU;
-        let base = LUMENS_PER_RADIUS_SQUARED * source.radius * source.radius;
-        let mut parent = commands.entity(entity);
-        parent.with_child((
-            PointLight {
-                color: source.colour,
-                intensity: base,
-                range: source.radius,
-                ..default()
-            },
-            Transform::from_translation(local),
-            // Lights spill into view from around corners, so they ignore the
-            // fog of war that hides their prop.
-            Visibility::Visible,
-            Flicker {
-                base,
-                amount: source.flicker,
-                phase,
-            },
-        ));
-        if is_hero {
-            continue;
-        }
-        let mesh = flame_mesh.get_or_insert_with(|| meshes.add(flame())).clone();
-        let material = materials.add(StandardMaterial {
-            base_color: source.colour,
-            // Far above 1.0 in HDR, so the bloom pass makes it glow.
-            emissive: source.colour.to_linear() * 60.0,
+        let flame = (!is_hero).then(|| (flame_mesh.get_or_insert_with(|| meshes.add(flame())).clone(), materials.add(flame_material(source))));
+        spawn_light(&mut commands.entity(entity), source, local, phase, flame);
+    }
+}
+
+/// A light's `PointLight` child at `local`, flickering from `phase`, and its
+/// flame when given one.
+pub(crate) fn spawn_light(
+    parent: &mut EntityCommands,
+    source: &LightSource,
+    local: Vec3,
+    phase: f32,
+    flame: Option<(Handle<Mesh>, Handle<StandardMaterial>)>,
+) {
+    let base = LUMENS_PER_RADIUS_SQUARED * source.radius * source.radius;
+    parent.with_child((
+        PointLight {
+            color: source.colour,
+            intensity: base,
+            range: source.radius,
             ..default()
-        });
+        },
+        Transform::from_translation(local),
+        // Lights spill into view from around corners, so they ignore the
+        // fog of war that hides their prop.
+        Visibility::Visible,
+        Flicker {
+            base,
+            amount: source.flicker,
+            phase,
+        },
+    ));
+    if let Some((mesh, material)) = flame {
         parent.with_child((
             Mesh3d(mesh),
             MeshMaterial3d(material),
@@ -151,8 +155,17 @@ fn attach_lights(
     }
 }
 
+pub(crate) fn flame_material(source: &LightSource) -> StandardMaterial {
+    StandardMaterial {
+        base_color: source.colour,
+        // Far above 1.0 in HDR, so the bloom pass makes it glow.
+        emissive: source.colour.to_linear() * 60.0,
+        ..default()
+    }
+}
+
 /// A teardrop: a round base with a cone drawn up to a point.
-fn flame() -> Mesh {
+pub(crate) fn flame() -> Mesh {
     let mut flame = Sphere::new(0.09).mesh().ico(2).unwrap();
     let tip = Cone::new(0.09, 0.3).mesh().resolution(8).build();
     flame.merge(&tip.translated_by(Vec3::Y * 0.15)).expect("sphere and cone share attributes");

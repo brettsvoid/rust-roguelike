@@ -25,13 +25,12 @@ use crate::picking::{self, HoveredTile};
 use crate::pathfinding::a_star_explored_avoiding;
 use crate::player::{self, WalkPath};
 use crate::raws::{self, RAWS};
-use crate::resources::UiFont;
 use crate::spawner::spawn_recruit;
 use crate::RunState;
 
-use crate::ui::menu::{
-    build_menu_text, despawn_modal_menu, get_selected_index, handle_pagination_input,
-    spawn_modal_menu, ModalMenu, ModalMenuBuilder, ModalMenuContainer, ModalMenuText,
+use crate::ui::panel::{
+    close_panels, get_selected_index, handle_pagination_input, page_hints, page_of, show, spawn_panel, Hint, Panel,
+    PanelSpec, Placement, Row, Tab,
 };
 use crate::ui::resources::MenuPage;
 
@@ -50,6 +49,22 @@ impl ShopMode {
             ShopMode::Sell if vendor == Vendor::Barkeep => ShopMode::Hire,
             _ => ShopMode::Buy,
         }
+    }
+
+    /// The tabs a vendor's shop has, in Tab order.
+    fn tabs(vendor: Vendor) -> &'static [ShopMode] {
+        if vendor == Vendor::Barkeep {
+            &[ShopMode::Buy, ShopMode::Sell, ShopMode::Hire]
+        } else {
+            &[ShopMode::Buy, ShopMode::Sell]
+        }
+    }
+
+    /// How many Tab presses it takes from `self` to `to`.
+    fn presses_to(self, to: ShopMode, vendor: Vendor) -> usize {
+        let tabs = Self::tabs(vendor);
+        let at = |m| tabs.iter().position(|&t| t == m).unwrap_or(0);
+        (at(to) + tabs.len() - at(self)) % tabs.len()
     }
 }
 
@@ -83,7 +98,7 @@ impl Plugin for ShopPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Shop>()
             .add_systems(OnEnter(RunState::ShowShop), spawn_shop)
-            .add_systems(OnExit(RunState::ShowShop), despawn_shop)
+            .add_systems(OnExit(RunState::ShowShop), close_panels)
             .add_systems(
                 Update,
                 (
@@ -174,10 +189,10 @@ enum Deal {
     Hire(Recruit),
 }
 
-/// One tradeable line and the text shown.
+/// One tradeable line and the row shown.
 struct Line {
     deal: Deal,
-    label: String,
+    row: Row,
 }
 
 /// The vendor's shelf when buying, what the vendor will buy from the hero's
@@ -201,7 +216,7 @@ fn shop_lines(
                 let item = find(name)?;
                 let price = buy_price(town, item.sector?, item.base_value);
                 Some(Line {
-                    label: format!("{name:<24}{price:>5} gold   {left} left"),
+                    row: Row { label: name.clone(), detail: format!("{price} gold   {left} left") },
                     deal: Deal::Buy(item),
                 })
             })
@@ -213,7 +228,7 @@ fn shop_lines(
                 let item = find(&name.name).filter(|item| buys(shop.vendor, item))?;
                 let price = sell_price(town, item.sector?, item.base_value);
                 Some(Line {
-                    label: format!("{:<24}{price:>5} gold", name.name),
+                    row: Row { label: name.name.clone(), detail: format!("{price} gold") },
                     deal: Deal::Sell(item, entity),
                 })
             })
@@ -223,10 +238,10 @@ fn shop_lines(
             recruits(town, &names)
                 .into_iter()
                 .map(|recruit| Line {
-                    label: format!(
-                        "{:<10}{:<9}level {}{:>7} gold",
-                        recruit.name, recruit.class, recruit.level, recruit.price
-                    ),
+                    row: Row {
+                        label: format!("{}, {} level {}", recruit.name, recruit.class, recruit.level),
+                        detail: format!("{} gold", recruit.price),
+                    },
                     deal: Deal::Hire(recruit),
                 })
                 .collect()
@@ -234,36 +249,45 @@ fn shop_lines(
     }
 }
 
-fn shop_menu(shop: &Shop, gold: i32, hero: &str, lines: &[Line]) -> ModalMenu {
+fn shop_spec(shop: &Shop, gold: i32, hero: &str, rows: &[Row], page: usize) -> PanelSpec {
     let vendor = shop.vendor.name();
-    let hires = shop.vendor == Vendor::Barkeep;
-    let tab = |mode: ShopMode, label: String| if shop.mode == mode { format!("[{label}]") } else { format!(" {label} ") };
-    let mut tabs = tab(ShopMode::Buy, "Buy".into()) + "  " + &tab(ShopMode::Sell, format!("Sell from {hero}'s pack"));
-    if hires {
-        tabs += &format!("  {}", tab(ShopMode::Hire, "Hire".into()));
-    }
-    let empty = match shop.mode {
-        ShopMode::Buy => format!("The {} has nothing left to sell.", vendor.to_lowercase()),
-        ShopMode::Sell => format!("Nothing in {hero}'s pack that the {} buys.", vendor.to_lowercase()),
-        ShopMode::Hire => "Nobody is looking for work.".to_string(),
+    let tabs = ShopMode::tabs(shop.vendor)
+        .iter()
+        .map(|&mode| Tab {
+            label: match mode {
+                ShopMode::Buy => "Buy".to_string(),
+                ShopMode::Sell => format!("Sell from {hero}'s pack"),
+                ShopMode::Hire => "Hire".to_string(),
+            },
+            active: mode == shop.mode,
+            keys: vec![KeyCode::Tab; shop.mode.presses_to(mode, shop.vendor)],
+        })
+        .collect();
+    let (empty, verb) = match shop.mode {
+        ShopMode::Buy => (format!("The {} has nothing left to sell.", vendor.to_lowercase()), "Buy"),
+        ShopMode::Sell => (format!("Nothing in {hero}'s pack that the {} buys.", vendor.to_lowercase()), "Sell"),
+        ShopMode::Hire => ("Nobody is looking for work.".to_string(), "Hire"),
     };
-    let other = match shop.mode.next(shop.vendor) {
-        ShopMode::Buy => "buy",
-        ShopMode::Sell => "sell",
-        ShopMode::Hire => "hire",
-    };
-    let mut footer = String::new();
-    if !shop.message.is_empty() {
-        footer.push_str(&shop.message);
-        footer.push_str("\n\n");
+    let (shown, page) = page_of(rows, page);
+    let mut hints = Vec::new();
+    if !shown.is_empty() {
+        hints.push(Hint::rows(shown.len(), verb));
     }
-    footer.push_str(&format!("(Tab to {other}, Escape to close)"));
-    ModalMenuBuilder::new(format!("{vendor:<20}Purse: {gold} gold\n\n{tabs}"))
-        .items_with_index(lines.iter().map(|line| line.label.as_str()))
-        .paginated()
-        .empty_message(empty)
-        .footer(footer)
-        .build()
+    hints.push(Hint::new("Tab", "Next tab", KeyCode::Tab));
+    hints.extend(page_hints(page));
+    hints.push(Hint::close());
+    PanelSpec {
+        title: vendor.to_string(),
+        aside: format!("Purse {gold} gold"),
+        width: 560.0,
+        tabs,
+        rows: shown,
+        empty,
+        message: shop.message.clone(),
+        page,
+        hints,
+        ..default()
+    }
 }
 
 /// A bought item, made real and put straight into the hero's backpack.
@@ -277,14 +301,10 @@ fn give_item(commands: &mut Commands, name: &str, hero: Entity) {
     }
 }
 
-/// The text is filled in by `refresh_shop` the same frame.
-fn spawn_shop(mut commands: Commands, font: Res<UiFont>, mut menu_page: ResMut<MenuPage>) {
+/// The panel is filled in by `refresh_shop` the same frame.
+fn spawn_shop(mut commands: Commands, mut menu_page: ResMut<MenuPage>) {
     menu_page.0 = 0;
-    spawn_modal_menu(&mut commands, &font, &ModalMenuBuilder::new("").build(), &menu_page);
-}
-
-fn despawn_shop(mut commands: Commands, menu_query: Query<Entity, With<ModalMenuContainer>>) {
-    despawn_modal_menu(&mut commands, &menu_query);
+    spawn_panel(&mut commands, Placement::Modal);
 }
 
 /// One trade per frame, so the next is chosen from the updated lists.
@@ -371,17 +391,42 @@ fn refresh_shop(
     names: Query<&Name>,
     backpack: Query<(Entity, &InBackpack, &Name), With<Item>>,
     party: Query<(&PartyMember, &Name, &Position)>,
-    mut text_query: Query<&mut Text, With<ModalMenuText>>,
+    mut panels: Query<(&Panel, &mut PanelSpec)>,
 ) {
     let Some(hero) = active.0 else {
         return;
     };
     let hero_name = names.get(hero).map_or("Hero", |n| n.name.as_str());
-    let lines = shop_lines(&shop, &town, hero, &backpack, &party);
-    let text = build_menu_text(&shop_menu(&shop, purse.gold, hero_name, &lines), &menu_page);
-    if let Ok(mut shown) = text_query.single_mut() {
-        if **shown != text {
-            **shown = text;
-        }
+    let rows: Vec<Row> = shop_lines(&shop, &town, hero, &backpack, &party).into_iter().map(|line| line.row).collect();
+    show(&mut panels, shop_spec(&shop, purse.gold, hero_name, &rows, menu_page.0));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tabs_count_the_presses_to_reach_them() {
+        assert_eq!(ShopMode::Buy.presses_to(ShopMode::Sell, Vendor::Blacksmith), 1);
+        assert_eq!(ShopMode::Sell.presses_to(ShopMode::Buy, Vendor::Blacksmith), 1);
+        assert_eq!(ShopMode::Buy.presses_to(ShopMode::Hire, Vendor::Barkeep), 2);
+        assert_eq!(ShopMode::Hire.presses_to(ShopMode::Sell, Vendor::Barkeep), 2);
+        assert_eq!(ShopMode::Sell.presses_to(ShopMode::Sell, Vendor::Barkeep), 0);
+    }
+
+    #[test]
+    fn the_shop_panel_shows_the_purse_tabs_rows_and_last_trade() {
+        let mut shop = Shop::open(Vendor::Barkeep);
+        shop.mode = ShopMode::Sell;
+        shop.message = "Sold the Dagger for 4 gold.".into();
+        let rows = vec![Row { label: "Dagger".into(), detail: "4 gold".into() }];
+        let spec = shop_spec(&shop, 40, "Aldric", &rows, 0);
+        assert_eq!(spec.aside, "Purse 40 gold");
+        let tabs: Vec<_> = spec.tabs.iter().map(|t| (t.label.as_str(), t.active, t.keys.len())).collect();
+        assert_eq!(tabs, [("Buy", false, 2), ("Sell from Aldric's pack", true, 0), ("Hire", false, 1)]);
+        assert_eq!(spec.rows, rows);
+        assert_eq!(spec.message, "Sold the Dagger for 4 gold.");
+        assert_eq!(spec.hints[0].action, "Sell");
+        assert!(shop_spec(&Shop::open(Vendor::Blacksmith), 0, "Aldric", &[], 0).empty.contains("nothing left"));
     }
 }

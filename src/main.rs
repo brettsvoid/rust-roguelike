@@ -32,6 +32,7 @@ mod map_builders;
 mod map_indexing;
 mod map_render;
 mod mapgen_viz;
+mod menu_scene;
 mod models;
 mod monsters;
 mod overwatch;
@@ -73,7 +74,7 @@ fn main() {
         DefaultPlugins
             .set(WindowPlugin {
                 primary_window: Some(Window {
-                    title: "Rust Roguelike".into(),
+                    title: "The Abyss Below".into(),
                     resolution: RESOLUTION.as_uvec2().into(),
                     // The harness draws into an off-screen image, so its window
                     // would only flash up empty. Unfocused, so the app does not
@@ -128,6 +129,7 @@ fn main() {
             ui::InventoryPlugin,
             ui::LedgerPlugin,
             ui::ShopPlugin,
+            ui::PanelPlugin,
             debug::DebugPlugin,
             presentation::PresentationPlugin,
             abilities::AbilitiesPlugin,

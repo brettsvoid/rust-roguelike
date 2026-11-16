@@ -92,8 +92,7 @@ fn opacity(age: f32) -> f32 {
     } else {
         1.0 - (age - EASE_IN - HOLD) / EASE_OUT
     };
-    let t = t.clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
+    style::ease(t)
 }
 
 fn show_banner(

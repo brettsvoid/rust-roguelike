@@ -88,8 +88,14 @@ pub fn update_hovered_tile(
     hovered.set_if_neq(HoveredTile { cursor, tile });
 }
 
-fn clear_hovered_tile(mut hovered: ResMut<HoveredTile>) {
-    hovered.set_if_neq(HoveredTile::default());
+/// Outside gameplay only the cursor counts (the main menu reads it).
+fn clear_hovered_tile(
+    window: Single<&Window, With<PrimaryWindow>>,
+    fake_cursor: Option<Res<FakeCursor>>,
+    mut hovered: ResMut<HoveredTile>,
+) {
+    let cursor = fake_cursor.map(|fake| fake.0).or_else(|| window.cursor_position());
+    hovered.set_if_neq(HoveredTile { cursor, tile: None });
 }
 
 /// The whole tile, in tile-local coordinates (x along grid x, y along grid y).

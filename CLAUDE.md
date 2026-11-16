@@ -53,19 +53,22 @@ The coordinator runs the same suite before every merge.
 
 ```text
 --seed N --depth N --frames N --reveal-map
+--menu             stay on the main menu and capture it (no game starts)
 --console CMD      a debug console command, repeatable. "town ..." commands run before the
                    level is built. Useful: godmode, "place DX DY NAME" (any raws entry at an
                    offset from the active hero), "spawn <item>", "gold N", "hurt N",
                    "effect <spark|fireball|missile|heal|confusion|blood>", "teleport X Y",
                    "town level <sector> <1-5>", "town days N", kill_all (every monster
                    falls as if killed: stand-in body, gold, "is dead", experience), kill
-                   (the active hero falls), "xp N" (to every living hero).
+                   (the active hero falls), "kill party" (every hero: game over),
+                   "xp N" (to every living hero).
 --click X,Y        left-click grid cell X,Y: walk, attack, select a hero, confirm a target
 --press X,Y        left-click a point of the 1600x1000 picture (HUD buttons and cards)
 --cursor X,Y       hover the mouse at a point of the picture
 --keys CHARS       g pick up, . stairs, i inventory, r remove, t ledger, n Tab, space wait,
                    e end turn, f attack, o overwatch, h hunker, 1 2 abilities, w a s d pan,
-                   c recentre, + - zoom, a to j a menu line, ! Escape
+                   c recentre, + - zoom, a to j a menu line, ! Escape (n is Tab, so in a
+                   shop it switches tab)
 --shop VENDOR      walk to a vendor and open the shop
 --target ITEM      enter targeting with an item
 --ledger           open the town ledger
@@ -160,7 +163,12 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
   `Strikes::strike`, at once), hunker, go on overwatch or wait. One that sees no hero hunts:
   a one-AP move at a time towards where it last saw one (a fleeing coward does not).
   `monster_target` picks the nearest hero a monster sees or stands next to (the one it spots)
-- **GuiPlugin** (`gui.rs`) - Main menu and builder-select menu (other UI lives in `ui/`)
+- **GuiPlugin** (`gui.rs`) - Main menu and builder-select menu (other UI lives in `ui/`). The
+  main menu ("The Abyss Below": New Game, Continue, Map Visualiser, Quit) takes its letter, the
+  arrow keys and Enter, or the mouse; Continue is dimmed without a save. `MainMenuNotice` is an
+  empty one-line `Text` under the entries for a notice. Behind it `menu_scene.rs` builds a fixed
+  dungeon corner from the tile, prop and hero models with torches and a slow camera drift on
+  `Time` (it overrides the follow camera while the menu shows; the HUD bar is hidden there)
 - **HudPlugin** (`ui/hud.rs`) - The bottom bar: party cards (portrait, name, class, health, AP
   pips, status badges; a click selects the hero as Tab does), the action bar (with a button per
   ability of the active hero, named after it, its caption the hotkey or why it is refused,
@@ -169,12 +177,22 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
   `player::handle_player_input` takes it after the real key presses, so a button and its
   hotkey share one code path. The rules (which buttons, why one is disabled, the shot
   preview numbers, which banner a phase change shows) are pure functions in
-  `ui/combat_hud.rs`. Shared colours and sizes live in `ui/style.rs`. A card's portrait disc
+  `ui/combat_hud.rs`. Shared colours, sizes and the `ease` curve live in `ui/style.rs`, for every
+  UI screen. A card's portrait disc
   shows the hero's level, and its name is the hero's `Name` (a recruit's own)
+- **PanelPlugin** (`ui/panel.rs`) - The one modal panel look: inventory, drop, remove, shop,
+  ledger, game over and the targeting banner. A screen builds a `PanelSpec` (title, aside,
+  tabs, rows, body lines, message, footer hints) with a pure function and writes it with
+  `panel::show`; `render_panels` redraws on change. A click on a row, tab or hint, or Enter on
+  the row picked by hover or the arrow keys, writes the key it stands for as a `KeyboardInput`,
+  so the screen's own key handler does the rest. Panels ease in on spawn and out after
+  `close_panels` (each screen's `OnExit`)
 - **TooltipPlugin** (`ui/tooltip.rs`) - Names what is under the cursor; in combat a hostile shows
   the shot preview (hit, crit, damage, cover or flank) from `combat::aim_at`
-- **HealthBarsPlugin** (`ui/health_bars.rs`) - A bar over each unit, a UI node placed by
-  projecting the unit's `GlobalTransform` through the `Camera3d` each frame; hidden with the unit
+- **HealthBarsPlugin** (`ui/health_bars.rs`) - A bar over each monster the party sees and over a
+  hero only when hurt or hovered (the cards show the rest), a UI node placed by projecting a point
+  just above the unit's model through the `Camera3d` each frame. The height is the top of the
+  unit's mesh bounds (`Aabb`), measured once its model has loaded; hidden with the unit
 - **BannerPlugin** (`ui/banner.rs`) - The eased centred banner on a mode or phase change
 - **LightingPlugin** (`lighting.rs`) - `LightSource` point lights, flicker, the shadow caster cap,
   and the per-depth ambient light, fog, bloom and town sun (see Lighting)

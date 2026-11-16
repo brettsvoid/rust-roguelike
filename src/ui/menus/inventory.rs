@@ -1,3 +1,7 @@
+//! The inventory (use an item), drop and remove-equipment menus: one panel,
+//! filled from the active hero's backpack or worn gear. A letter, a click on
+//! the row or Enter on the picked row acts on that item.
+
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input::ButtonState;
 use bevy::prelude::*;
@@ -5,108 +9,151 @@ use bevy::prelude::*;
 use crate::abilities::HeroClass;
 use crate::components::{Equipped, InBackpack, Item, Name, Ranged, WantsToDropItem, WantsToRemoveItem, WantsToUseItem};
 use crate::party::ActiveUnit;
-use crate::resources::UiFont;
 use crate::ui::TargetingInfo;
 use crate::RunState;
 
-use crate::ui::menu::{
-    build_menu_text, get_selected_index, handle_pagination_input, ModalMenu,
-    ModalMenuBuilder, ModalMenuContainer, ModalMenuText,
+use crate::ui::panel::{
+    close_panels, get_selected_index, handle_pagination_input, page_hints, page_of, show, spawn_panel, Hint, Panel,
+    PanelSpec, Placement, Row,
 };
 use crate::ui::resources::MenuPage;
-
-/// Marker for inventory menu (use items)
-#[derive(Component)]
-pub struct InventoryMenuMarker;
-
-/// Marker for drop menu
-#[derive(Component)]
-pub struct DropMenuMarker;
-
-/// Marker for remove equipment menu
-#[derive(Component)]
-pub struct RemoveMenuMarker;
 
 pub struct InventoryPlugin;
 
 impl Plugin for InventoryPlugin {
     fn build(&self, app: &mut App) {
-        app
-            // Inventory (use items)
-            .add_systems(OnEnter(RunState::ShowInventory), spawn_inventory_menu)
-            .add_systems(OnExit(RunState::ShowInventory), despawn_inventory_menu)
-            .add_systems(
-                Update,
+        let in_menu = in_state(RunState::ShowInventory)
+            .or_else(in_state(RunState::ShowDropItem))
+            .or_else(in_state(RunState::ShowRemoveItem));
+        for state in [RunState::ShowInventory, RunState::ShowDropItem, RunState::ShowRemoveItem] {
+            app.add_systems(OnEnter(state), open_item_menu).add_systems(OnExit(state), close_panels);
+        }
+        app.add_systems(
+            Update,
+            (
                 handle_inventory_input.run_if(in_state(RunState::ShowInventory)),
-            )
-            // Drop items
-            .add_systems(OnEnter(RunState::ShowDropItem), spawn_drop_menu)
-            .add_systems(OnExit(RunState::ShowDropItem), despawn_drop_menu)
-            .add_systems(
-                Update,
                 handle_drop_input.run_if(in_state(RunState::ShowDropItem)),
-            )
-            // Remove equipment
-            .add_systems(OnEnter(RunState::ShowRemoveItem), spawn_remove_menu)
-            .add_systems(OnExit(RunState::ShowRemoveItem), despawn_remove_menu)
-            .add_systems(
-                Update,
                 handle_remove_input.run_if(in_state(RunState::ShowRemoveItem)),
-            );
+                refresh_item_menu.run_if(in_menu),
+            ),
+        );
     }
 }
 
-// ============================================================================
-// Inventory Menu (Use Items)
-// ============================================================================
+/// Which of the three menus is open.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum ItemMenu {
+    Use,
+    Drop,
+    Remove,
+}
 
-fn spawn_inventory_menu(
-    mut commands: Commands,
-    font: Res<UiFont>,
-    mut menu_page: ResMut<MenuPage>,
+impl ItemMenu {
+    fn of(state: &RunState) -> Option<Self> {
+        match state {
+            RunState::ShowInventory => Some(ItemMenu::Use),
+            RunState::ShowDropItem => Some(ItemMenu::Drop),
+            RunState::ShowRemoveItem => Some(ItemMenu::Remove),
+            _ => None,
+        }
+    }
+}
+
+/// The menu for `items` (names, in the order the handlers see them).
+fn item_menu_spec(menu: ItemMenu, hero: &str, items: &[String], page: usize) -> PanelSpec {
+    let (title, verb, empty) = match menu {
+        ItemMenu::Use => ("Inventory", "Use", "The pack is empty."),
+        ItemMenu::Drop => ("Drop an item", "Drop", "Nothing to drop."),
+        ItemMenu::Remove => ("Remove equipment", "Remove", "Nothing worn to remove."),
+    };
+    let (shown, page) = page_of(items, page);
+    let mut hints = Vec::new();
+    if !shown.is_empty() {
+        hints.push(Hint::rows(shown.len(), verb));
+    }
+    hints.extend(page_hints(page));
+    hints.push(Hint::close());
+    PanelSpec {
+        title: title.into(),
+        aside: hero.into(),
+        width: 440.0,
+        rows: shown.into_iter().map(|label| Row { label, detail: String::new() }).collect(),
+        empty: empty.into(),
+        page,
+        hints,
+        ..default()
+    }
+}
+
+/// "Aldric, Fighter".
+fn hero_title(unit: Option<(&Name, Option<&HeroClass>)>) -> String {
+    match unit {
+        Some((name, Some(class))) => format!("{}, {}", name.name, class.0),
+        Some((name, None)) => name.name.clone(),
+        None => String::new(),
+    }
+}
+
+/// The hero's backpack, or worn gear for the remove menu, in a fixed order.
+fn items_of(
+    menu: ItemMenu,
+    hero: Entity,
+    backpack: &Query<(Entity, &InBackpack, &Name), With<Item>>,
+    equipped: &Query<(Entity, &Equipped, &Name), With<Item>>,
+) -> Vec<(Entity, String)> {
+    let mut items: Vec<(Entity, String)> = match menu {
+        ItemMenu::Remove => equipped.iter().filter(|(_, e, _)| e.owner == hero).map(|(i, _, n)| (i, n.name.clone())).collect(),
+        _ => backpack.iter().filter(|(_, b, _)| b.owner == hero).map(|(i, _, n)| (i, n.name.clone())).collect(),
+    };
+    items.sort_by_key(|(entity, _)| *entity);
+    items
+}
+
+fn open_item_menu(mut commands: Commands, mut menu_page: ResMut<MenuPage>) {
+    menu_page.0 = 0;
+    spawn_panel(&mut commands, Placement::Modal);
+}
+
+fn refresh_item_menu(
+    state: Res<State<RunState>>,
+    menu_page: Res<MenuPage>,
     active: Res<ActiveUnit>,
     names: Query<(&Name, Option<&HeroClass>)>,
-    backpack_query: Query<(&InBackpack, &Name), With<Item>>,
+    backpack: Query<(Entity, &InBackpack, &Name), With<Item>>,
+    equipped: Query<(Entity, &Equipped, &Name), With<Item>>,
+    mut panels: Query<(&Panel, &mut PanelSpec)>,
 ) {
-    menu_page.0 = 0;
-
-    let Some(player_entity) = active.0 else {
+    let (Some(menu), Some(hero)) = (ItemMenu::of(state.get()), active.0) else {
         return;
     };
-
-    let items: Vec<String> = backpack_query
-        .iter()
-        .filter(|(backpack, _)| backpack.owner == player_entity)
-        .map(|(_, name)| name.name.clone())
-        .collect();
-
-    let menu = ModalMenuBuilder::new(titled("Inventory", names.get(player_entity).ok()))
-        .items_with_index(items.iter().map(|s| s.as_str()))
-        .paginated()
-        .empty_message("Your inventory is empty.")
-        .footer("(Press Escape to close)")
-        .on_cancel(RunState::AwaitingInput)
-        .build();
-
-    commands.spawn((
-        InventoryMenuMarker,
-        menu.clone(),
-    ));
-
-    spawn_menu_ui(&mut commands, &font, &menu, &menu_page);
+    let items: Vec<String> = items_of(menu, hero, &backpack, &equipped).into_iter().map(|(_, n)| n).collect();
+    let title = hero_title(names.get(hero).ok());
+    show(&mut panels, item_menu_spec(menu, &title, &items, menu_page.0));
 }
 
-fn despawn_inventory_menu(
-    mut commands: Commands,
-    menu_query: Query<Entity, With<InventoryMenuMarker>>,
-    container_query: Query<Entity, With<ModalMenuContainer>>,
-) {
-    for entity in &menu_query {
-        commands.entity(entity).despawn();
+/// The item a key picks, after Escape and page turns are dealt with.
+fn picked(
+    evr_kbd: &mut MessageReader<KeyboardInput>,
+    next_state: &mut NextState<RunState>,
+    menu_page: &mut MenuPage,
+    items: &[(Entity, String)],
+) -> Option<Entity> {
+    for ev in evr_kbd.read() {
+        if ev.state != ButtonState::Pressed {
+            continue;
+        }
+        if ev.key_code == KeyCode::Escape {
+            next_state.set_if_different(RunState::AwaitingInput);
+            return None;
+        }
+        if handle_pagination_input(ev.key_code, menu_page, items.len()) {
+            continue;
+        }
+        if let Some(index) = get_selected_index(ev.key_code, menu_page, items.len()) {
+            return Some(items[index].0);
+        }
     }
-    for entity in &container_query {
-        commands.entity(entity).despawn();
-    }
+    None
 }
 
 pub fn handle_inventory_input(
@@ -116,115 +163,25 @@ pub fn handle_inventory_input(
     mut targeting_info: ResMut<TargetingInfo>,
     mut menu_page: ResMut<MenuPage>,
     active: Res<ActiveUnit>,
-    backpack_query: Query<(Entity, &InBackpack), With<Item>>,
+    backpack: Query<(Entity, &InBackpack, &Name), With<Item>>,
+    equipped: Query<(Entity, &Equipped, &Name), With<Item>>,
     ranged_query: Query<&Ranged>,
-    menu_query: Query<&ModalMenu, With<InventoryMenuMarker>>,
-    mut text_query: Query<&mut Text, With<ModalMenuText>>,
 ) {
-    let Some(player_entity) = active.0 else {
+    let Some(hero) = active.0 else {
         return;
     };
-
-    let Ok(menu) = menu_query.single() else {
+    let items = items_of(ItemMenu::Use, hero, &backpack, &equipped);
+    let Some(item) = picked(&mut evr_kbd, &mut next_state, &mut menu_page, &items) else {
         return;
     };
-
-    let items: Vec<Entity> = backpack_query
-        .iter()
-        .filter(|(_, backpack)| backpack.owner == player_entity)
-        .map(|(entity, _)| entity)
-        .collect();
-
-    let total_items = items.len();
-
-    for ev in evr_kbd.read() {
-        if ev.state != ButtonState::Pressed {
-            continue;
-        }
-
-        // Handle escape
-        if ev.key_code == KeyCode::Escape {
-            next_state.set_if_different(RunState::AwaitingInput);
-            return;
-        }
-
-        // Handle pagination
-        if handle_pagination_input(ev.key_code, &mut menu_page, total_items) {
-            // Update text in place
-            if let Ok(mut text) = text_query.single_mut() {
-                **text = build_menu_text(menu, &menu_page);
-            }
-            continue;
-        }
-
-        // Handle item selection
-        if let Some(index) = get_selected_index(ev.key_code, &menu_page, total_items) {
-            if let Some(&item) = items.get(index) {
-                // Check if item is ranged - if so, enter targeting mode
-                if let Ok(ranged) = ranged_query.get(item) {
-                    targeting_info.range = ranged.range;
-                    targeting_info.item = Some(item);
-                    next_state.set_if_different(RunState::ShowTargeting);
-                } else {
-                    // Non-ranged item, use immediately
-                    commands.entity(player_entity).insert(WantsToUseItem { item, target: None });
-                    next_state.set_if_different(RunState::PartyAction);
-                }
-            }
-        }
-    }
-}
-
-// ============================================================================
-// Drop Menu
-// ============================================================================
-
-fn spawn_drop_menu(
-    mut commands: Commands,
-    font: Res<UiFont>,
-    mut menu_page: ResMut<MenuPage>,
-    active: Res<ActiveUnit>,
-    names: Query<(&Name, Option<&HeroClass>)>,
-    backpack_query: Query<(&InBackpack, &Name), With<Item>>,
-) {
-    menu_page.0 = 0;
-
-    let Some(player_entity) = active.0 else {
-        return;
-    };
-
-    let items: Vec<String> = backpack_query
-        .iter()
-        .filter(|(backpack, _)| backpack.owner == player_entity)
-        .map(|(_, name)| name.name.clone())
-        .collect();
-
-    let menu = ModalMenuBuilder::new(titled("Drop which item?", names.get(player_entity).ok()))
-        .items_with_index(items.iter().map(|s| s.as_str()))
-        .paginated()
-        .empty_message("Nothing to drop.")
-        .footer("(Press Escape to close)")
-        .on_cancel(RunState::AwaitingInput)
-        .build();
-
-    commands.spawn((
-        DropMenuMarker,
-        menu.clone(),
-    ));
-
-    spawn_menu_ui(&mut commands, &font, &menu, &menu_page);
-}
-
-fn despawn_drop_menu(
-    mut commands: Commands,
-    menu_query: Query<Entity, With<DropMenuMarker>>,
-    container_query: Query<Entity, With<ModalMenuContainer>>,
-) {
-    for entity in &menu_query {
-        commands.entity(entity).despawn();
-    }
-    for entity in &container_query {
-        commands.entity(entity).despawn();
+    // A ranged item is aimed first; anything else is used at once.
+    if let Ok(ranged) = ranged_query.get(item) {
+        targeting_info.range = ranged.range;
+        targeting_info.item = Some(item);
+        next_state.set_if_different(RunState::ShowTargeting);
+    } else {
+        commands.entity(hero).insert(WantsToUseItem { item, target: None });
+        next_state.set_if_different(RunState::PartyAction);
     }
 }
 
@@ -234,105 +191,16 @@ fn handle_drop_input(
     mut next_state: ResMut<NextState<RunState>>,
     mut menu_page: ResMut<MenuPage>,
     active: Res<ActiveUnit>,
-    backpack_query: Query<(Entity, &InBackpack), With<Item>>,
-    menu_query: Query<&ModalMenu, With<DropMenuMarker>>,
-    mut text_query: Query<&mut Text, With<ModalMenuText>>,
+    backpack: Query<(Entity, &InBackpack, &Name), With<Item>>,
+    equipped: Query<(Entity, &Equipped, &Name), With<Item>>,
 ) {
-    let Some(player_entity) = active.0 else {
+    let Some(hero) = active.0 else {
         return;
     };
-
-    let Ok(menu) = menu_query.single() else {
-        return;
-    };
-
-    let items: Vec<Entity> = backpack_query
-        .iter()
-        .filter(|(_, backpack)| backpack.owner == player_entity)
-        .map(|(entity, _)| entity)
-        .collect();
-
-    let total_items = items.len();
-
-    for ev in evr_kbd.read() {
-        if ev.state != ButtonState::Pressed {
-            continue;
-        }
-
-        // Handle escape
-        if ev.key_code == KeyCode::Escape {
-            next_state.set_if_different(RunState::AwaitingInput);
-            return;
-        }
-
-        // Handle pagination
-        if handle_pagination_input(ev.key_code, &mut menu_page, total_items) {
-            if let Ok(mut text) = text_query.single_mut() {
-                **text = build_menu_text(menu, &menu_page);
-            }
-            continue;
-        }
-
-        // Handle item selection
-        if let Some(index) = get_selected_index(ev.key_code, &menu_page, total_items) {
-            if let Some(&item) = items.get(index) {
-                commands.entity(player_entity).insert(WantsToDropItem { item });
-                next_state.set_if_different(RunState::PartyAction);
-            }
-        }
-    }
-}
-
-// ============================================================================
-// Remove Equipment Menu
-// ============================================================================
-
-fn spawn_remove_menu(
-    mut commands: Commands,
-    font: Res<UiFont>,
-    mut menu_page: ResMut<MenuPage>,
-    active: Res<ActiveUnit>,
-    names: Query<(&Name, Option<&HeroClass>)>,
-    equipped_query: Query<(&Equipped, &Name), With<Item>>,
-) {
-    menu_page.0 = 0;
-
-    let Some(player_entity) = active.0 else {
-        return;
-    };
-
-    let items: Vec<String> = equipped_query
-        .iter()
-        .filter(|(equipped, _)| equipped.owner == player_entity)
-        .map(|(_, name)| name.name.clone())
-        .collect();
-
-    let menu = ModalMenuBuilder::new(titled("Remove which item?", names.get(player_entity).ok()))
-        .items_with_index(items.iter().map(|s| s.as_str()))
-        .paginated()
-        .empty_message("No equipment to remove.")
-        .footer("(Press Escape to close)")
-        .on_cancel(RunState::AwaitingInput)
-        .build();
-
-    commands.spawn((
-        RemoveMenuMarker,
-        menu.clone(),
-    ));
-
-    spawn_menu_ui(&mut commands, &font, &menu, &menu_page);
-}
-
-fn despawn_remove_menu(
-    mut commands: Commands,
-    menu_query: Query<Entity, With<RemoveMenuMarker>>,
-    container_query: Query<Entity, With<ModalMenuContainer>>,
-) {
-    for entity in &menu_query {
-        commands.entity(entity).despawn();
-    }
-    for entity in &container_query {
-        commands.entity(entity).despawn();
+    let items = items_of(ItemMenu::Drop, hero, &backpack, &equipped);
+    if let Some(item) = picked(&mut evr_kbd, &mut next_state, &mut menu_page, &items) {
+        commands.entity(hero).insert(WantsToDropItem { item });
+        next_state.set_if_different(RunState::PartyAction);
     }
 }
 
@@ -342,107 +210,46 @@ fn handle_remove_input(
     mut next_state: ResMut<NextState<RunState>>,
     mut menu_page: ResMut<MenuPage>,
     active: Res<ActiveUnit>,
-    equipped_query: Query<(Entity, &Equipped), With<Item>>,
-    menu_query: Query<&ModalMenu, With<RemoveMenuMarker>>,
-    mut text_query: Query<&mut Text, With<ModalMenuText>>,
+    backpack: Query<(Entity, &InBackpack, &Name), With<Item>>,
+    equipped: Query<(Entity, &Equipped, &Name), With<Item>>,
 ) {
-    let Some(player_entity) = active.0 else {
+    let Some(hero) = active.0 else {
         return;
     };
-
-    let Ok(menu) = menu_query.single() else {
-        return;
-    };
-
-    let items: Vec<Entity> = equipped_query
-        .iter()
-        .filter(|(_, equipped)| equipped.owner == player_entity)
-        .map(|(entity, _)| entity)
-        .collect();
-
-    let total_items = items.len();
-
-    for ev in evr_kbd.read() {
-        if ev.state != ButtonState::Pressed {
-            continue;
-        }
-
-        // Handle escape
-        if ev.key_code == KeyCode::Escape {
-            next_state.set_if_different(RunState::AwaitingInput);
-            return;
-        }
-
-        // Handle pagination
-        if handle_pagination_input(ev.key_code, &mut menu_page, total_items) {
-            if let Ok(mut text) = text_query.single_mut() {
-                **text = build_menu_text(menu, &menu_page);
-            }
-            continue;
-        }
-
-        // Handle item selection
-        if let Some(index) = get_selected_index(ev.key_code, &menu_page, total_items) {
-            if let Some(&item) = items.get(index) {
-                commands.entity(player_entity).insert(WantsToRemoveItem { item });
-                next_state.set_if_different(RunState::PartyAction);
-            }
-        }
+    let items = items_of(ItemMenu::Remove, hero, &backpack, &equipped);
+    if let Some(item) = picked(&mut evr_kbd, &mut next_state, &mut menu_page, &items) {
+        commands.entity(hero).insert(WantsToRemoveItem { item });
+        next_state.set_if_different(RunState::PartyAction);
     }
 }
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::panel::BodyLine;
 
-/// A menu title naming the unit it acts for.
-/// "Aldric the Fighter: Inventory".
-fn titled(title: &str, unit: Option<(&Name, Option<&HeroClass>)>) -> String {
-    match unit {
-        Some((name, Some(class))) => format!("{} the {}: {title}", name.name, class.0),
-        Some((name, None)) => format!("{}: {title}", name.name),
-        None => title.to_string(),
+    #[test]
+    fn the_inventory_lists_the_items_with_their_keys_and_hints() {
+        let items = vec!["Health Potion".to_string(), "Dagger".to_string()];
+        let spec = item_menu_spec(ItemMenu::Use, "Aldric, Fighter", &items, 0);
+        assert_eq!(spec.title, "Inventory");
+        assert_eq!(spec.aside, "Aldric, Fighter");
+        assert_eq!(spec.rows.iter().map(|r| r.label.as_str()).collect::<Vec<_>>(), ["Health Potion", "Dagger"]);
+        let hints: Vec<_> = spec.hints.iter().map(|h| (h.cap.as_str(), h.action.as_str())).collect();
+        assert_eq!(hints, [("a-b", "Use"), ("Esc", "Close")]);
+        assert_eq!(spec.body, Vec::<BodyLine>::new());
     }
-}
 
-fn spawn_menu_ui(commands: &mut Commands, font: &UiFont, menu: &ModalMenu, menu_page: &MenuPage) {
-    let text_content = build_menu_text(menu, menu_page);
-    let style = &menu.style;
-
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                ..default()
-            },
-            ModalMenuContainer,
-        ))
-        .with_children(|parent| {
-            parent
-                .spawn((
-                    Node {
-                        padding: UiRect::all(Val::Px(style.padding)),
-                        border: UiRect::all(Val::Px(2.0)),
-                        ..default()
-                    },
-                    BorderColor::all(style.border_color),
-                    BackgroundColor(style.background_color),
-                ))
-                .with_children(|inner| {
-                    inner.spawn((
-                        Text::new(text_content),
-                        TextFont {
-                            font: font.0.clone().into(),
-                            font_size: FontSize::Px(style.font_size),
-                            ..default()
-                        },
-                        TextColor(style.text_color),
-                        ModalMenuText,
-                    ));
-                });
-        });
+    #[test]
+    fn a_long_pack_pages_and_an_empty_one_says_so() {
+        let items: Vec<String> = (0..12).map(|i| format!("Item {i}")).collect();
+        let spec = item_menu_spec(ItemMenu::Drop, "", &items, 1);
+        assert_eq!(spec.rows.len(), 2);
+        assert_eq!(spec.page, Some((1, 2)));
+        assert!(spec.hints.iter().any(|h| h.action == "Next"));
+        let empty = item_menu_spec(ItemMenu::Remove, "", &[], 0);
+        assert!(empty.rows.is_empty());
+        assert_eq!(empty.empty, "Nothing worn to remove.");
+        assert_eq!(empty.hints.len(), 1);
+    }
 }

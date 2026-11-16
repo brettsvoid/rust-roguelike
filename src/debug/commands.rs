@@ -44,6 +44,12 @@ pub fn execute_command(
         Some("town") => cmd_town(&parts, town),
         Some("gold") => cmd_gold(&parts, commands),
         Some("xp") => cmd_xp(&parts, commands),
+        Some("kill") if parts.get(1) == Some(&"party") => {
+            for (hero, ..) in party.iter() {
+                cmd_kill(commands, Some(hero));
+            }
+            "Killed the whole party".to_string()
+        }
         Some("kill") => cmd_kill(commands, active),
         Some(cmd) => format!("Unknown command: {}", cmd),
         None => String::new(),
@@ -51,7 +57,7 @@ pub fn execute_command(
 }
 
 fn cmd_help() -> String {
-    "Commands: spawn <item> (portal, heart, ...), effect <spark|fireball|missile|heal|confusion|blood>, place <dx> <dy> <raws name>, teleport <x> <y>, gold <n>, xp <n>, kill (the active hero), godmode, reveal, nofog, heal, hurt <n>, kill_all, town sell <sector> <value>, town days <n>, town level <sector> <n>".to_string()
+    "Commands: spawn <item> (portal, heart, ...), effect <spark|fireball|missile|heal|confusion|blood>, place <dx> <dy> <raws name>, teleport <x> <y>, gold <n>, xp <n>, kill (the active hero; kill party for all), godmode, reveal, nofog, heal, hurt <n>, kill_all, town sell <sector> <value>, town days <n>, town level <sector> <n>".to_string()
 }
 
 fn cmd_godmode(god_mode: &mut GodMode) -> String {
