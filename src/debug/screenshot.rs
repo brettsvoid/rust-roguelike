@@ -515,9 +515,11 @@ fn capture_after_frames(
     }
     let mut save = save_to_disk(args.path.clone());
     commands.spawn(Screenshot::image(target.0.clone())).observe(
-        move |captured: On<ScreenshotCaptured>, mut exit: MessageWriter<AppExit>| {
+        move |captured: On<ScreenshotCaptured>| {
             save(captured);
-            exit.write(AppExit::Success);
+            // The picture is on disk. Bevy's own shutdown now and then never returns with
+            // a hidden window, so leave at once.
+            std::process::exit(0);
         },
     );
 }
