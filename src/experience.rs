@@ -15,7 +15,7 @@ use crate::presentation::{Beat, Presentation};
 use crate::raws::RAWS;
 
 /// Total experience between level 1 and 2; each later level costs one step more.
-pub const XP_STEP: i32 = 50;
+pub const XP_STEP: i32 = 800;
 /// Aim gained per level.
 pub const LEVEL_AIM: i32 = 2;
 
@@ -42,7 +42,7 @@ pub fn mob_xp(max_hp: i32, power: i32) -> i32 {
     max_hp / 2 + power
 }
 
-/// The total experience needed to reach `level`: 0, 50, 150, 300, 500, ...
+/// The total experience needed to reach `level`: 0, 800, 2400, 4800, 8000, ...
 pub fn xp_for(level: i32) -> i32 {
     XP_STEP * (level - 1) * level / 2
 }
@@ -92,16 +92,16 @@ mod tests {
 
     #[test]
     fn thresholds_grow_by_one_step_a_level() {
-        assert_eq!((1..=5).map(xp_for).collect::<Vec<_>>(), vec![0, 50, 150, 300, 500]);
-        assert_eq!([0, 49, 50, 149, 150, 499, 500].map(level_for), [1, 1, 2, 2, 3, 4, 5]);
-        assert_eq!(Experience::at(3), Experience { level: 3, xp: 150 });
+        assert_eq!((1..=5).map(xp_for).collect::<Vec<_>>(), vec![0, 800, 2400, 4800, 8000]);
+        assert_eq!([0, 799, 800, 2399, 2400, 7999, 8000].map(level_for), [1, 1, 2, 2, 3, 4, 5]);
+        assert_eq!(Experience::at(3), Experience { level: 3, xp: 2400 });
     }
 
     #[test]
     fn monsters_are_worth_half_their_hit_points_plus_their_power() {
-        assert_eq!(mob_xp(16, 4), 12); // Goblin
-        assert_eq!(mob_xp(2, 1), 2); // Rat
-        assert_eq!(mob_xp(70, 15), 50); // Demon Lord
+        assert_eq!(mob_xp(16, 11), 19); // Goblin
+        assert_eq!(mob_xp(2, 7), 8); // Rat
+        assert_eq!(mob_xp(90, 25), 70); // Demon Lord
     }
 
     #[test]

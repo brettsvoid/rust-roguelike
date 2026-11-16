@@ -9,14 +9,18 @@ use crate::{
     experience::{level_up, Experience},
     map::{Position, MAP_WIDTH},
     party::{PartyMember, HEROES},
-    raws::{get_spawn_table_for_depth, spawn_class_kit, spawn_named_entity, Class, RAWS},
+    raws::{get_spawn_table_for_depth, spawn_class_kit, spawn_named_entity, Class, RawMaster, RAWS},
     rng::GameRng,
     shapes::Rect,
     viewshed::Viewshed,
 };
 
-const MAX_MONSTERS: i32 = 4;
-const MAX_ITEMS: i32 = 2;
+// A room rolls up to `MAX_MONSTERS` + depth / `DEPTHS_PER_SPAWN` spawn points
+// for monsters and one fewer for items, each rolled on the
+// depth's whole spawn table (balance pass P04, `docs/design.md`).
+const MAX_MONSTERS: i32 = 2;
+const MAX_ITEMS: i32 = 1;
+const DEPTHS_PER_SPAWN: i32 = 3;
 
 /// A fresh hero for `slot` at `(x, y)`, with the class's starting stats.
 pub fn party_member(slot: usize, x: i32, y: i32, class: &Class) -> impl Bundle {
@@ -92,24 +96,38 @@ pub fn spawn_room(
     monster_id: &mut usize,
     map_depth: i32,
 ) {
+    let raws = RAWS.lock().unwrap();
+    for ((x, y), entity_name) in room_spawns(&raws, rng, room, map_depth) {
+        // Check if it's a monster (needs monster_id)
+        if raws.mob_index.contains_key(&entity_name) {
+            spawn_named_entity(&raws, commands, &entity_name, x, y, Some(*monster_id));
+            *monster_id += 1;
+        } else {
+            spawn_named_entity(&raws, commands, &entity_name, x, y, None);
+        }
+    }
+}
+
+/// What `spawn_room` puts in `room` at `map_depth`: each spawn point and the
+/// raws name the depth's table rolled for it. Pure, so the balance simulator
+/// (`balance`) counts the same spawns as the game.
+pub fn room_spawns(raws: &RawMaster, rng: &mut GameRng, room: &Rect, map_depth: i32) -> Vec<((i32, i32), String)> {
     // Calculate spawn counts based on depth
-    let max_monsters_roll = (MAX_MONSTERS + 3) + map_depth - 3;
+    let max_monsters_roll = MAX_MONSTERS + map_depth / DEPTHS_PER_SPAWN;
     let num_monsters = if max_monsters_roll > 0 {
         rng.0.random_range(1..=max_monsters_roll).max(0)
     } else {
         0
     };
 
-    let max_items_roll = (MAX_ITEMS + 3) + map_depth - 3;
+    let max_items_roll = MAX_ITEMS + map_depth / DEPTHS_PER_SPAWN;
     let num_items = if max_items_roll > 0 {
         rng.0.random_range(1..=max_items_roll).max(0)
     } else {
         0
     };
 
-    // Get spawn table from JSON data
-    let raws = RAWS.lock().unwrap();
-    let spawn_table = get_spawn_table_for_depth(&raws, map_depth);
+    let spawn_table = get_spawn_table_for_depth(raws, map_depth);
 
     // Generate all spawn points
     let total_spawns = num_monsters + num_items;
@@ -129,19 +147,8 @@ pub fn spawn_room(
         }
     }
 
-    // Spawn entities using weighted table
-    for (x, y) in spawn_points.iter() {
-        if let Some(entity_name) = spawn_table.roll(rng) {
-            // Check if it's a monster (needs monster_id)
-            let is_monster = raws.mob_index.contains_key(&entity_name);
-            if is_monster {
-                spawn_named_entity(&raws, commands, &entity_name, *x, *y, Some(*monster_id));
-                *monster_id += 1;
-            } else {
-                spawn_named_entity(&raws, commands, &entity_name, *x, *y, None);
-            }
-        }
-    }
+    // Roll the weighted table for each point
+    spawn_points.into_iter().filter_map(|point| Some((point, spawn_table.roll(rng)?))).collect()
 }
 
 /// Spawn entities in a region defined by tile indices (for non-rectangular areas like caves)
@@ -258,7 +265,7 @@ mod tests {
             kits,
             vec![
                 ("Fighter".into(), (34, 3, 2, 65, 5, 4), s(&["Longsword", "Shield"]), s(&[]), s(&["Cleave", "Second Wind"])),
-                ("Ranger".into(), (28, 2, 1, 75, 10, 5), s(&["Shortbow"]), s(&["Dagger"]), s(&["Aimed Shot", "Snare"])),
+                ("Ranger".into(), (28, 6, 1, 75, 10, 5), s(&["Shortbow"]), s(&["Dagger"]), s(&["Aimed Shot", "Snare"])),
                 ("Mage".into(), (22, 1, 0, 70, 5, 4), s(&["Dagger"]), s(&[]), s(&["Fireball", "Magic Missile"])),
                 ("Cleric".into(), (30, 2, 2, 65, 0, 4), s(&["Blessed Mace"]), s(&[]), s(&["Heal", "Smite"])),
             ]

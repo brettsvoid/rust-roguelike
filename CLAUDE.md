@@ -35,6 +35,20 @@ it failed to compile: `getrandom` 0.4.3, pulled in through `rand` 0.10 by `bevy_
 game, refuses that target unless its `wasm_js` feature is on. The `wasm-release` profile and the
 `target_arch = "wasm32"` branches (no-op save and an in-memory town) were removed with it.
 
+### Balance simulator
+
+`src/balance.rs` (test-only) plays hundreds of seeded runs headless with the game's own rules,
+raws, level generators and economy, and prints survival per depth, levels, wins, gold, class
+shares and town level-ups. Any change to combat numbers, the raws, experience, spawns or the
+economy should be measured with it before and after. Targets, results and its simplifications
+are in `docs/design.md` (Balance). Environment knobs (`POWER_ADD`, `HP_PCT`, `XP_PCT`,
+`GEAR_PCT`, `REST_PCT`, ...) try a change before it goes into the raws.
+
+```bash
+cargo test --release balance::report -- --ignored --nocapture          # BALANCE_CAMPAIGNS=N, default 200
+cargo test --release balance::staged_fights -- --ignored --nocapture   # vs scenes balance_lord, balance_d3
+```
+
 ### Verifying changes: batch, don't poll
 
 A game run is the expensive step, so work in batches (the owner asked for this):

@@ -9,6 +9,8 @@ use map::{GRID_PX, MAP_WIDTH};
 
 mod abilities;
 mod animation;
+#[cfg(test)]
+mod balance;
 mod bystander;
 mod camera;
 mod combat;

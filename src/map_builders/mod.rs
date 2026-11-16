@@ -327,6 +327,9 @@ pub trait MapBuilder {
     /// What the chain queued to spawn: (tile index, raws name).
     #[cfg(test)]
     fn spawn_list(&self) -> &[(usize, String)];
+    /// The rooms `spawn_entities` rolls spawns in (all but the first).
+    #[cfg(test)]
+    fn rooms(&self) -> &[Rect];
     fn get_snapshot_history(&self) -> Vec<Map>;
     fn get_name(&self) -> &'static str;
     /// Appends a meta builder to the end of the chain.
@@ -459,6 +462,11 @@ impl MapBuilder for BuilderChain {
     #[cfg(test)]
     fn spawn_list(&self) -> &[(usize, String)] {
         &self.build_data.spawn_list
+    }
+
+    #[cfg(test)]
+    fn rooms(&self) -> &[Rect] {
+        self.build_data.rooms.as_deref().unwrap_or_default()
     }
 
     fn get_snapshot_history(&self) -> Vec<Map> {

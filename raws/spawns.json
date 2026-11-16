@@ -249,7 +249,7 @@
         "bg": "#000000",
         "order": 0
       },
-      "shield": { "defense_bonus": 3 }
+      "shield": { "defense_bonus": 2 }
     },
     {
       "name": "Chain Mail",
@@ -298,7 +298,7 @@
         "bg": "#000000",
         "order": 0
       },
-      "shield": { "defense_bonus": 4 }
+      "shield": { "defense_bonus": 2 }
     },
     {
       "name": "Scale Mail",
@@ -314,7 +314,7 @@
       },
       "armour": {
         "slot": "chest",
-        "defense_bonus": 3
+        "defense_bonus": 2
       }
     },
     {
@@ -349,7 +349,7 @@
       },
       "armour": {
         "slot": "chest",
-        "defense_bonus": 4
+        "defense_bonus": 3
       }
     },
     {
@@ -384,7 +384,7 @@
       },
       "armour": {
         "slot": "chest",
-        "defense_bonus": 5
+        "defense_bonus": 3
       }
     },
     {
@@ -435,7 +435,7 @@
       },
       "armour": {
         "slot": "chest",
-        "defense_bonus": 2
+        "defense_bonus": 1
       }
     },
     {
@@ -452,7 +452,7 @@
       },
       "armour": {
         "slot": "chest",
-        "defense_bonus": 3
+        "defense_bonus": 2
       }
     },
     {
@@ -469,7 +469,7 @@
       },
       "armour": {
         "slot": "cloak",
-        "defense_bonus": 2
+        "defense_bonus": 1
       }
     },
     {
@@ -486,7 +486,7 @@
       },
       "armour": {
         "slot": "chest",
-        "defense_bonus": 4
+        "defense_bonus": 3
       }
     },
     {
@@ -503,7 +503,7 @@
       },
       "armour": {
         "slot": "cloak",
-        "defense_bonus": 3
+        "defense_bonus": 2
       }
     },
     {
@@ -732,7 +732,7 @@
         "bg": "#000000",
         "order": 0
       },
-      "shield": { "defense_bonus": 4 }
+      "shield": { "defense_bonus": 2 }
     },
     {
       "name": "Greater Holy Water",
@@ -842,7 +842,7 @@
         "bg": "#000000",
         "order": 0
       },
-      "shield": { "defense_bonus": 5 }
+      "shield": { "defense_bonus": 3 }
     },
     {
       "name": "Scroll of Inferno",
@@ -920,7 +920,7 @@
         "max_hp": 16,
         "hp": 16,
         "defense": 1,
-        "power": 4
+        "power": 11
       },
       "vision_range": 8
     },
@@ -940,7 +940,7 @@
         "max_hp": 16,
         "hp": 16,
         "defense": 1,
-        "power": 4
+        "power": 12
       },
       "vision_range": 8
     },
@@ -960,7 +960,7 @@
         "max_hp": 4,
         "hp": 4,
         "defense": 0,
-        "power": 2
+        "power": 8
       },
       "vision_range": 4
     },
@@ -979,7 +979,7 @@
         "max_hp": 2,
         "hp": 2,
         "defense": 0,
-        "power": 1,
+        "power": 7,
         "defence": 10
       },
       "vision_range": 4
@@ -1170,7 +1170,7 @@
         "max_hp": 6,
         "hp": 6,
         "defense": 0,
-        "power": 3,
+        "power": 9,
         "movement": 6,
         "defence": 20
       },
@@ -1193,7 +1193,7 @@
         "max_hp": 8,
         "hp": 8,
         "defense": 0,
-        "power": 4
+        "power": 10
       },
       "vision_range": 6
     },
@@ -1210,10 +1210,10 @@
       },
       "blocks_tile": true,
       "stats": {
-        "max_hp": 20,
-        "hp": 20,
+        "max_hp": 26,
+        "hp": 26,
         "defense": 2,
-        "power": 5
+        "power": 14
       },
       "vision_range": 8
     },
@@ -1230,10 +1230,10 @@
       },
       "blocks_tile": true,
       "stats": {
-        "max_hp": 24,
-        "hp": 24,
+        "max_hp": 32,
+        "hp": 32,
         "defense": 2,
-        "power": 6
+        "power": 18
       },
       "vision_range": 8
     },
@@ -1251,10 +1251,10 @@
       },
       "blocks_tile": true,
       "stats": {
-        "max_hp": 18,
-        "hp": 18,
+        "max_hp": 24,
+        "hp": 24,
         "defense": 1,
-        "power": 7
+        "power": 13
       },
       "vision_range": 9
     },
@@ -1271,10 +1271,10 @@
       },
       "blocks_tile": true,
       "stats": {
-        "max_hp": 26,
-        "hp": 26,
-        "defense": 3,
-        "power": 7
+        "max_hp": 34,
+        "hp": 34,
+        "defense": 2,
+        "power": 18
       },
       "vision_range": 8
     },
@@ -1291,10 +1291,10 @@
       },
       "blocks_tile": true,
       "stats": {
-        "max_hp": 30,
-        "hp": 30,
-        "defense": 3,
-        "power": 9
+        "max_hp": 39,
+        "hp": 39,
+        "defense": 2,
+        "power": 18
       },
       "vision_range": 10
     },
@@ -1311,10 +1311,10 @@
       },
       "blocks_tile": true,
       "stats": {
-        "max_hp": 45,
-        "hp": 45,
-        "defense": 4,
-        "power": 11
+        "max_hp": 58,
+        "hp": 58,
+        "defense": 2,
+        "power": 19
       },
       "vision_range": 10
     },
@@ -1331,10 +1331,10 @@
       },
       "blocks_tile": true,
       "stats": {
-        "max_hp": 24,
-        "hp": 24,
-        "defense": 3,
-        "power": 9
+        "max_hp": 32,
+        "hp": 32,
+        "defense": 2,
+        "power": 19
       },
       "vision_range": 8
     },
@@ -1351,10 +1351,10 @@
       },
       "blocks_tile": true,
       "stats": {
-        "max_hp": 40,
-        "hp": 40,
-        "defense": 4,
-        "power": 12
+        "max_hp": 52,
+        "hp": 52,
+        "defense": 3,
+        "power": 22
       },
       "vision_range": 10
     },
@@ -1371,10 +1371,10 @@
       },
       "blocks_tile": true,
       "stats": {
-        "max_hp": 70,
-        "hp": 70,
-        "defense": 6,
-        "power": 15
+        "max_hp": 90,
+        "hp": 90,
+        "defense": 4,
+        "power": 25
       },
       "vision_range": 10
     },
@@ -1394,7 +1394,7 @@
         "max_hp": 12,
         "hp": 12,
         "defense": 0,
-        "power": 1
+        "power": 7
       },
       "vision_range": 9
     }
@@ -1621,30 +1621,30 @@
     }
   ],
   "spawn_table": [
-    { "name": "Kobold", "weight": 15, "min_depth": 0, "max_depth": 2 },
-    { "name": "Rat", "weight": 10, "min_depth": 1, "max_depth": 3 },
-    { "name": "Giant Bat", "weight": 8, "min_depth": 1, "max_depth": 3 },
-    { "name": "Giant Spider", "weight": 6, "min_depth": 2, "max_depth": 4 },
-    { "name": "Goblin", "weight": 10, "min_depth": 0, "max_depth": 5 },
-    { "name": "Hobgoblin", "weight": 6, "min_depth": 2, "max_depth": 5 },
-    { "name": "Orc", "weight": 1, "min_depth": 0, "max_depth": 7, "add_map_depth_to_weight": true },
-    { "name": "Orc Warrior", "weight": 6, "min_depth": 4, "max_depth": 7 },
-    { "name": "Orc Shaman", "weight": 4, "min_depth": 4, "max_depth": 7 },
-    { "name": "Skeleton", "weight": 8, "min_depth": 6, "max_depth": 9 },
-    { "name": "Wraith", "weight": 5, "min_depth": 7, "max_depth": 9 },
-    { "name": "Lich", "weight": 2, "min_depth": 8, "max_depth": 9 },
-    { "name": "Imp", "weight": 8, "min_depth": 8, "max_depth": 100 },
-    { "name": "Hellhound", "weight": 6, "min_depth": 9, "max_depth": 100 },
-    { "name": "Demon Lord", "weight": 2, "min_depth": 10, "max_depth": 100 },
-    { "name": "Goblin Archer", "weight": 6, "min_depth": 3, "max_depth": 5 },
-    { "name": "Gold", "weight": 6, "min_depth": 0, "max_depth": 100 },
-    { "name": "Health Potion", "weight": 7, "min_depth": 0, "max_depth": 100 },
-    { "name": "Rations", "weight": 10, "min_depth": 0, "max_depth": 100 },
-    { "name": "Magic Missile Scroll", "weight": 2, "min_depth": 0, "max_depth": 5 },
-    { "name": "Fireball Scroll", "weight": 2, "min_depth": 2, "max_depth": 7 },
-    { "name": "Confusion Scroll", "weight": 2, "min_depth": 0, "max_depth": 5 },
-    { "name": "Town Portal", "weight": 2, "min_depth": 1, "max_depth": 100 },
-    { "name": "Scroll of Magic Mapping", "weight": 2, "min_depth": 2, "max_depth": 7 },
+    { "name": "Kobold", "weight": 45, "min_depth": 0, "max_depth": 2 },
+    { "name": "Rat", "weight": 30, "min_depth": 1, "max_depth": 3 },
+    { "name": "Giant Bat", "weight": 24, "min_depth": 1, "max_depth": 3 },
+    { "name": "Giant Spider", "weight": 18, "min_depth": 2, "max_depth": 4 },
+    { "name": "Goblin", "weight": 30, "min_depth": 0, "max_depth": 5 },
+    { "name": "Hobgoblin", "weight": 18, "min_depth": 2, "max_depth": 5 },
+    { "name": "Orc", "weight": 3, "min_depth": 0, "max_depth": 7, "add_map_depth_to_weight": true },
+    { "name": "Orc Warrior", "weight": 18, "min_depth": 4, "max_depth": 7 },
+    { "name": "Orc Shaman", "weight": 12, "min_depth": 4, "max_depth": 7 },
+    { "name": "Skeleton", "weight": 24, "min_depth": 6, "max_depth": 9 },
+    { "name": "Wraith", "weight": 15, "min_depth": 7, "max_depth": 9 },
+    { "name": "Lich", "weight": 6, "min_depth": 8, "max_depth": 9 },
+    { "name": "Imp", "weight": 24, "min_depth": 8, "max_depth": 100 },
+    { "name": "Hellhound", "weight": 18, "min_depth": 9, "max_depth": 100 },
+    { "name": "Demon Lord", "weight": 6, "min_depth": 10, "max_depth": 100 },
+    { "name": "Goblin Archer", "weight": 18, "min_depth": 3, "max_depth": 5 },
+    { "name": "Gold", "weight": 18, "min_depth": 0, "max_depth": 100 },
+    { "name": "Health Potion", "weight": 21, "min_depth": 0, "max_depth": 100 },
+    { "name": "Rations", "weight": 30, "min_depth": 0, "max_depth": 100 },
+    { "name": "Magic Missile Scroll", "weight": 6, "min_depth": 0, "max_depth": 5 },
+    { "name": "Fireball Scroll", "weight": 6, "min_depth": 2, "max_depth": 7 },
+    { "name": "Confusion Scroll", "weight": 6, "min_depth": 0, "max_depth": 5 },
+    { "name": "Town Portal", "weight": 6, "min_depth": 1, "max_depth": 100 },
+    { "name": "Scroll of Magic Mapping", "weight": 6, "min_depth": 2, "max_depth": 7 },
     { "name": "Dagger", "weight": 3, "min_depth": 0, "max_depth": 5 },
     { "name": "Shortbow", "weight": 2, "min_depth": 0, "max_depth": 5 },
     { "name": "Longsword", "weight": 1, "min_depth": 2, "max_depth": 7 },
@@ -1666,33 +1666,33 @@
     { "name": "Elven Cloak", "weight": 1, "min_depth": 4, "max_depth": 9 },
     { "name": "Spidersilk Robe", "weight": 1, "min_depth": 6, "max_depth": 11 },
     { "name": "Shadow Cloak", "weight": 1, "min_depth": 8, "max_depth": 100 },
-    { "name": "Greater Health Potion", "weight": 2, "min_depth": 2, "max_depth": 7 },
-    { "name": "Alchemist's Fire", "weight": 2, "min_depth": 2, "max_depth": 7 },
-    { "name": "Superior Health Potion", "weight": 2, "min_depth": 4, "max_depth": 9 },
-    { "name": "Potion of Restoration", "weight": 2, "min_depth": 6, "max_depth": 11 },
-    { "name": "Elixir of Life", "weight": 2, "min_depth": 8, "max_depth": 100 },
-    { "name": "Hearty Stew", "weight": 2, "min_depth": 2, "max_depth": 7 },
-    { "name": "Waybread", "weight": 2, "min_depth": 4, "max_depth": 9 },
-    { "name": "Dwarven Feast", "weight": 2, "min_depth": 6, "max_depth": 11 },
-    { "name": "Ambrosia", "weight": 2, "min_depth": 8, "max_depth": 100 },
-    { "name": "Holy Water", "weight": 2, "min_depth": 0, "max_depth": 5 },
-    { "name": "Prayer Scroll", "weight": 2, "min_depth": 0, "max_depth": 5 },
+    { "name": "Greater Health Potion", "weight": 6, "min_depth": 2, "max_depth": 7 },
+    { "name": "Alchemist's Fire", "weight": 6, "min_depth": 2, "max_depth": 7 },
+    { "name": "Superior Health Potion", "weight": 6, "min_depth": 4, "max_depth": 9 },
+    { "name": "Potion of Restoration", "weight": 6, "min_depth": 6, "max_depth": 11 },
+    { "name": "Elixir of Life", "weight": 6, "min_depth": 8, "max_depth": 100 },
+    { "name": "Hearty Stew", "weight": 6, "min_depth": 2, "max_depth": 7 },
+    { "name": "Waybread", "weight": 6, "min_depth": 4, "max_depth": 9 },
+    { "name": "Dwarven Feast", "weight": 6, "min_depth": 6, "max_depth": 11 },
+    { "name": "Ambrosia", "weight": 6, "min_depth": 8, "max_depth": 100 },
+    { "name": "Holy Water", "weight": 6, "min_depth": 0, "max_depth": 5 },
+    { "name": "Prayer Scroll", "weight": 6, "min_depth": 0, "max_depth": 5 },
     { "name": "Blessed Mace", "weight": 1, "min_depth": 2, "max_depth": 7 },
     { "name": "Ward of the Faithful", "weight": 1, "min_depth": 4, "max_depth": 9 },
-    { "name": "Greater Holy Water", "weight": 2, "min_depth": 6, "max_depth": 11 },
+    { "name": "Greater Holy Water", "weight": 6, "min_depth": 6, "max_depth": 11 },
     { "name": "Saint's Hammer", "weight": 1, "min_depth": 8, "max_depth": 100 },
-    { "name": "Scroll of Divine Light", "weight": 2, "min_depth": 8, "max_depth": 100 },
+    { "name": "Scroll of Divine Light", "weight": 6, "min_depth": 8, "max_depth": 100 },
     { "name": "Runed Staff", "weight": 1, "min_depth": 4, "max_depth": 9 },
-    { "name": "Scroll of Lightning", "weight": 2, "min_depth": 4, "max_depth": 9 },
+    { "name": "Scroll of Lightning", "weight": 6, "min_depth": 4, "max_depth": 9 },
     { "name": "Spellguard Buckler", "weight": 1, "min_depth": 6, "max_depth": 11 },
-    { "name": "Scroll of Inferno", "weight": 2, "min_depth": 6, "max_depth": 11 },
+    { "name": "Scroll of Inferno", "weight": 6, "min_depth": 6, "max_depth": 11 },
     { "name": "Staff of the Archmage", "weight": 1, "min_depth": 8, "max_depth": 100 },
-    { "name": "Scroll of Meteor Storm", "weight": 2, "min_depth": 8, "max_depth": 100 },
-    { "name": "Bear Trap", "weight": 2, "min_depth": 0, "max_depth": 100 }
+    { "name": "Scroll of Meteor Storm", "weight": 6, "min_depth": 8, "max_depth": 100 },
+    { "name": "Bear Trap", "weight": 6, "min_depth": 0, "max_depth": 100 }
   ],
   "classes": [
     { "name": "Fighter", "model": "hero_fighter", "stats": { "max_hp": 34, "power": 3, "armour": 2, "aim": 65, "defence": 5, "movement": 4 }, "gear": ["Longsword", "Shield"], "abilities": ["Cleave", "Second Wind"] },
-    { "name": "Ranger", "model": "hero_ranger", "stats": { "max_hp": 28, "power": 2, "armour": 1, "aim": 75, "defence": 10, "movement": 5 }, "gear": ["Shortbow", "Dagger"], "abilities": ["Aimed Shot", "Snare"] },
+    { "name": "Ranger", "model": "hero_ranger", "stats": { "max_hp": 28, "power": 6, "armour": 1, "aim": 75, "defence": 10, "movement": 5 }, "gear": ["Shortbow", "Dagger"], "abilities": ["Aimed Shot", "Snare"] },
     { "name": "Mage", "model": "hero_mage", "stats": { "max_hp": 22, "power": 1, "armour": 0, "aim": 70, "defence": 5, "movement": 4 }, "gear": ["Dagger"], "abilities": ["Fireball", "Magic Missile"] },
     { "name": "Cleric", "model": "hero_cleric", "stats": { "max_hp": 30, "power": 2, "armour": 2, "aim": 65, "defence": 0, "movement": 4 }, "gear": ["Blessed Mace"], "abilities": ["Heal", "Smite"] }
   ],
