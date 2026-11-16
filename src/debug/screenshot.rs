@@ -32,7 +32,9 @@ use bevy::input::keyboard::{Key, KeyboardInput, NativeKey};
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::input::touch::TouchPhase;
 use bevy::input::ButtonState;
+use bevy::camera::{ImageRenderTarget, RenderTarget, ShadowLodOrigin};
 use bevy::prelude::*;
+use bevy::render::render_resource::TextureFormat;
 use bevy::render::view::screenshot::{save_to_disk, Screenshot, ScreenshotCaptured};
 use bevy::time::TimeUpdateStrategy;
 use bevy::window::{CursorOptions, PrimaryWindow};
@@ -76,6 +78,7 @@ impl Plugin for ScreenshotPlugin {
             .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(1.0 / 60.0)))
             .insert_resource(args)
             .add_systems(Startup, ignore_mouse)
+            .add_systems(PostStartup, render_to_image)
             .add_systems(
                 Update,
                 (
@@ -223,6 +226,40 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
 }
 
 /// A cursor resting over the window would pop up tooltips and change the picture.
+/// The picture the harness renders into and saves.
+#[derive(Resource)]
+struct CaptureTarget(Handle<Image>);
+
+/// The capture size in pixels, whatever the window manager does to the window.
+const CAPTURE_SIZE: UVec2 = UVec2::new(1600, 1000);
+
+/// Points both cameras at an off-screen image. A window's picture depends on
+/// its size (window managers resize it) and is black while the screen is
+/// locked or asleep; an image is neither.
+fn render_to_image(
+    mut commands: Commands,
+    cameras: Query<(Entity, Has<Camera3d>), With<Camera>>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    let handle = images.add(Image::new_target_texture(
+        CAPTURE_SIZE.x,
+        CAPTURE_SIZE.y,
+        TextureFormat::Rgba8UnormSrgb,
+        None,
+    ));
+    for (camera, is_3d) in &cameras {
+        commands.entity(camera).insert(RenderTarget::Image(ImageRenderTarget {
+            handle: handle.clone(),
+            scale_factor: 1.0,
+        }));
+        if is_3d {
+            // Shadow detail is picked from a window camera unless one is named.
+            commands.entity(camera).insert(ShadowLodOrigin);
+        }
+    }
+    commands.insert_resource(CaptureTarget(handle));
+}
+
 fn ignore_mouse(mut cursor: Single<&mut CursorOptions, With<PrimaryWindow>>) {
     cursor.hit_test = false;
 }
@@ -412,9 +449,15 @@ fn feed_next_input(
     }
 }
 
-/// Counts frames after the game starts, then captures the window once.
+/// Counts frames after the game starts, then captures the picture once.
 /// Saves the PNG and logs the game log, so a run can be checked by its state too.
-fn capture_after_frames(mut commands: Commands, args: Res<ScreenshotArgs>, log: Res<GameLog>, mut frame: Local<u32>) {
+fn capture_after_frames(
+    mut commands: Commands,
+    args: Res<ScreenshotArgs>,
+    target: Res<CaptureTarget>,
+    log: Res<GameLog>,
+    mut frame: Local<u32>,
+) {
     *frame += 1;
     if *frame != args.frames {
         return;
@@ -423,7 +466,7 @@ fn capture_after_frames(mut commands: Commands, args: Res<ScreenshotArgs>, log: 
         info!("log> {line}");
     }
     let mut save = save_to_disk(args.path.clone());
-    commands.spawn(Screenshot::primary_window()).observe(
+    commands.spawn(Screenshot::image(target.0.clone())).observe(
         move |captured: On<ScreenshotCaptured>, mut exit: MessageWriter<AppExit>| {
             save(captured);
             exit.write(AppExit::Success);

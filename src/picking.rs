@@ -70,8 +70,9 @@ pub fn update_hovered_tile(
 ) {
     let cursor = fake_cursor.map(|fake| fake.0).or_else(|| window.cursor_position());
     // UI nodes measure in physical pixels.
+    let scale = camera.0.target_scaling_factor().unwrap_or(1.0);
     let over_ui = cursor.is_some_and(|c| {
-        let point = c * window.scale_factor();
+        let point = c * scale;
         blockers
             .iter()
             .any(|(node, transform, visible)| visible.get() && node.contains_point(*transform, point))

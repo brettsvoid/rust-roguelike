@@ -18,6 +18,8 @@ cargo build --release
 cargo run --features file_watcher
 
 # Screenshot harness: start a seeded new game, wait N frames, save a PNG, exit.
+# It renders into a fixed 1600x1000 off-screen image, so the picture does not depend on the
+# window size and works with the screen locked or asleep. --cursor points are in that image.
 # Depth 0 is the town, the dungeon is depths 1 to 12. Same seed and flags give a
 # byte-identical PNG.
 # Known exception: runs with clicks or a lit effect (missile, fireball) can differ by a
