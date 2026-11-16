@@ -291,7 +291,7 @@ and adds the `model` names to `raws/spawns.json`.
   gameplay zoom.
 
 ### A06 Items and loot
-- Status: in progress
+- Status: done
 - Needs: F08
 - Potion, scroll, rations, dagger, longsword, battleaxe, shield, tower shield,
   gold pile, generic loot sack.
@@ -307,7 +307,7 @@ and adds the `model` names to `raws/spawns.json`.
   recording.
 
 ### A08 Monsters and gear for later tiers
-- Status: todo
+- Status: done
 - Needs: A05, E05
 - Models for the monsters, weapons and armour that E05 adds to the raws.
 - Done when: no raws entry falls back to a primitive.
@@ -558,7 +558,7 @@ and adds the `model` names to `raws/spawns.json`.
 - Done when: the three documents agree with this file.
 
 ### P03 Main menu and UI restyle
-- Status: todo
+- Status: in progress
 - Needs: F07
 - Restyle the main menu, HUD and modals to suit the dark 3D look. A lit 3D
   scene behind the main menu.
