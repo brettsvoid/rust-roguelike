@@ -13,7 +13,8 @@ use crate::gamelog::GameLog;
 use crate::economy::Gold;
 use crate::map::{Map, Position};
 use crate::overwatch::{Hunkered, Overwatch, OVERWATCH_AIM_PENALTY};
-use crate::effects::{EffectKind, Effects};
+use crate::effects::Effects;
+use crate::presentation::{self, Beat, BodyParts, Presentation};
 use crate::party::{next_unit, ActiveUnit, PartyMember};
 use crate::raws::{spawn_named_item, RAWS};
 use crate::rng::GameRng;
@@ -208,6 +209,7 @@ pub struct Strikes<'w, 's> {
     pub log: ResMut<'w, GameLog>,
     pub effects: ResMut<'w, Effects>,
     pub rng: ResMut<'w, GameRng>,
+    pub presentation: ResMut<'w, Presentation>,
     pub arms: Arms<'w, 's>,
     god_mode: Res<'w, GodMode>,
     party: Query<'w, 's, (), With<PartyMember>>,
@@ -245,9 +247,11 @@ impl Strikes<'_, '_> {
             }
         };
         let ranged = weapon.range > 1;
-        if ranged {
-            self.effects.play(EffectKind::MagicMissile { from }, to.0, to.1);
-        }
+        self.presentation.push(if ranged {
+            Beat::Projectile { from, to }
+        } else {
+            Beat::Lunge { unit: attacker.entity, from, to }
+        });
         let verb = if ranged { "shoots" } else { "attacks" };
         let prefix = if reaction { "Overwatch! " } else { "" };
         let (who, whom) = (attacker.name, target.name);
@@ -255,6 +259,7 @@ impl Strikes<'_, '_> {
         let odds = odds(chance, cover);
         if outcome == Outcome::Miss {
             self.log.entries.push(format!("{prefix}{who} {verb} {whom}: miss ({odds})"));
+            self.presentation.push(Beat::Floater { at: to, outcome, damage: 0 });
             return Some(0);
         }
         let well_fed = self.hunger.get(attacker.entity).is_ok_and(|h| h.state == HungerState::WellFed);
@@ -264,6 +269,7 @@ impl Strikes<'_, '_> {
         let damage = roll_damage(&mut self.rng, weapon.damage, bonus, armour, crit);
         let what = if crit { "critical hit" } else { "hit" };
         self.log.entries.push(format!("{prefix}{who} {verb} {whom}: {what} for {damage} ({odds})"));
+        self.presentation.push(Beat::Floater { at: to, outcome, damage });
         if damage == 0 {
             return Some(0);
         }
@@ -272,7 +278,7 @@ impl Strikes<'_, '_> {
             self.commands.entity(target.entity).insert(*poison);
             self.log.entries.push(format!("{whom} is poisoned!"));
         }
-        self.effects.play(EffectKind::HitSpark, to.0, to.1);
+        self.presentation.push(Beat::Flinch { unit: target.entity, at: to, from });
         let spared = self.god_mode.0 && self.party.contains(target.entity);
         Some(if spared { 0 } else { damage })
     }
@@ -357,10 +363,14 @@ pub fn start_of_turn<F: QueryFilter>(
     }
 }
 
-/// Despawns everything at 0 hp. A fallen hero drops what they carry and the
+/// Despawns everything at 0 hp, leaving a stand-in body to fall
+/// (`presentation::fall`). A fallen hero drops what they carry and the
 /// selection moves on; the run ends when the last one falls.
+#[allow(clippy::too_many_arguments)]
 pub fn delete_the_dead(
     mut commands: Commands,
+    mut presentation: ResMut<Presentation>,
+    bodies: BodyParts,
     mut log: ResMut<GameLog>,
     mut next_state: ResMut<NextState<RunState>>,
     mut active: ResMut<ActiveUnit>,
@@ -376,6 +386,9 @@ pub fn delete_the_dead(
             continue;
         }
         log.entries.push(format!("{} is dead", name.name));
+        if let Some(pos) = pos {
+            presentation::fall(&mut commands, &mut presentation, &bodies, entity, (pos.x, pos.y));
+        }
         commands.entity(entity).despawn();
 
         if let (Some(pos), Some(&gold)) = (pos, gold) {
@@ -583,6 +596,7 @@ mod tests {
         let mut world = World::new();
         world.insert_resource(GameLog { entries: Vec::new() });
         world.init_resource::<NextState<RunState>>();
+        world.init_resource::<Presentation>();
         let first = hero(&mut world, 0, 0);
         let second = hero(&mut world, 1, 12);
         world.insert_resource(ActiveUnit(Some(first)));

@@ -473,12 +473,14 @@ fn update_tile_mesh_visibility(
 }
 
 /// Keeps 3D entities on their tile as their `Position` changes. Tiles never
-/// move and are placed at spawn.
+/// move and are placed at spawn. Creatures glide instead (`presentation.rs`).
 pub fn translate_positions(
     mut query: Query<(&Position, &EntityShape, &mut Transform), Or<(Changed<Position>, Changed<EntityShape>)>>,
 ) {
     for (&pos, &shape, mut transform) in &mut query {
-        *transform = entity_transform(shape, pos);
+        if shape != EntityShape::Creature {
+            *transform = entity_transform(shape, pos);
+        }
     }
 }
 
@@ -536,18 +538,28 @@ fn update_visible_tiles(
     }
 }
 
+/// Shows an entity while the tile its body is over is in view: a monster
+/// gliding out of sight stays seen until it crosses into the dark.
+#[allow(clippy::type_complexity)]
 fn update_renderable_visibility(
     map: Res<Map>,
-    mut query: Query<(&Position, &mut Visibility, Option<&Hidden>), (With<EntityShape>, Without<PartyMember>)>,
+    mut query: Query<
+        (&Transform, &mut Visibility, Option<&Hidden>),
+        (With<EntityShape>, With<Position>, Without<PartyMember>),
+    >,
 ) {
-    for (pos, mut visibility, hidden) in &mut query {
+    for (transform, mut visibility, hidden) in &mut query {
         // Hidden entities are always invisible
         if hidden.is_some() {
             *visibility = Visibility::Hidden;
             continue;
         }
 
-        let idx = map.xy_idx(pos.x, pos.y);
+        let (x, y) = (transform.translation.x.round() as i32, transform.translation.z.round() as i32);
+        if x < 0 || y < 0 || x >= map.width || y >= map.height {
+            continue;
+        }
+        let idx = map.xy_idx(x, y);
         if map.visible_tiles[idx] {
             *visibility = Visibility::Visible;
         } else {

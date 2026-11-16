@@ -58,6 +58,7 @@ use crate::monsters::Monster;
 use crate::picking::{self, FakeCursor, HoveredTile};
 use crate::party::{ActiveUnit, PartyMember};
 use crate::player::{self, WalkPath};
+use crate::presentation::Presentation;
 use crate::resources::UiFont;
 use crate::ui::menus::{inventory, shop};
 use crate::rng::GameRng;
@@ -403,6 +404,7 @@ fn feed_next_input(
     mut hovered: ResMut<HoveredTile>,
     vendors: Query<(&Position, &Name), With<Bystander>>,
     debug_state: Res<DebugState>,
+    presentation: Res<Presentation>,
 ) {
     let mut key = |key_code, state| {
         keyboard.write(KeyboardInput {
@@ -422,8 +424,9 @@ fn feed_next_input(
         }
         return;
     }
-    // A pending reveal would leave a click's target unexplored.
-    if walk.is_active() || debug_state.reveal_map {
+    // A pending reveal would leave a click's target unexplored. Inputs wait
+    // for the presentation too, so a script acts on what it has seen.
+    if walk.is_active() || debug_state.reveal_map || presentation.busy() {
         return;
     }
     let Some(input) = args.inputs.get(*next) else {

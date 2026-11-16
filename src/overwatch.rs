@@ -74,19 +74,26 @@ pub fn walk_under_watch(
         .map(|w| Watcher { cell: w.at, range: strikes.arms.weapon(w.entity).range, party: strikes.is_party(w.entity) })
         .collect();
     let fired = reactions(&plain, strikes.is_party(mover.entity), path, |from, to| line_of_sight(map, from, to));
-    let mut end = path.last().copied().unwrap_or(mover.at);
+    // The glide is cut at each reaction, so the shot lands where it triggered.
+    let cells: Vec<_> = std::iter::once(mover.at).chain(path.iter().copied()).collect();
+    let mut shown = 0;
+    let mut end = cells.len() - 1;
     let mut hp = mover.stats.hp;
     let mut spent = Vec::new();
     for (step, watcher) in fired {
+        strikes.presentation.push_move(mover.entity, &cells[shown..=step + 1]);
+        shown = step + 1;
         let target = Fighter { at: path[step], ..*mover };
         hp -= strikes.strike(map, &watchers[watcher], &target, true).unwrap_or(0);
         strikes.commands.entity(watchers[watcher].entity).remove::<Overwatch>();
         spent.push(watcher);
         if hp <= 0 {
-            end = target.at;
+            end = step + 1;
             break;
         }
     }
+    strikes.presentation.push_move(mover.entity, &cells[shown..=end]);
+    let end = cells[end];
     spent.sort_unstable();
     for watcher in spent.into_iter().rev() {
         watchers.remove(watcher);

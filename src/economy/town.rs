@@ -481,6 +481,7 @@ mod tests {
         world.init_resource::<NextState<RunState>>();
         world.insert_resource(UiFont(Handle::default()));
         world.init_resource::<ActiveUnit>();
+        world.init_resource::<crate::presentation::Presentation>();
         world.spawn((
             PartyMember { slot: 0 },
             Name { name: "Aldric".into() },

@@ -12,6 +12,7 @@ use crate::{
     overwatch::{walk_under_watch, Hunkered, Overwatch},
     pathfinding,
     party::PartyMember,
+    presentation::{Beat, BETWEEN_UNITS_SECS},
     tactics::{confused_step, move_range, Action, AP_PER_ROUND},
     viewshed::Viewshed,
     RunState,
@@ -95,6 +96,12 @@ pub fn monster_ai(
             continue;
         }
         let mut ap = if combat { AP_PER_ROUND } else { 1 };
+        // In combat a monster with a hero to go for acts in view: the camera
+        // owner decides whether its tile is off-screen.
+        let acts = combat && monster_target((pos.x, pos.y), &party, |tile| viewshed.visible_tiles.contains(&tile)).is_some();
+        if acts {
+            strikes.presentation.push(Beat::CameraFocus { at: (pos.x, pos.y) });
+        }
         while ap > 0 {
             let here = (pos.x, pos.y);
             let target = monster_target(here, &party, |tile| viewshed.visible_tiles.contains(&tile));
@@ -149,6 +156,9 @@ pub fn monster_ai(
             if !alive {
                 break;
             }
+        }
+        if acts {
+            strikes.presentation.push(Beat::Wait { secs: BETWEEN_UNITS_SECS });
         }
     }
 }

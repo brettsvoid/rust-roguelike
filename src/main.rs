@@ -37,6 +37,7 @@ mod party;
 mod pathfinding;
 mod picking;
 mod player;
+mod presentation;
 mod raws;
 mod resources;
 mod rng;
@@ -120,6 +121,7 @@ fn main() {
             ui::LedgerPlugin,
             ui::ShopPlugin,
             debug::DebugPlugin,
+            presentation::PresentationPlugin,
         ))
         .add_systems(Startup, setup)
         .add_systems(Update, saveload::save_on_quit)

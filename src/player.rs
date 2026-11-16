@@ -24,6 +24,7 @@ use crate::{
     party::{follow, next_unit, ActiveUnit, PartyMember},
     pathfinding::a_star_explored,
     picking::{self, HoveredTile, TileMarks, FULL_TILE},
+    presentation::{Presentation, WALK_LEAD},
     rng::GameRng,
     tactics::{attack_target, confused_step, move_range, Action, MoveRange},
     ui::ActionRequest,
@@ -329,7 +330,7 @@ pub(crate) fn handle_player_input(
     monsters: Query<(Entity, &Position, &Name), (With<Monster>, Without<PartyMember>, Without<Bystander>)>,
     mut doors: Query<(Entity, &mut Door, &mut Renderable), Without<PartyMember>>,
     mut positions: Query<&mut Position, Or<(With<Bystander>, With<PartyMember>)>>,
-    (debug_mode, mode, mut turn_ended, mut hero_action, range, confused, mut rng, arms, mut request): (
+    (debug_mode, mode, mut turn_ended, mut hero_action, range, confused, mut rng, arms, mut request, mut presentation): (
         Res<DebugMode>,
         Res<Mode>,
         ResMut<TurnEnded>,
@@ -339,10 +340,17 @@ pub(crate) fn handle_player_input(
         ResMut<GameRng>,
         Arms,
         ResMut<ActionRequest>,
+        ResMut<Presentation>,
     ),
 ) {
     // Don't process player input if debug console is open
     if debug_mode.show_console {
+        return;
+    }
+    // In combat, results play out before the next order (a key or click skips them).
+    if matches!(*mode, Mode::Combat { .. }) && presentation.busy() {
+        evr_kbd.clear();
+        request.0 = None;
         return;
     }
 
@@ -549,10 +557,15 @@ pub(crate) fn handle_player_input(
             }
         }
     } else if !player_acted && walk.cells.is_empty() && walk.descend {
-        *walk = WalkPath::default();
-        if is_stairs(map.tiles[xy_idx(player_x, player_y)]) {
-            next_state.set_if_different(RunState::NextLevel);
+        // Arrive before the level changes under the glide.
+        if presentation.glide_left(player_entity) <= 0.0 {
+            *walk = WalkPath::default();
+            if is_stairs(map.tiles[xy_idx(player_x, player_y)]) {
+                next_state.set_if_different(RunState::NextLevel);
+            }
         }
+    } else if !player_acted && walk.is_active() && presentation.glide_left(player_entity) > WALK_LEAD {
+        // The rules stay at most `WALK_LEAD` tiles ahead of the glide.
     } else if !player_acted && walk.is_active() {
         step = walk_step((player_x, player_y), &walk.cells, hostile_in_view);
         if step.is_none() {
@@ -582,14 +595,17 @@ pub(crate) fn handle_player_input(
         Some(MoveResult::Moved { new_x, new_y }) => {
             if let Ok(mut pos) = positions.get_mut(player_entity) {
                 (pos.x, pos.y) = (new_x, new_y);
+                presentation.push_move(player_entity, &[(player_x, player_y), (new_x, new_y)]);
             }
         }
         Some(MoveResult::Swapped { other, new_x, new_y }) => {
             if let Ok(mut pos) = positions.get_mut(other) {
                 (pos.x, pos.y) = (player_x, player_y);
+                presentation.push_move(other, &[(new_x, new_y), (player_x, player_y)]);
             }
             if let Ok(mut pos) = positions.get_mut(player_entity) {
                 (pos.x, pos.y) = (new_x, new_y);
+                presentation.push_move(player_entity, &[(player_x, player_y), (new_x, new_y)]);
             }
         }
         _ => {}
@@ -611,10 +627,11 @@ pub(crate) fn handle_player_input(
             (!map.blocked_tiles[next]).then_some((next as i32 % map.width, next as i32 / map.width))
         };
         let moved = follow((player_x, player_y), leader_to, &cells, step_towards);
-        for ((follower, _), cell) in followers.iter().zip(moved) {
-            if let Ok(mut pos) = positions.get_mut(*follower) {
+        for (&(follower, from), cell) in followers.iter().zip(moved) {
+            if let Ok(mut pos) = positions.get_mut(follower) {
                 if (pos.x, pos.y) != cell {
                     (pos.x, pos.y) = cell;
+                    presentation.push_move(follower, &[from, cell]);
                 }
             }
         }
