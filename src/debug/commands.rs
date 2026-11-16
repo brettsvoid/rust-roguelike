@@ -41,13 +41,15 @@ pub fn execute_command(
         Some("effect") => cmd_effect(&parts, commands, party, active),
         Some("town") => cmd_town(&parts, town),
         Some("gold") => cmd_gold(&parts, commands),
+        Some("xp") => cmd_xp(&parts, commands),
+        Some("kill") => cmd_kill(commands, active),
         Some(cmd) => format!("Unknown command: {}", cmd),
         None => String::new(),
     }
 }
 
 fn cmd_help() -> String {
-    "Commands: spawn <item> (portal, heart, ...), effect <spark|fireball|missile|heal|confusion|blood>, place <dx> <dy> <raws name>, teleport <x> <y>, gold <n>, godmode, reveal, nofog, heal, hurt <n>, kill_all, town sell <sector> <value>, town days <n>, town level <sector> <n>".to_string()
+    "Commands: spawn <item> (portal, heart, ...), effect <spark|fireball|missile|heal|confusion|blood>, place <dx> <dy> <raws name>, teleport <x> <y>, gold <n>, xp <n>, kill (the active hero), godmode, reveal, nofog, heal, hurt <n>, kill_all, town sell <sector> <value>, town days <n>, town level <sector> <n>".to_string()
 }
 
 fn cmd_godmode(god_mode: &mut GodMode) -> String {
@@ -113,6 +115,34 @@ fn cmd_gold(parts: &[&str], commands: &mut Commands) -> String {
         }
         _ => "Usage: gold <n>".to_string(),
     }
+}
+
+/// Gives every living hero `n` experience, as a kill worth `n` would.
+fn cmd_xp(parts: &[&str], commands: &mut Commands) -> String {
+    match parts.get(1).map(|n| n.parse::<i32>()) {
+        Some(Ok(n)) if n > 0 => {
+            commands.run_system_cached_with(crate::experience::grant_xp, n);
+            format!("Gave the party {n} experience")
+        }
+        _ => "Usage: xp <n>".to_string(),
+    }
+}
+
+/// Drops the active hero to 0 hp and lets `combat::delete_the_dead` take
+/// them, as if they fell in a fight (to try out hiring a recruit).
+fn cmd_kill(commands: &mut Commands, active: Option<Entity>) -> String {
+    let Some(hero) = active else {
+        return "No active hero".to_string();
+    };
+    commands.queue(move |world: &mut World| {
+        if let Some(mut stats) = world.get_mut::<CombatStats>(hero) {
+            stats.hp = 0;
+        }
+        if let Err(err) = world.run_system_cached(crate::combat::delete_the_dead) {
+            warn!("kill: {err}");
+        }
+    });
+    "Killed the active hero".to_string()
 }
 
 /// Takes `n` hit points off the active hero (never below 1), to try out healing.

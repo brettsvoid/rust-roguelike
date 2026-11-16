@@ -6,6 +6,7 @@ use crate::{
     combat::CombatStats,
     components::{HungerClock, HungerState, Name, RenderableBundle},
     entity_render::EntityShape,
+    experience::{level_up, Experience},
     map::{Position, MAP_WIDTH},
     party::{PartyMember, HEROES},
     raws::{get_spawn_table_for_depth, spawn_class_kit, spawn_named_entity, Class, RAWS},
@@ -20,21 +21,13 @@ const MAX_ITEMS: i32 = 2;
 /// A fresh hero for `slot` at `(x, y)`, with the class's starting stats.
 pub fn party_member(slot: usize, x: i32, y: i32, class: &Class) -> impl Bundle {
     let (name, colour, _) = HEROES[slot];
-    let stats = &class.stats;
     (
         PartyMember { slot },
+        Experience::at(1),
         Name { name: name.to_string() },
         HeroClass(class.name.clone()),
         Position { x, y },
-        CombatStats {
-            max_hp: stats.max_hp,
-            hp: stats.max_hp,
-            armour: stats.armour,
-            power: stats.power,
-            movement: stats.movement,
-            aim: stats.aim,
-            defence: stats.defence,
-        },
+        class_stats(class),
         Viewshed {
             range: 8,
             ..default()
@@ -45,6 +38,20 @@ pub fn party_member(slot: usize, x: i32, y: i32, class: &Class) -> impl Bundle {
         },
         RenderableBundle::new("☺", colour.into(), EntityShape::Creature),
     )
+}
+
+/// A level 1 hero's stats for `class`.
+fn class_stats(class: &Class) -> CombatStats {
+    let stats = &class.stats;
+    CombatStats {
+        max_hp: stats.max_hp,
+        hp: stats.max_hp,
+        armour: stats.armour,
+        power: stats.power,
+        movement: stats.movement,
+        aim: stats.aim,
+        defence: stats.defence,
+    }
 }
 
 /// Spawns one hero per tile, in slot order, each with their class's gear and
@@ -61,6 +68,21 @@ pub fn spawn_party(commands: &mut Commands, tiles: &[(i32, i32)]) -> Vec<Entity>
             hero
         })
         .collect()
+}
+
+/// A recruit hired into the empty `slot`: a fresh hero of `class` named
+/// `name`, raised to `level`, with the class's gear and abilities.
+pub fn spawn_recruit(commands: &mut Commands, slot: usize, (x, y): (i32, i32), name: &str, class: &str, level: i32) -> Entity {
+    let raws = RAWS.lock().unwrap();
+    let class = raws.class(class).expect("every recruit's class is in the raws");
+    let mut stats = class_stats(class);
+    for _ in 1..level {
+        level_up(&mut stats, class.stats.max_hp);
+    }
+    let hero = commands.spawn(party_member(slot, x, y, class)).id();
+    commands.entity(hero).insert((Name { name: name.to_string() }, stats, Experience::at(level)));
+    spawn_class_kit(&raws, commands, hero, class);
+    hero
 }
 
 pub fn spawn_room(

@@ -1,10 +1,58 @@
 //! Trading with a vendor: pure rules over the town, the purse's gold and a
-//! raws item. The shop screen (`ui/menus/shop.rs`) moves the item entity into
+//! raws item, and hiring recruits at the pub. The shop screen (`ui/menus/shop.rs`) moves the item entity into
 //! or out of the hero's backpack when a trade here succeeds.
 
-use super::town::{stocked_by, TownState, Vendor};
+use super::town::{stocked_by, Sector, TownState, Vendor};
 use super::trade::{buy_price, record_sale, sell_price};
+use crate::party::PARTY_SIZE;
 use crate::raws::Item;
+
+/// The barkeep's recruits by class (a raws `classes` name), each with the
+/// names they come under, the first not already in the party offered.
+pub const RECRUITS: [(&str, [&str; 3]); 4] = [
+    ("Fighter", ["Halvard", "Ingrid", "Torvald"]),
+    ("Ranger", ["Sigrun", "Eirik", "Wren"]),
+    ("Mage", ["Ysolde", "Merrick", "Oswin"]),
+    ("Cleric", ["Hilde", "Anselm", "Maren"]),
+];
+/// Gold a recruit costs per level.
+pub const RECRUIT_PRICE: i32 = 60;
+
+/// A hero for hire at the pub.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Recruit {
+    pub name: &'static str,
+    pub class: &'static str,
+    pub level: i32,
+    pub price: i32,
+}
+
+/// One recruit per class, at the level of the pub's sector (provisions, 1 to
+/// 5), each under a name nobody in the party has.
+pub fn recruits(town: &TownState, party: &[&str]) -> Vec<Recruit> {
+    let level = town.sectors[&Sector::Provisions].level as i32;
+    RECRUITS
+        .iter()
+        .filter_map(|(class, names)| {
+            let name = names.iter().find(|name| !party.contains(name))?;
+            Some(Recruit { name, class, level, price: RECRUIT_PRICE * level })
+        })
+        .collect()
+}
+
+/// Hire `recruit` into the lowest party slot nobody holds (`taken`, the
+/// living heroes' slots). Returns that slot and the message for the player.
+pub fn hire(gold: &mut i32, taken: &[usize], recruit: &Recruit) -> Result<(usize, String), String> {
+    let Some(slot) = (0..PARTY_SIZE).find(|slot| !taken.contains(slot)) else {
+        return Err("The party is full.".to_string());
+    };
+    let Recruit { name, class, price, .. } = recruit;
+    if *gold < *price {
+        return Err(format!("You cannot afford {name} ({price} gold)."));
+    }
+    *gold -= price;
+    Ok((slot, format!("{name} the {} joins the party for {price} gold.", class.to_lowercase())))
+}
 
 /// A vendor buys what it would stock: its stalls' sectors and tiers,
 /// whatever the town's level. Gold has no sector, so nobody buys it.
@@ -55,7 +103,6 @@ pub fn buy(town: &mut TownState, gold: &mut i32, vendor: Vendor, item: &Item) ->
 mod tests {
     use super::*;
     use crate::economy::stock::restock;
-    use crate::economy::town::Sector;
     use crate::raws::Raws;
 
     fn shipped_items() -> Vec<Item> {
@@ -72,6 +119,52 @@ mod tests {
         let mut town = TownState::fresh(7);
         restock(&mut town, &shipped_items());
         town
+    }
+
+    #[test]
+    fn the_pub_offers_one_recruit_a_class_at_its_level() {
+        let mut town = TownState::fresh(7);
+        let offered = recruits(&town, &["Aldric", "Halvard"]);
+        assert_eq!(
+            offered.iter().map(|r| (r.name, r.class, r.level, r.price)).collect::<Vec<_>>(),
+            vec![
+                ("Ingrid", "Fighter", 1, 60),
+                ("Sigrun", "Ranger", 1, 60),
+                ("Ysolde", "Mage", 1, 60),
+                ("Hilde", "Cleric", 1, 60),
+            ]
+        );
+        town.sectors.get_mut(&Sector::Provisions).unwrap().level = 3;
+        assert_eq!((recruits(&town, &[])[0].level, recruits(&town, &[])[0].price), (3, 180));
+    }
+
+    #[test]
+    fn every_recruit_class_is_in_the_raws() {
+        let raws: Raws = serde_json::from_str(include_str!("../../raws/spawns.json")).unwrap();
+        for (class, _) in RECRUITS {
+            assert!(raws.classes.iter().any(|c| c.name == class), "{class}");
+        }
+    }
+
+    #[test]
+    fn a_hire_fills_the_first_empty_slot_for_its_price() {
+        let recruit = recruits(&TownState::fresh(7), &[])[2].clone();
+        let mut gold = 100;
+        assert_eq!(
+            hire(&mut gold, &[0, 2, 3], &recruit),
+            Ok((1, "Ysolde the mage joins the party for 60 gold.".to_string()))
+        );
+        assert_eq!(gold, 40);
+    }
+
+    #[test]
+    fn a_hire_is_refused_with_a_full_party_or_a_short_purse() {
+        let recruit = recruits(&TownState::fresh(7), &[])[0].clone();
+        let mut gold = 1000;
+        assert_eq!(hire(&mut gold, &[0, 1, 2, 3], &recruit), Err("The party is full.".to_string()));
+        let mut gold = 59;
+        assert_eq!(hire(&mut gold, &[1, 2, 3], &recruit), Err("You cannot afford Halvard (60 gold).".to_string()));
+        assert_eq!(gold, 59);
     }
 
     #[test]

@@ -22,6 +22,7 @@ use crate::gamelog::GameLog;
 use crate::map::{tile_walkable, Map, Position, Tile, TileType, FONT_SIZE};
 use crate::map_render::{spawn_map_tiles, TileReveal};
 use crate::monsters::Monster;
+use crate::experience::{mob_xp, Experience, XpValue};
 use crate::party::{ActiveUnit, PartyMember};
 use crate::raws::{spawn_class_kit, RAWS};
 use crate::resources::UiFont;
@@ -54,6 +55,7 @@ pub type PartySaveQuery<'w, 's> = Query<
         &'static HungerClock,
         &'static Renderable,
         Option<&'static HeroClass>,
+        Option<&'static Experience>,
     ),
 >;
 
@@ -197,6 +199,15 @@ pub struct SerializedMember {
     /// The raws class; missing in saves from before classes.
     #[serde(default)]
     pub class: Option<String>,
+    /// Missing in saves from before levels: level 1, no experience.
+    #[serde(default = "first_level")]
+    pub level: i32,
+    #[serde(default)]
+    pub xp: i32,
+}
+
+fn first_level() -> i32 {
+    1
 }
 
 fn default_hunger_duration() -> i32 {
@@ -304,7 +315,7 @@ pub fn save_game(
 ) {
     let mut party: Vec<SerializedMember> = party_query
         .iter()
-        .map(|(_, member, pos, name, stats, viewshed, hunger, renderable, class)| SerializedMember {
+        .map(|(_, member, pos, name, stats, viewshed, hunger, renderable, class, experience)| SerializedMember {
             slot: member.slot,
             x: pos.x,
             y: pos.y,
@@ -321,6 +332,8 @@ pub fn save_game(
             hunger_state: hunger.state,
             hunger_duration: hunger.duration,
             class: class.map(|c| c.0.clone()),
+            level: experience.map_or(1, |e| e.level),
+            xp: experience.map_or(0, |e| e.xp),
         })
         .collect();
     if party.is_empty() {
@@ -580,6 +593,7 @@ fn restore_game(
         let entity = commands
             .spawn((
                 PartyMember { slot: member.slot },
+                Experience { level: member.level, xp: member.xp },
                 Name { name: member.name },
                 Position {
                     x: member.x,
@@ -626,6 +640,8 @@ fn restore_game(
     for monster in save_data.monsters {
         let mut entity_commands = commands.spawn((
             Monster,
+            // Not saved yet (P01): a raws `xp` override.
+            XpValue(mob_xp(monster.max_hp, monster.power)),
             BlocksTile,
             Name { name: monster.name },
             Position {
@@ -814,6 +830,8 @@ mod tests {
             hunger_state: HungerState::Normal,
             hunger_duration: 20,
             class: None,
+            level: 2,
+            xp: 60,
         }
     }
 
@@ -892,6 +910,17 @@ mod tests {
         assert_eq!(loaded.active, 2);
         assert!(matches!(loaded.items[1].location, ItemLocation::InBackpack { slot: 2 }));
         assert_eq!(loaded.delve, Delve { deepest: 3, levels_visited: 2 });
+        assert_eq!((loaded.party[1].level, loaded.party[1].xp), (2, 60));
+    }
+
+    #[test]
+    fn a_hero_saved_before_levels_loads_at_level_one() {
+        let mut json = serde_json::to_value(save_with_gold()).unwrap();
+        let hero = json["party"][0].as_object_mut().unwrap();
+        hero.remove("level");
+        hero.remove("xp");
+        let loaded: SaveData = serde_json::from_value(json).unwrap();
+        assert_eq!((loaded.party[0].level, loaded.party[0].xp), (1, 0));
     }
 
     #[test]

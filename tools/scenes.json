@@ -250,6 +250,44 @@
       "name": "monsters_high_zoom",
       "note": "The same line-up zoomed in.",
       "args": "--seed 42 --depth 2 --console godmode --console \"place -1 -2 Wraith\" --console \"place 1 -2 Lich\" --console \"place 3 -2 Imp\" --console \"place 5 -2 Hellhound\" --console \"place -1 -4 Demon Lord\" --console \"place 1 -4 Giant Bat\" --console \"place 3 -4 Giant Spider\" --keys \"++++++++\" --frames 180"
+    },
+    {
+      "name": "level_up",
+      "note": "The party has 45 experience; kill_all fells a goblin placed beside it and the rest of the level, and the kills' experience takes every hero to level 2 (cards show 2, a floater over each hero).",
+      "args": "--seed 42 --depth 2 --reveal-map --console \"xp 45\" --console \"place 2 0 Goblin\" --console kill_all --frames 120",
+      "expect": [
+        "The party gains 45 experience.",
+        "Goblin is dead",
+        "The party gains",
+        "Aldric reaches level 2.",
+        "Dagny reaches level 2."
+      ]
+    },
+    {
+      "name": "hire",
+      "note": "Aldric falls in town; the barkeep's Hire tab offers a recruit per class and Halvard the fighter takes Aldric's card (slot 0).",
+      "args": "--seed 42 --depth 0 --reveal-map --console kill --console \"gold 100\" --shop barkeep --keys nna! --frames 900",
+      "expect": [
+        "Aldric is dead",
+        "Halvard the fighter joins the party for 60 gold."
+      ]
+    },
+    {
+      "name": "hire_refused",
+      "note": "The barkeep refuses a hire while the party is full; the Hire tab stays open with the message.",
+      "args": "--seed 42 --depth 0 --reveal-map --shop barkeep --keys nna --frames 900",
+      "expect": [
+        "The party is full."
+      ]
+    },
+    {
+      "name": "hire_poor",
+      "note": "With Aldric fallen and an empty purse, the barkeep refuses the hire.",
+      "args": "--seed 42 --depth 0 --reveal-map --console kill --shop barkeep --keys nna! --frames 900",
+      "expect": [
+        "Aldric is dead",
+        "You cannot afford Halvard (60 gold)."
+      ]
     }
   ]
 }

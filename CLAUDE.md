@@ -58,7 +58,8 @@ The coordinator runs the same suite before every merge.
                    offset from the active hero), "spawn <item>", "gold N", "hurt N",
                    "effect <spark|fireball|missile|heal|confusion|blood>", "teleport X Y",
                    "town level <sector> <1-5>", "town days N", kill_all (every monster
-                   falls as if killed: stand-in body, gold, "is dead").
+                   falls as if killed: stand-in body, gold, "is dead", experience), kill
+                   (the active hero falls), "xp N" (to every living hero).
 --click X,Y        left-click grid cell X,Y: walk, attack, select a hero, confirm a target
 --press X,Y        left-click a point of the 1600x1000 picture (HUD buttons and cards)
 --cursor X,Y       hover the mouse at a point of the picture
@@ -164,7 +165,8 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
   `player::handle_player_input` takes it after the real key presses, so a button and its
   hotkey share one code path. The rules (which buttons, why one is disabled, the shot
   preview numbers, which banner a phase change shows) are pure functions in
-  `ui/combat_hud.rs`. Shared colours and sizes live in `ui/style.rs`
+  `ui/combat_hud.rs`. Shared colours and sizes live in `ui/style.rs`. A card's portrait disc
+  shows the hero's level, and its name is the hero's `Name` (a recruit's own)
 - **TooltipPlugin** (`ui/tooltip.rs`) - Names what is under the cursor; in combat a hostile shows
   the shot preview (hit, crit, damage, cover or flank) from `combat::aim_at`
 - **HealthBarsPlugin** (`ui/health_bars.rs`) - A bar over each unit, a UI node placed by
@@ -223,6 +225,14 @@ Non-plugin modules worth knowing:
   shared material per colour from `EntityAssets` via the `attach_entity_mesh` observer. Spawn
   map entities with `RenderableBundle`; re-inserting `EntityShape` re-dresses (doors opening)
 - `models.rs` - The model pipeline (see Models below)
+- `experience.rs` - Experience and levels. Every hero has `Experience { level, xp }` (xp is a
+  running total). A hostile carries `XpValue`: the raws mob `xp`, else `mob_xp` (half its max hp
+  plus its power; a goblin 12). When one dies, `combat::delete_the_dead` sums them and runs
+  `grant_xp`, which gives the full amount to every living hero ("The party gains 12
+  experience."). `xp_for(level)` is `XP_STEP` (50) times 1+2+...+(level-1): 50, 150, 300, 500.
+  Each level (`level_up`) adds a fifth of the class's base max hp (healed at once) and
+  `LEVEL_AIM` (2) aim, logs "Aldric reaches level 2." and shows a "Level 2!" floater
+  (`Outcome::LevelUp`)
 - `tactics.rs` - The pure action point rules: `AP_PER_ROUND` (2), `DEFAULT_MOVEMENT` (4 tiles per
   AP), `Action` and `Action::spend` (move and item 1 AP, dash 2; attack, wait, overwatch and
   hunker spend the rest and need at least 1), `move_range` (cheapest-first flood fill over `Map::get_available_exits`,
@@ -471,9 +481,11 @@ of the same logic. The build should stay at zero warnings.
 - The save holds the whole party (`SaveData::party`, in slot order), the active hero's slot, and
   each backpack item's owner by slot, and the `Delve` (deepest depth, levels since town)
 - Each hero's class is saved (`SerializedMember::class`, missing in older saves). On load a
-  hero with a class gets the class's starting gear equipped afresh and their abilities ready
+  hero with a class gets the class's starting gear equipped afresh and their abilities ready.
+  Level and experience are saved too (`level`, `xp`; an older save loads at level 1)
 - Not saved yet (P01): `Poison` on a unit, a mob's poison bite (`PoisonsOnHit`), a monster's
-  `Alertness`, `Archetype` and own `Weapon` (a loaded monster is an idle, unarmed brute),
+  `Alertness`, `Archetype`, own `Weapon` (a loaded monster is an idle, unarmed brute) and raws
+  `xp` (a loaded monster is worth `mob_xp`),
   `Overwatch` and `Hunkered`, equipment (equipped items are left out of the save; a hero
   without a class, from an older save, loses it) and ability cooldowns
 - Permadeath: save file deleted on load and when the last hero dies. A fallen hero leaves play
@@ -484,6 +496,12 @@ of the same logic. The build should stay at zero warnings.
   `economy/shop.rs`; who buys and stocks what is `town::STALLS`. Shelves refill
   (`stock::restock`) when a new game starts in town and on every return to town. Sales
   feed the sector's stock.
+- Recruits: the barkeep's shop has a third tab, Hire (Tab cycles Buy, Sell, Hire). It
+  offers one recruit per class (`economy::shop::recruits`, names from `RECRUITS`, the first
+  not in the party) at the provisions sector's level (1 to 5) for `RECRUIT_PRICE` (60) gold a
+  level. `shop::hire` refuses with "The party is full." or "You cannot afford ..."; a hire
+  fills the lowest empty slot (`spawner::spawn_recruit`: the slot's colour, the recruit's
+  name, class stats raised to its level, then `spawn_class_kit`) beside the active hero
 - Town state (`economy/town.rs`) lives in its own `town.json`, loaded at startup
   and saved whenever `TownState` changes. Permadeath never deletes it. A bad or
   wrong-version file is renamed to `town.json.bad-<secs>` and a fresh town founded.

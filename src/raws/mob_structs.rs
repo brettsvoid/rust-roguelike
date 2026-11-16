@@ -26,6 +26,9 @@ pub struct Mob {
     /// without one, `Weapon::NATURAL`.
     #[serde(default)]
     pub weapon: Option<String>,
+    /// Experience each hero gains when it dies; `experience::mob_xp` when missing.
+    #[serde(default)]
+    pub xp: Option<i32>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

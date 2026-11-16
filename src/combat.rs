@@ -12,6 +12,7 @@ use crate::debug::GodMode;
 use crate::gamelog::GameLog;
 use crate::economy::Gold;
 use crate::enemy_ai::Alertness;
+use crate::experience::{grant_xp, XpValue};
 use crate::map::{Map, Position};
 use crate::overwatch::{Hunkered, Overwatch, OVERWATCH_AIM_PENALTY};
 use crate::effects::Effects;
@@ -127,6 +128,8 @@ pub enum Outcome {
     Miss,
     Hit,
     Crit,
+    /// Not an attack: a hero's level-up floater, its `damage` the new level.
+    LevelUp,
 }
 
 /// Rolls to hit at `chance` percent; a hit then rolls `crit_chance` for a critical.
@@ -391,11 +394,12 @@ pub fn delete_the_dead(
     mut log: ResMut<GameLog>,
     mut next_state: ResMut<NextState<RunState>>,
     mut active: ResMut<ActiveUnit>,
-    query: Query<(Entity, &CombatStats, &Name, Option<&Position>, Option<&Gold>, Option<&PartyMember>)>,
+    query: Query<(Entity, &CombatStats, &Name, Option<&Position>, Option<&Gold>, Option<&PartyMember>, Option<&XpValue>)>,
     carried: Query<(Entity, Option<&InBackpack>, Option<&Equipped>), With<Item>>,
 ) {
     let mut party = Vec::new();
-    for (entity, stats, name, pos, gold, member) in &query {
+    let mut xp = 0;
+    for (entity, stats, name, pos, gold, member, worth) in &query {
         if let Some(member) = member {
             party.push((member.slot, entity, stats.hp > 0));
         }
@@ -403,6 +407,7 @@ pub fn delete_the_dead(
             continue;
         }
         log.entries.push(format!("{} is dead", name.name));
+        xp += worth.map_or(0, |w| w.0);
         if let Some(pos) = pos {
             presentation::fall(&mut commands, &mut presentation, &bodies, entity, (pos.x, pos.y));
         }
@@ -427,6 +432,9 @@ pub fn delete_the_dead(
         }
     }
 
+    if xp > 0 {
+        commands.run_system_cached_with(grant_xp, xp);
+    }
     if party.iter().any(|&(_, entity, alive)| !alive && active.0 == Some(entity)) {
         active.0 = next_unit(&party, active.0);
     }

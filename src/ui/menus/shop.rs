@@ -1,8 +1,9 @@
 //! The shop screen (E02). Clicking a vendor in town walks the active hero
 //! beside them and opens it. Tab switches between buying from the vendor and
-//! selling from the active hero's backpack, a letter trades that line and
-//! Escape closes it. The trade rules are `economy::shop`; this module moves
-//! the item entities.
+//! selling from the active hero's backpack (and, at the barkeep, hiring a
+//! recruit into a fallen hero's slot), a letter trades that line and Escape
+//! closes it. The trade rules are `economy::shop`; this module moves the item
+//! entities and spawns the hired hero.
 
 use std::collections::HashSet;
 
@@ -13,18 +14,19 @@ use bevy::prelude::*;
 use crate::bystander::Bystander;
 use crate::components::{BlocksTile, Door, InBackpack, Item, Name};
 use crate::debug::DebugMode;
-use crate::economy::shop::{self, buys};
+use crate::economy::shop::{self, buys, recruits, Recruit};
 use crate::economy::town::{TownState, Vendor};
 use crate::economy::trade::{buy_price, sell_price};
 use crate::economy::Purse;
 use crate::gamelog::GameLog;
 use crate::map::{Map, Position};
-use crate::party::{ActiveUnit, PartyMember};
+use crate::party::{spawn_tiles, ActiveUnit, PartyMember};
 use crate::picking::{self, HoveredTile};
 use crate::pathfinding::a_star_explored_avoiding;
 use crate::player::{self, WalkPath};
 use crate::raws::{self, RAWS};
 use crate::resources::UiFont;
+use crate::spawner::spawn_recruit;
 use crate::RunState;
 
 use crate::ui::menu::{
@@ -37,6 +39,18 @@ use crate::ui::resources::MenuPage;
 pub enum ShopMode {
     Buy,
     Sell,
+    Hire,
+}
+
+impl ShopMode {
+    /// The mode Tab switches to: the barkeep also hires.
+    fn next(self, vendor: Vendor) -> Self {
+        match self {
+            ShopMode::Buy => ShopMode::Sell,
+            ShopMode::Sell if vendor == Vendor::Barkeep => ShopMode::Hire,
+            _ => ShopMode::Buy,
+        }
+    }
 }
 
 /// The open shop: whose it is, which way the trade goes and the last result.
@@ -152,21 +166,28 @@ pub fn click_vendor(
     }
 }
 
-/// One tradeable line: the raws item, its backpack entity when selling, and
-/// the text shown.
+/// What a line trades.
+enum Deal {
+    Buy(raws::Item),
+    /// The raws item and its backpack entity.
+    Sell(raws::Item, Entity),
+    Hire(Recruit),
+}
+
+/// One tradeable line and the text shown.
 struct Line {
-    item: raws::Item,
-    entity: Option<Entity>,
+    deal: Deal,
     label: String,
 }
 
-/// The vendor's shelf when buying, or what the vendor will buy from the
-/// hero's backpack when selling, each with its price now.
+/// The vendor's shelf when buying, what the vendor will buy from the hero's
+/// backpack when selling, or the recruits for hire, each with its price now.
 fn shop_lines(
     shop: &Shop,
     town: &TownState,
     hero: Entity,
     backpack: &Query<(Entity, &InBackpack, &Name), With<Item>>,
+    party: &Query<(&PartyMember, &Name, &Position)>,
 ) -> Vec<Line> {
     let raws = RAWS.lock().unwrap();
     let find = |name: &str| raws.item_index.get(name).map(|&i| raws.raws.items[i].clone());
@@ -181,8 +202,7 @@ fn shop_lines(
                 let price = buy_price(town, item.sector?, item.base_value);
                 Some(Line {
                     label: format!("{name:<24}{price:>5} gold   {left} left"),
-                    item,
-                    entity: None,
+                    deal: Deal::Buy(item),
                 })
             })
             .collect(),
@@ -194,27 +214,43 @@ fn shop_lines(
                 let price = sell_price(town, item.sector?, item.base_value);
                 Some(Line {
                     label: format!("{:<24}{price:>5} gold", name.name),
-                    item,
-                    entity: Some(entity),
+                    deal: Deal::Sell(item, entity),
                 })
             })
             .collect(),
+        ShopMode::Hire => {
+            let names: Vec<&str> = party.iter().map(|(_, name, _)| name.name.as_str()).collect();
+            recruits(town, &names)
+                .into_iter()
+                .map(|recruit| Line {
+                    label: format!(
+                        "{:<10}{:<9}level {}{:>7} gold",
+                        recruit.name, recruit.class, recruit.level, recruit.price
+                    ),
+                    deal: Deal::Hire(recruit),
+                })
+                .collect()
+        }
     }
 }
 
 fn shop_menu(shop: &Shop, gold: i32, hero: &str, lines: &[Line]) -> ModalMenu {
     let vendor = shop.vendor.name();
-    let (tabs, empty, other) = match shop.mode {
-        ShopMode::Buy => (
-            format!("[Buy]   Sell from {hero}'s pack "),
-            format!("The {} has nothing left to sell.", vendor.to_lowercase()),
-            "sell",
-        ),
-        ShopMode::Sell => (
-            format!(" Buy   [Sell from {hero}'s pack]"),
-            format!("Nothing in {hero}'s pack that the {} buys.", vendor.to_lowercase()),
-            "buy",
-        ),
+    let hires = shop.vendor == Vendor::Barkeep;
+    let tab = |mode: ShopMode, label: String| if shop.mode == mode { format!("[{label}]") } else { format!(" {label} ") };
+    let mut tabs = tab(ShopMode::Buy, "Buy".into()) + "  " + &tab(ShopMode::Sell, format!("Sell from {hero}'s pack"));
+    if hires {
+        tabs += &format!("  {}", tab(ShopMode::Hire, "Hire".into()));
+    }
+    let empty = match shop.mode {
+        ShopMode::Buy => format!("The {} has nothing left to sell.", vendor.to_lowercase()),
+        ShopMode::Sell => format!("Nothing in {hero}'s pack that the {} buys.", vendor.to_lowercase()),
+        ShopMode::Hire => "Nobody is looking for work.".to_string(),
+    };
+    let other = match shop.mode.next(shop.vendor) {
+        ShopMode::Buy => "buy",
+        ShopMode::Sell => "sell",
+        ShopMode::Hire => "hire",
     };
     let mut footer = String::new();
     if !shop.message.is_empty() {
@@ -263,7 +299,9 @@ pub fn handle_shop_input(
     mut purse: ResMut<Purse>,
     mut gamelog: ResMut<GameLog>,
     active: Res<ActiveUnit>,
+    map: Res<Map>,
     backpack: Query<(Entity, &InBackpack, &Name), With<Item>>,
+    party: Query<(&PartyMember, &Name, &Position)>,
 ) {
     let Some(hero) = active.0 else {
         return;
@@ -278,15 +316,12 @@ pub fn handle_shop_input(
                 return;
             }
             KeyCode::Tab => {
-                shop.mode = match shop.mode {
-                    ShopMode::Buy => ShopMode::Sell,
-                    ShopMode::Sell => ShopMode::Buy,
-                };
+                shop.mode = shop.mode.next(shop.vendor);
                 shop.message.clear();
                 menu_page.0 = 0;
             }
             key => {
-                let lines = shop_lines(&shop, &town, hero, &backpack);
+                let lines = shop_lines(&shop, &town, hero, &backpack, &party);
                 if handle_pagination_input(key, &mut menu_page, lines.len()) {
                     continue;
                 }
@@ -295,11 +330,20 @@ pub fn handle_shop_input(
                     continue;
                 };
                 let vendor = shop.vendor;
-                let result = match shop.mode {
-                    ShopMode::Buy => shop::buy(&mut town, &mut purse.gold, vendor, &line.item)
-                        .inspect(|_| give_item(&mut commands, &line.item.name, hero)),
-                    ShopMode::Sell => shop::sell(&mut town, &mut purse.gold, vendor, &line.item)
-                        .inspect(|_| commands.entity(line.entity.unwrap()).despawn()),
+                let result = match &line.deal {
+                    Deal::Buy(item) => shop::buy(&mut town, &mut purse.gold, vendor, item)
+                        .inspect(|_| give_item(&mut commands, &item.name, hero)),
+                    Deal::Sell(item, entity) => shop::sell(&mut town, &mut purse.gold, vendor, item)
+                        .inspect(|_| commands.entity(*entity).despawn()),
+                    Deal::Hire(recruit) => {
+                        let taken: Vec<usize> = party.iter().map(|(member, ..)| member.slot).collect();
+                        let from = party.get(hero).map_or((0, 0), |(_, _, p)| (p.x, p.y));
+                        shop::hire(&mut purse.gold, &taken, recruit).map(|(slot, message)| {
+                            let at = beside(&map, from, &party);
+                            spawn_recruit(&mut commands, slot, at, recruit.name, recruit.class, recruit.level);
+                            message
+                        })
+                    }
                 };
                 shop.message = result.unwrap_or_else(|refusal| refusal);
                 gamelog.entries.push(shop.message.clone());
@@ -307,6 +351,15 @@ pub fn handle_shop_input(
             }
         }
     }
+}
+
+/// The nearest free walkable cell beside `from` for a recruit to stand on.
+fn beside(map: &Map, from: (i32, i32), party: &Query<(&PartyMember, &Name, &Position)>) -> (i32, i32) {
+    spawn_tiles(map, from, 25)
+        .into_iter()
+        .skip(1)
+        .find(|&(x, y)| !map.blocked_tiles[map.xy_idx(x, y)] && !party.iter().any(|(_, _, p)| (p.x, p.y) == (x, y)))
+        .unwrap_or(from)
 }
 
 fn refresh_shop(
@@ -317,13 +370,14 @@ fn refresh_shop(
     active: Res<ActiveUnit>,
     names: Query<&Name>,
     backpack: Query<(Entity, &InBackpack, &Name), With<Item>>,
+    party: Query<(&PartyMember, &Name, &Position)>,
     mut text_query: Query<&mut Text, With<ModalMenuText>>,
 ) {
     let Some(hero) = active.0 else {
         return;
     };
     let hero_name = names.get(hero).map_or("Hero", |n| n.name.as_str());
-    let lines = shop_lines(&shop, &town, hero, &backpack);
+    let lines = shop_lines(&shop, &town, hero, &backpack, &party);
     let text = build_menu_text(&shop_menu(&shop, purse.gold, hero_name, &lines), &menu_page);
     if let Ok(mut shown) = text_query.single_mut() {
         if **shown != text {

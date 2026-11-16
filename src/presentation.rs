@@ -284,6 +284,7 @@ struct FloaterText;
 pub fn floater_text(outcome: Outcome, damage: i32) -> (String, Color) {
     match outcome {
         Outcome::Miss => ("Miss".into(), Color::srgb(0.7, 0.75, 0.85)),
+        Outcome::LevelUp => (format!("Level {damage}!"), Color::srgb(0.95, 0.76, 0.32)),
         _ if damage <= 0 => ("No damage".into(), Color::srgb(0.7, 0.7, 0.7)),
         Outcome::Hit => (damage.to_string(), Color::srgb(1.0, 0.95, 0.6)),
         Outcome::Crit => (format!("Crit! {damage}"), Color::srgb(1.0, 0.45, 0.2)),
@@ -909,6 +910,7 @@ mod tests {
         assert_eq!(floater_text(Outcome::Crit, 9).0, "Crit! 9");
         assert_eq!(floater_text(Outcome::Hit, 0).0, "No damage");
         assert_eq!(floater_text(Outcome::Crit, 0).0, "No damage");
+        assert_eq!(floater_text(Outcome::LevelUp, 3).0, "Level 3!");
     }
 
     #[test]

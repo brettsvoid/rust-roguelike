@@ -8,6 +8,7 @@ use crate::combat::{CombatStats, DEFAULT_AIM};
 use crate::cover::Cover;
 use crate::economy::Gold;
 use crate::entity_render::EntityShape;
+use crate::experience::{mob_xp, XpValue};
 use crate::models::Model;
 use crate::components::{
     AreaOfEffect, BlocksTile, BlocksVisibility, CausesConfusion, Consumable, DefenseBonus,
@@ -366,7 +367,9 @@ pub fn spawn_named_mob(
         }
         _ => {
             // Default to monster (aggressive) AI
-            entity.insert(Monster);
+            let stats = &mob_template.stats;
+            let xp = mob_template.xp.unwrap_or_else(|| mob_xp(stats.max_hp, stats.power));
+            entity.insert((Monster, XpValue(xp)));
         }
     }
 

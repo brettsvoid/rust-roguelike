@@ -10,6 +10,7 @@ use crate::abilities::{update_active_abilities, ActiveAbilities, HeroAbility, He
 use crate::combat::{in_reach, Arms, CombatStats};
 use crate::components::{Confusion, HungerClock, HungerState, Name, Poison};
 use crate::economy::Purse;
+use crate::experience::Experience;
 use crate::game_flow::Mode;
 use crate::gamelog::GameLog;
 use crate::map::{Map, Position};
@@ -78,6 +79,8 @@ struct CardStripe(usize);
 struct CardDisc(usize);
 #[derive(Component)]
 struct CardName(usize);
+#[derive(Component)]
+struct CardLevel(usize);
 #[derive(Component)]
 struct CardClass(usize);
 #[derive(Component)]
@@ -226,18 +229,21 @@ fn spawn_card(cards: &mut ChildSpawnerCommands, f: &Handle<Font>, slot: usize) {
         ))
         .with_children(|card| {
             card.spawn((Node { width: Val::Px(3.0), height: Val::Percent(100.0), ..default() }, BackgroundColor(Color::NONE), CardStripe(slot)));
-            // Portrait: the hero's colour until there is art.
+            // Portrait: the hero's colour until there is art, with their level on it.
             card.spawn((
                 Node {
-                    width: Val::Px(12.0),
-                    height: Val::Px(12.0),
+                    width: Val::Px(16.0),
+                    height: Val::Px(16.0),
                     flex_shrink: 0.0,
-                    border_radius: BorderRadius::all(Val::Px(6.0)),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    border_radius: BorderRadius::all(Val::Px(8.0)),
                     ..default()
                 },
                 BackgroundColor(HEROES[slot].1.into()),
                 CardDisc(slot),
-            ));
+            ))
+            .with_child((Text::new(""), font(f, style::FONT_SMALL), TextColor(style::PANEL), CardLevel(slot)));
             card.spawn((
                 Node { width: Val::Px(54.0), flex_shrink: 0.0, ..default() },
                 Text::new(HEROES[slot].0),
@@ -343,6 +349,8 @@ type CardHero<'a> = (
     Has<Poison>,
     Has<Confusion>,
     Option<&'a HeroClass>,
+    &'a Name,
+    &'a Experience,
 );
 
 /// Each card shows its hero's health, AP pips (in combat), hunger and
@@ -358,7 +366,8 @@ fn update_cards(
     mut cards: Query<(&HudTarget, &ComputedNode, &UiGlobalTransform, &mut BackgroundColor), Without<CardHealth>>,
     mut stripes: Query<(&CardStripe, &mut BackgroundColor), (Without<HudTarget>, Without<CardHealth>, Without<CardPip>)>,
     mut discs: Query<(&CardDisc, &mut BackgroundColor), (Without<HudTarget>, Without<CardStripe>, Without<CardHealth>, Without<CardPip>)>,
-    mut names: Query<(&CardName, &mut TextColor), (Without<CardHealthText>, Without<CardBadge>)>,
+    mut names: Query<(&CardName, &mut Text, &mut TextColor), (Without<CardHealthText>, Without<CardBadge>, Without<CardClass>)>,
+    mut levels: Query<(&CardLevel, &mut Text), (Without<CardName>, Without<CardHealthText>, Without<CardBadge>, Without<CardClass>)>,
     mut health: Query<(&CardHealth, &mut Node, &mut BackgroundColor), (Without<HudTarget>, Without<CardPip>)>,
     mut health_text: Query<(&CardHealthText, &mut Text), Without<CardBadge>>,
     mut classes: Query<(&CardClass, &mut Text), (Without<CardHealthText>, Without<CardBadge>)>,
@@ -383,8 +392,18 @@ fn update_cards(
     for (CardDisc(slot), mut colour) in &mut discs {
         colour.0 = if hero(*slot).is_some() { HEROES[*slot].1.into() } else { style::TEXT_FAINT };
     }
-    for (CardName(slot), mut colour) in &mut names {
+    for (CardName(slot), mut text, mut colour) in &mut names {
         colour.0 = if hero(*slot).is_some() { style::TEXT } else { style::TEXT_FAINT };
+        // A recruit takes the fallen hero's card; the card keeps the last name until then.
+        if let Some(name) = hero(*slot).map(|h| &h.9.name).filter(|name| **text != **name) {
+            **text = name.clone();
+        }
+    }
+    for (CardLevel(slot), mut text) in &mut levels {
+        let level = hero(*slot).map_or(String::new(), |h| h.10.level.to_string());
+        if **text != level {
+            **text = level;
+        }
     }
     for (CardHealth(slot), mut node, mut colour) in &mut health {
         let fraction = hero(*slot).map_or(0.0, |h| h.2.hp.max(0) as f32 / h.2.max_hp.max(1) as f32);
@@ -409,7 +428,7 @@ fn update_cards(
         colour.0 = if left.is_some_and(|ap| *pip < ap) { style::AP } else { style::AP_SPENT };
     }
     for (CardBadge(slot, badge), mut node, mut text, mut colour, mut border) in &mut badges {
-        let shown = hero(*slot).and_then(|(_, _, _, hunger, watching, hunkered, poisoned, confused, _)| match badge {
+        let shown = hero(*slot).and_then(|(_, _, _, hunger, watching, hunkered, poisoned, confused, ..)| match badge {
             Badge::Overwatch => watching.then_some(("Watch", style::BADGE_OVERWATCH)),
             Badge::Hunkered => hunkered.then_some(("Hunker", style::BADGE_HUNKERED)),
             Badge::Poisoned => poisoned.then_some(("Poison", style::BADGE_POISON)),
