@@ -275,7 +275,7 @@ and adds the `model` names to `raws/spawns.json`.
 - Done when: each prop appears as its model in a harness town screenshot.
 
 ### A04 Heroes and townsfolk
-- Status: in progress
+- Status: done
 - Needs: F08
 - Four hero classes (fighter, ranger, mage, cleric) and the townsfolk
   (barkeep, patron, priest, blacksmith, clothier, alchemist, mom, peasant).
@@ -284,7 +284,7 @@ and adds the `model` names to `raws/spawns.json`.
   gameplay zoom.
 
 ### A05 Monsters, set 1
-- Status: todo
+- Status: in progress
 - Needs: F08
 - Rat, kobold, goblin, orc.
 - Done when: all four appear in a harness screenshot and are told apart at
