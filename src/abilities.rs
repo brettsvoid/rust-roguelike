@@ -500,6 +500,7 @@ mod tests {
         world.insert_resource(GameRng::seeded(42));
         world.insert_resource(GodMode::default());
         world.insert_resource(HeroAction::default());
+        world.init_resource::<crate::presentation::Presentation>();
         world
     }
 

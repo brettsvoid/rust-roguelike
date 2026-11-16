@@ -85,9 +85,9 @@ cargo run -- --screenshot cooldown.png --depth 2 --reveal-map --console godmode 
 cargo run -- --screenshot aimed.png --depth 2 --reveal-map --console godmode \
   --console "place 8 0 Goblin" --keys ' n1' --click 48,21 --frames 150
 # Corin's Fireball between two goblins ("Corin casts Fireball.", "Fireball hits Goblin for
-# 15 hp.", "... for 10 hp."); --frames 40 catches the blast:
+# 15 hp.", "... for 10 hp."):
 cargo run -- --screenshot fireball.png --depth 2 --reveal-map --console godmode \
-  --console "place 4 -1 Goblin" --console "place 4 1 Goblin" --keys ' nn1' --click 44,21 --frames 40
+  --console "place 4 -1 Goblin" --console "place 4 1 Goblin" --keys ' nn1' --click 44,21 --frames 200
 # "hurt N" takes N hit points off the active hero. Dagny heals Aldric in combat ("Dagny uses
 # Heal on Aldric, healing 10 hp.": his card goes from 20/34 to 30/34). Exploring, heals work
 # too: drop the goblin and the space:
