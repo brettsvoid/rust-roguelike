@@ -1281,6 +1281,7 @@
       "name": "Door",
       "renderable": {
         "glyph": "+",
+        "model": "door",
         "fg": "#D2691E",
         "bg": "#000000",
         "order": 0
@@ -1471,6 +1472,7 @@
       "cover": "none",
       "renderable": {
         "glyph": "*",
+        "model": "wall_torch",
         "fg": "#FF8C00",
         "bg": "#000000",
         "order": 0

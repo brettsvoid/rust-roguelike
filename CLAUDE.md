@@ -309,15 +309,29 @@ scans the folder once at startup, so restart after adding a file).
   floor, walls 2 m tall. In Blender's top view +X is east and +Y is north (towards smaller grid y).
 - Fog: entity models hide with their entity. Tile models swap each mesh's material for a
   dimmed copy (`map_render::dimmed`) when explored but out of view.
+- Variants: a tile shows `<name>`, `<name>_2` or `<name>_3`, picked by `models::tile_variant`
+  (a hash of the cell, so a map always looks the same); a missing variant falls back to `<name>`.
+- Facing: models face south (+z, Blender -Y). `models::face_prop_models` turns a prop on a wall
+  tile (the wall torch) to its open side, the side `lighting::wall_offset` hangs the flame on,
+  and a door with walls north and south a quarter turn (`model_yaw`).
 - Export: Blender sources live in `art/`. Each top-level collection becomes one `.glb` named
-  after it: `blender art/<file>.blend --background --python art/export.py`.
-  `art/export.py` is untested in Blender so far; check its first export by eye.
+  after it: `blender art/<file>.blend --background --python art/export.py` (or run the script
+  in a live Blender with `__file__` set). Collections named `_...` are skipped.
+- Dungeon kit (A01): `art/build_dungeon_kit.py` builds every piece procedurally in
+  `art/dungeon_kit.blend`; change a number there, rerun it, then `export.py`. It also lays out a
+  `_preview` grid and a small room to judge the pieces together (the pieces stay at the origin,
+  hidden in the viewport). Pieces: `tile_floor` (+ `_2`, `_3`), `tile_wall_0` to `tile_wall_15`
+  (stones on faces without a wall neighbour, plain faces towards one), `tile_down_stairs`,
+  `tile_up_stairs`, `door` / `door_open` and `wall_torch` (raws `model` on the Door and Wall
+  Torch props). Three materials (stone, wood, iron); per-stone variation is a vertex colour
+  (glTF `COLOR_0`) multiplied into the base colour. Pieces stay under about 260 triangles.
 - `art/make_test_model.py` writes `assets/models/test_pyramid.glb` (no Blender needed). Copy it to
   a used name, e.g. `tile_floor.glb`, to check the pipeline, and delete the copy afterwards.
 - Every model is loaded at startup and kept. The harness starts the game only once they have
   all loaded, so model entities spawn in the same frame and order each run (byte-identical PNGs).
 - Wall cut-away (`occlusion.rs`) scales the wall tile's `Transform` on y, so a wall model is
-  squashed to a stub the same way as the primitive.
+  squashed to a stub the same way as the primitive. The kit has no separate stub piece: the
+  squashed stone courses read as a low ledge under the dark cap.
 - Model scenes need `reflect_auto_register` (in `Cargo.toml`): scenes are copied into the world
   by reflection.
 

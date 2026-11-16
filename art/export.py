@@ -10,9 +10,11 @@ Blender's top view +X is east and +Y is north (towards smaller grid y). The
 export keeps world positions, so build each collection at the world origin.
 Name a collection the way the game asks for it: a raws `model` value such as
 `orc`, or a tile name such as `tile_floor` or `tile_wall_10` (see
-src/models.rs). Excluded collections are skipped.
+src/models.rs). Excluded collections and ones whose name starts with `_`
+(the kit's `_preview` grid) are skipped.
 
-Untested: written without a Blender run. Check the first export by eye.
+In a running Blender, run it from the Text Editor or exec it with `__file__`
+set to this path; the output folder is found from that path either way.
 """
 
 from pathlib import Path
@@ -24,7 +26,7 @@ out_dir.mkdir(parents=True, exist_ok=True)
 
 view_layer = bpy.context.view_layer
 for layer_collection in view_layer.layer_collection.children:
-    if layer_collection.exclude:
+    if layer_collection.exclude or layer_collection.name.startswith("_"):
         continue
     name = layer_collection.name
     view_layer.active_layer_collection = layer_collection
