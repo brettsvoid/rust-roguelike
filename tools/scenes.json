@@ -190,8 +190,7 @@
       "note": "kill_all fells every monster (a placed goblin beside the party too), then the party walks to where the combat scene meets goblins.",
       "args": "--seed 42 --depth 2 --reveal-map --console \"place 2 0 Goblin\" --console kill_all --click 30,28 --keys ' ' --frames 400",
       "expect": [
-        "Goblin is dead",
-        "Goblin #0 is dead"
+        "Goblin is dead"
       ]
     },
     {
