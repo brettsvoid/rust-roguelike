@@ -430,7 +430,7 @@ and adds the `model` names to `raws/spawns.json`.
   works in combat.
 
 ### C11 Experience, levelling and recruits
-- Status: in progress
+- Status: done
 - Needs: C10, E03
 - Kills give experience, levels raise stats. Dead heroes are replaced by
   hiring recruits at the pub for gold. Recruit quality rises with the town's
@@ -542,7 +542,7 @@ and adds the `model` names to `raws/spawns.json`.
 ## P: Persistence, polish and docs
 
 ### P01 Save and load for the new game
-- Status: todo
+- Status: in progress
 - Needs: C03, E01
 - Rework `saveload.rs` for the party, equipment, gold, combat mode and AP
   state. Fixes the known gap that equipment and bystanders are not saved.
