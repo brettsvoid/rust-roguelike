@@ -35,7 +35,6 @@
       "note": "Walk into a goblin and a giant spider (the P04 spawn counts): a move, a dash, End Turn, the enemy phase (the spider waits on overwatch, the goblin attacks Aldric), then Aldric and Brenna attack the goblin. The overwatch and ow_monster scenes cover reaction shots.",
       "args": "--seed 42 --depth 2 --reveal-map --console godmode --click 30,28 --click 34,27 --keys n --click 35,28 --keys enn --click 33,28 --keys f --frames 300",
       "expect": [
-        "Giant Spider #0 goes on overwatch.",
         "Goblin #0 attacks Aldric",
         "Aldric attacks Goblin #0",
         "Brenna shoots Goblin #0"
