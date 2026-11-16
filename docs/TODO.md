@@ -314,7 +314,7 @@ and adds the `model` names to `raws/spawns.json`.
 - Note: A05 modelled every monster in the raws. A06 covers every item. Close this when A06 lands.
 
 ### A09 Skeletal animation
-- Status: in progress
+- Status: done
 - Needs: A04, A05, C09
 - Rig heroes and monsters. Idle, walk, attack, hit and death clips, played by
   the presentation layer from C09.
