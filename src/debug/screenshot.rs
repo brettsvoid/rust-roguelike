@@ -514,14 +514,16 @@ fn capture_after_frames(
         info!("log> {line}");
     }
     let mut save = save_to_disk(args.path.clone());
-    commands.spawn(Screenshot::image(target.0.clone())).observe(
-        move |captured: On<ScreenshotCaptured>| {
-            save(captured);
-            // The picture is on disk. Bevy's own shutdown now and then never returns with
-            // a hidden window, so leave at once.
-            std::process::exit(0);
-        },
-    );
+    commands.spawn(Screenshot::image(target.0.clone())).observe(move |captured: On<ScreenshotCaptured>| {
+        save(captured);
+        // Leave without tearing the app down: dropping the render world waits on the
+        // Metal queue (`waitUntilCompleted`), which can block for minutes or for good
+        // when other games share the GPU. The PNG and the log are written by now.
+        use std::io::Write;
+        let _ = std::io::stdout().flush();
+        let _ = std::io::stderr().flush();
+        std::process::exit(0);
+    });
 }
 
 #[cfg(test)]

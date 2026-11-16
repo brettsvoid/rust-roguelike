@@ -141,11 +141,19 @@ fn cmd_heal(party: &mut Query<(Entity, &mut Position, &mut CombatStats), With<Pa
     format!("Healed {} heroes", party.iter().count())
 }
 
+/// Drops every monster to 0 hp and lets `combat::delete_the_dead` take them,
+/// as if they fell in a fight: each falls, leaves its gold and is logged.
 fn cmd_kill_all(commands: &mut Commands, monster_query: &Query<Entity, With<Monster>>) -> String {
     let count = monster_query.iter().count();
-    for entity in monster_query.iter() {
-        commands.entity(entity).despawn();
-    }
+    commands.queue(|world: &mut World| {
+        let mut monsters = world.query_filtered::<&mut CombatStats, With<Monster>>();
+        for mut stats in monsters.iter_mut(world) {
+            stats.hp = 0;
+        }
+        if let Err(err) = world.run_system_cached(crate::combat::delete_the_dead) {
+            warn!("kill_all: {err}");
+        }
+    });
     format!("Killed {} monsters", count)
 }
 
