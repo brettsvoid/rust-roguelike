@@ -565,7 +565,7 @@ and adds the `model` names to `raws/spawns.json`.
 - Done when: harness screenshots of the menu and HUD show the new style.
 
 ### P04 Balance pass
-- Status: in progress
+- Status: done
 - Needs: C07, C10, E05, E07
 - Tune hit chances, damage, monster counts per depth, prices and sector
   thresholds so a first run is hard but fair and the town's first level-up
