@@ -31,7 +31,8 @@ Outside the overhaul tickets:
 - [ ] Level theming per depth band (see the depth table in design.md) -
       pick builder chains + spawn tables per theme instead of fully random
 - [ ] Boss encounters at key depths
-- [ ] The Heart of the Abyss + return journey (difficulty scaling on the way up)
+- [x] The Heart of the Abyss + return journey (TODO.md P05)
+- [ ] Difficulty scaling on the way up with the Heart
 - [ ] Item identification (unidentified potions/scrolls)
 - [ ] Sound effects / music
 
