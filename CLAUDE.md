@@ -326,7 +326,15 @@ scans the folder once at startup, so restart after adding a file).
 - Tiles: the name comes from `models::tile_model_name`: `tile_floor`, `tile_wood_floor`,
   `tile_road`, `tile_grass`, `tile_bridge`, `tile_shallow_water`, `tile_deep_water`,
   `tile_down_stairs`, and `tile_wall_<mask>` where the mask (0 to 15) is `Map::wall_glyph_at`:
-  N=1, S=2, W=4, E=8, set where that neighbour is a wall next to floor.
+  N=1, S=2, W=4, E=8, set where that neighbour is a drawn wall (one next to any floor-like tile).
+  `models::tile_model_names` lists the names a tile tries, best first: in town (depth 0) a wall
+  tries `tile_house_wall_<mask>` when a wood floor or stone floor (doorway, hovel) is among its 8
+  neighbours, else `tile_town_wall_<mask>` (the town wall, ruins), then `tile_wall_<mask>`.
+  `attach_tile_mesh` reads the mask from the `Map`, not from a component, because the observer
+  runs before later inserts on the new tile land.
+- Roofs: every tile of a town building (a closed `WoodFloor` room, walls and doorway included)
+  gets a `roof` model (+ `_2`, `_3`) on the wall tops (`occlusion::spawn_roofs`), shown and
+  hidden with the building; without the file it is a flat slab.
 - Conventions: one Blender unit is one metre and one tile, origin at the tile centre on the
   floor, walls 2 m tall. In Blender's top view +X is east and +Y is north (towards smaller grid y).
 - Fog: entity models hide with their entity. Tile models swap each mesh's material for a
@@ -347,6 +355,17 @@ scans the folder once at startup, so restart after adding a file).
   `tile_up_stairs`, `door` / `door_open` and `wall_torch` (raws `model` on the Door and Wall
   Torch props). Three materials (stone, wood, iron); per-stone variation is a vertex colour
   (glTF `COLOR_0`) multiplied into the base colour. Pieces stay under about 260 triangles.
+- Town kit (A02): `art/build_town_kit.py` builds every piece in `art/town_kit.blend` the same way,
+  reusing the dungeon script's helpers with its own palette, plus a `_preview` town corner and a
+  `_cam` set to the game's view. Pieces: `tile_grass`, `tile_road`, `tile_wood_floor` (each + `_2`,
+  `_3`: tufts, pebbles, plank joints), `tile_shallow_water`, `tile_deep_water`, `tile_bridge`
+  (a plank pier over deep water), `tile_house_wall_0` to `_15` (timber frame and plaster on a
+  stone footing; the straight runs 3 and 12 have `_2` with a lit window and `_3` with braces),
+  `tile_town_wall_0` to `_15` (stone courses with merlons) and `roof` (+ `_2`, `_3`, shingle
+  courses). Terrain pieces are closed slabs down to -0.3 m, so a lower neighbour (water beside
+  grass) shows a bank, not a gap; water sits at -0.08 (shallow) and -0.14 (deep). Nine materials;
+  the window material is emissive. Pieces stay under about 270 triangles, terrain under 100. The
+  door is the dungeon kit's `door`, and doorways and hovels keep the dungeon's `tile_floor`
 - `art/make_test_model.py` writes `assets/models/test_pyramid.glb` (no Blender needed). Copy it to
   a used name, e.g. `tile_floor.glb`, to check the pipeline, and delete the copy afterwards.
 - Every model is loaded at startup and kept. The harness starts the game only once they have
@@ -411,7 +430,8 @@ of the same logic. The build should stay at zero warnings.
 - Occlusion: the camera looks from the +x, +z side, so a wall hides tiles up to two steps
   towards -x, -z. `occlusion::walls_to_cut` lists every wall that would hide a visible non-wall
   tile or any hero; those are drawn as a 0.25-unit stub (the wall `Transform` is scaled, the
-  mesh is shared). Town buildings (closed `WoodFloor` rooms) get a flat roof slab at wall height.
+  mesh is shared). Town buildings (closed `WoodFloor` rooms) get a roof over every tile, walls
+  included, at wall height (the `roof` model, or a flat slab without it).
   A roof hides while any hero is inside the building or behind it; while it shows, its walls
   stay full height
 - Click-to-move paths (`pathfinding::a_star_explored`) only cross explored tiles

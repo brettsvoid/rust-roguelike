@@ -334,31 +334,13 @@ impl Map {
 
     /// Calculate wall glyph for a given position based on neighbors
     pub fn wall_glyph_at(&self, x: i32, y: i32) -> WallGlyph {
-        // Check if a tile is a floor
-        let is_floor_at = |tx: i32, ty: i32| -> bool {
-            if tx < 0 || tx >= self.width || ty < 0 || ty >= self.height {
-                return false;
-            }
-            self.tiles[self.xy_idx(tx, ty)] == TileType::Floor
-        };
-
-        // Check if a wall at (nx, ny) is a "boundary wall" (adjacent to at least one floor, including diagonals)
+        // A "boundary wall" is one that gets drawn: a wall next to any floor-like tile
+        // (grass, road and wood floor too, so town walls join up).
         let is_boundary_wall = |nx: i32, ny: i32| -> bool {
             if nx < 0 || nx >= self.width || ny < 0 || ny >= self.height {
                 return false;
             }
-            if self.tiles[self.xy_idx(nx, ny)] != TileType::Wall {
-                return false;
-            }
-            // Check if this wall is adjacent to any floor (cardinal + diagonal)
-            is_floor_at(nx, ny - 1)
-                || is_floor_at(nx, ny + 1)
-                || is_floor_at(nx - 1, ny)
-                || is_floor_at(nx + 1, ny)
-                || is_floor_at(nx - 1, ny - 1)
-                || is_floor_at(nx + 1, ny - 1)
-                || is_floor_at(nx - 1, ny + 1)
-                || is_floor_at(nx + 1, ny + 1)
+            self.tiles[self.xy_idx(nx, ny)] == TileType::Wall && self.is_adjacent_to_floor(nx, ny)
         };
 
         // Draw wall segments only toward boundary walls (walls next to floors)
@@ -791,5 +773,17 @@ mod tests {
             glyph.0
         );
         assert_eq!(glyph.to_char(), '┼', "Cross should be ┼");
+    }
+
+    #[test]
+    fn walls_beside_grass_join_up() {
+        // A town wall running east to west across the grass.
+        let mut map = create_test_map(3, 3);
+        map.tiles = vec![TileType::Grass; 9];
+        for x in 0..3 {
+            let idx = map.xy_idx(x, 1);
+            map.tiles[idx] = TileType::Wall;
+        }
+        assert_eq!(map.wall_glyph_at(1, 1).0, 12);
     }
 }

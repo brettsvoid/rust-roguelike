@@ -14,6 +14,7 @@ use bevy::world_serialization::WorldInstanceReady;
 
 use crate::components::Door;
 use crate::entity_render::ModelScene;
+use crate::levels::TOWN_DEPTH;
 use crate::lighting::wall_offset;
 use crate::map::{Map, Position, Revealed, RevealedState, TileType};
 use crate::map_render::{dimmed, TileMesh};
@@ -62,14 +63,17 @@ impl AvailableModels {
         self.0.get(name).cloned().map(WorldAssetRoot)
     }
 
-    /// The scene for a tile: `<name>`, `<name>_2` or `<name>_3` picked by
-    /// `tile_variant`, falling back to `<name>` when that variant has no file.
-    pub fn tile_scene(&self, name: &str, x: i32, y: i32) -> Option<WorldAssetRoot> {
-        match tile_variant(x, y) {
-            1 => None,
-            n => self.scene(&format!("{name}_{n}")),
-        }
-        .or_else(|| self.scene(name))
+    /// The scene for a tile from the first of `names` that has a file: for each,
+    /// `<name>`, `<name>_2` or `<name>_3` picked by `tile_variant`, falling back
+    /// to `<name>` when that variant has no file.
+    pub fn tile_scene(&self, names: &[String], x: i32, y: i32) -> Option<WorldAssetRoot> {
+        names.iter().find_map(|name| {
+            match tile_variant(x, y) {
+                1 => None,
+                n => self.scene(&format!("{name}_{n}")),
+            }
+            .or_else(|| self.scene(name))
+        })
     }
 
     /// True once every model has loaded or failed (a bad file logs one error).
@@ -114,6 +118,29 @@ pub fn tile_model_name(tile: TileType, wall_mask: u8) -> String {
         TileType::UpStairs => "up_stairs",
     };
     format!("tile_{name}")
+}
+
+/// The model files a map tile tries, best first. Walls take their mask from
+/// `Map::wall_glyph_at`. The town (depth 0) dresses its walls from the town
+/// kit: a wall beside a building's floor (wood floor, or the stone floor of a
+/// doorway or hovel) is `tile_house_wall_<mask>`, any other (the town wall,
+/// ruins) `tile_town_wall_<mask>`. Both fall back to the shared `tile_model_name`.
+pub fn tile_model_names(map: &Map, x: i32, y: i32) -> Vec<String> {
+    let tile = map.tiles[map.xy_idx(x, y)];
+    let wall_mask = if tile == TileType::Wall { map.wall_glyph_at(x, y).0 } else { 0 };
+    let shared = tile_model_name(tile, wall_mask);
+    if tile != TileType::Wall || map.depth != TOWN_DEPTH {
+        return vec![shared];
+    }
+    let house = (-1..=1).flat_map(|dy| (-1..=1).map(move |dx| (x + dx, y + dy))).any(|(nx, ny)| {
+        nx >= 0
+            && ny >= 0
+            && nx < map.width
+            && ny < map.height
+            && matches!(map.tiles[map.xy_idx(nx, ny)], TileType::WoodFloor | TileType::Floor)
+    });
+    let kit = if house { "house" } else { "town" };
+    vec![format!("tile_{kit}_wall_{wall_mask}"), shared]
 }
 
 /// Which of three variants (1 to 3) a cell shows, from a hash of the cell
@@ -272,6 +299,23 @@ mod tests {
         assert_eq!(tile_model_name(TileType::Floor, 0), "tile_floor");
         assert_eq!(tile_model_name(TileType::DownStairs, 0), "tile_down_stairs");
         assert_eq!(tile_model_name(TileType::Wall, 10), "tile_wall_10");
+    }
+
+    #[test]
+    fn town_walls_try_the_town_kit_first() {
+        // Row 0: a town wall on the grass. Rows 2 and 3: a house wall over wood floor.
+        let mut town = Map::new(4, 4, TOWN_DEPTH);
+        town.tiles = vec![TileType::Grass; 16];
+        for (x, y, tile) in [(0, 0, TileType::Wall), (1, 0, TileType::Wall), (1, 2, TileType::Wall), (1, 3, TileType::WoodFloor)] {
+            let idx = town.xy_idx(x, y);
+            town.tiles[idx] = tile;
+        }
+        assert_eq!(tile_model_names(&town, 1, 0), ["tile_town_wall_4", "tile_wall_4"]);
+        assert_eq!(tile_model_names(&town, 1, 2), ["tile_house_wall_0", "tile_wall_0"]);
+        assert_eq!(tile_model_names(&town, 3, 3), ["tile_grass"]);
+        let mut dungeon = town;
+        dungeon.depth = 1;
+        assert_eq!(tile_model_names(&dungeon, 1, 0), ["tile_wall_4"]);
     }
 
     #[test]

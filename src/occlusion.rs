@@ -5,7 +5,7 @@
 //! steps towards -x, -z behind it. Any wall that would hide a visible floor
 //! tile or a party member is cut down to a low stub (`walls_to_cut`).
 //!
-//! Town buildings (closed `WoodFloor` rooms) get a flat roof. A roof hides
+//! Town buildings (closed `WoodFloor` rooms) get a roof over every tile. A roof hides
 //! while a party member is inside its building or behind it; while it shows,
 //! its walls stay full height so it never floats.
 
@@ -15,6 +15,7 @@ use bevy::transform::TransformSystems;
 
 use crate::map::{Map, Position, Revealed, RevealedState, TileType};
 use crate::map_render::{TileMesh, WALL_HEIGHT};
+use crate::models::AvailableModels;
 use crate::party::PartyMember;
 
 /// How tall a cut wall stays, in world units.
@@ -129,12 +130,13 @@ fn find_buildings(map: &Map) -> Buildings {
     Buildings { of_tile, count }
 }
 
-/// Gives every non-wall building tile a roof slab when a map's tiles spawn.
+/// Gives every building tile, its walls included, a roof when a map's tiles spawn.
 fn spawn_roofs(
     mut commands: Commands,
     map: Res<Map>,
     added: Query<(Entity, &TileMesh, &Position), Added<TileMesh>>,
     mut buildings: ResMut<Buildings>,
+    models: Res<AvailableModels>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut assets: Local<Option<(Handle<Mesh>, Handle<StandardMaterial>)>>,
@@ -159,17 +161,19 @@ fn spawn_roofs(
         let Some(Some(b)) = buildings.of_tile.get(map.xy_idx(pos.x, pos.y)) else {
             continue;
         };
-        if *tile == TileType::Wall {
-            continue;
-        }
-        // A child of a floor tile, so it is despawned with the map.
-        commands.entity(entity).with_child((
-            Roof(*b),
-            Mesh3d(mesh.clone()),
-            MeshMaterial3d(material.clone()),
-            Transform::from_xyz(0.0, WALL_HEIGHT + ROOF_THICKNESS / 2.0, 0.0),
-            Visibility::Hidden,
-        ));
+        // A child of the tile, so it is despawned with the map. A wall tile's
+        // origin is half way up the wall (and squashed only while its roof hides).
+        let top = if *tile == TileType::Wall { WALL_HEIGHT / 2.0 } else { WALL_HEIGHT };
+        let mut roof = commands.spawn((Roof(*b), Visibility::Hidden, ChildOf(entity)));
+        // The `roof` model (and its variants) sits on the wall tops; the slab is the fallback.
+        match models.tile_scene(&["roof".to_string()], pos.x, pos.y) {
+            Some(scene) => roof.insert((scene, Transform::from_xyz(0.0, top, 0.0))),
+            None => roof.insert((
+                Mesh3d(mesh.clone()),
+                MeshMaterial3d(material.clone()),
+                Transform::from_xyz(0.0, top + ROOF_THICKNESS / 2.0, 0.0),
+            )),
+        };
     }
 }
 

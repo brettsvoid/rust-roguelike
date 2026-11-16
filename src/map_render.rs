@@ -9,8 +9,8 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use crate::map::{grid_to_world, Map, Position, Revealed, RevealedState, Tile, TileType, WallGlyph};
-use crate::models::{tile_model_name, AvailableModels};
+use crate::map::{grid_to_world, Map, Position, Revealed, RevealedState, Tile, TileType};
+use crate::models::{tile_model_names, AvailableModels};
 
 /// Wall height in world units (metres).
 pub const WALL_HEIGHT: f32 = 2.0;
@@ -121,15 +121,12 @@ fn spawn_map_meshes(commands: &mut Commands, map: &Map, reveal: TileReveal) {
             if tile == TileType::Wall && !map.is_adjacent_to_floor(x, y) {
                 continue;
             }
-            let mut entity = commands.spawn((
+            commands.spawn((
                 Tile,
                 TileMesh(tile),
                 Position { x, y },
                 Revealed(tile_reveal_state(map, idx, reveal)),
             ));
-            if tile == TileType::Wall {
-                entity.insert(map.wall_glyph_at(x, y));
-            }
         }
     }
 }
@@ -139,19 +136,20 @@ fn spawn_map_meshes(commands: &mut Commands, map: &Map, reveal: TileReveal) {
 pub fn attach_tile_mesh(
     add: On<Add<TileMesh>>,
     mut commands: Commands,
-    tiles: Query<(&TileMesh, &Position, Option<&WallGlyph>)>,
+    tiles: Query<(&TileMesh, &Position)>,
     models: Res<AvailableModels>,
+    map: Res<Map>,
     mut assets: ResMut<TileAssets>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let Ok((TileMesh(tile), pos, wall)) = tiles.get(add.entity) else {
+    let Ok((TileMesh(tile), pos)) = tiles.get(add.entity) else {
         return;
     };
     let (shape, color) = tile_style(*tile);
     let mut entity = commands.entity(add.entity);
     entity.insert(Transform::from_translation(grid_to_world(pos.x, pos.y) + Vec3::Y * shape.lift()));
-    if let Some(scene) = models.tile_scene(&tile_model_name(*tile, wall.map_or(0, |w| w.0)), pos.x, pos.y) {
+    if let Some(scene) = models.tile_scene(&tile_model_names(&map, pos.x, pos.y), pos.x, pos.y) {
         // A child back on the floor: the tile keeps the primitive's transform,
         // so the wall cut-away (`occlusion.rs`) squashes a model wall the same way.
         // No `Mesh3d` brings `Visibility` in here, and the scene child needs it on its parent.
