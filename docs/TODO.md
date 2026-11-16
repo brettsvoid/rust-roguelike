@@ -275,7 +275,7 @@ and adds the `model` names to `raws/spawns.json`.
 - Done when: each prop appears as its model in a harness town screenshot.
 
 ### A04 Heroes and townsfolk
-- Status: todo
+- Status: in progress
 - Needs: F08
 - Four hero classes (fighter, ranger, mage, cleric) and the townsfolk
   (barkeep, patron, priest, blacksmith, clothier, alchemist, mom, peasant).
@@ -389,7 +389,7 @@ and adds the `model` names to `raws/spawns.json`.
   both sides.
 
 ### C07 Tactical enemy AI
-- Status: todo
+- Status: in progress
 - Needs: C05, C06
 - Monsters wait in groups until alerted. Once active they score candidate
   tiles (cover, flank, distance, hit chance) and spend AP on the best move and
