@@ -64,7 +64,9 @@ pub fn item_collection_system(
 
 /// Damage scrolls roll damage through `combat::roll_damage`, ignoring armour.
 /// A single-target one also rolls to hit like a shot, with `SPELL_AIM_BONUS`;
-/// an area one hits everything in its radius. Confusion always lands.
+/// an area one hits everything in its radius. Confusion always lands. Spell
+/// abilities come through here too (`abilities`); they are not consumable, so
+/// they stay.
 pub fn item_use_system(
     mut commands: Commands,
     mut gamelog: ResMut<GameLog>,

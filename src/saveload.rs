@@ -951,6 +951,48 @@ mod tests {
     }
 
     #[test]
+    fn a_loaded_hero_gets_their_class_gear_and_abilities_back() {
+        use crate::abilities::HeroAbility;
+        use crate::components::Equipped;
+        use bevy::ecs::system::RunSystemOnce;
+
+        crate::raws::load_raws();
+        let mut save = save_with_gold();
+        save.party[1].class = Some("Mage".into());
+        let mut save = Some(save);
+        let mut world = World::new();
+        world
+            .run_system_once(
+                move |mut commands: Commands,
+                      existing: Query<
+                    Entity,
+                    Or<(With<PartyMember>, With<Monster>, With<Item>, With<Tile>, With<EntryTrigger>)>,
+                >| {
+                    let font = UiFont(Handle::default());
+                    let (mut map, mut log) = (Map::default(), GameLog::default());
+                    restore_game(&mut commands, &existing, &mut map, &mut log, &font, save.take().unwrap());
+                },
+            )
+            .unwrap();
+        let classes: Vec<(String, Option<String>)> = world
+            .query::<(&Name, Option<&HeroClass>)>()
+            .iter(&world)
+            .filter(|(n, _)| ["Aldric", "Corin"].contains(&n.name.as_str()))
+            .map(|(n, c)| (n.name.clone(), c.map(|c| c.0.clone())))
+            .collect();
+        assert!(classes.contains(&("Corin".into(), Some("Mage".into()))), "{classes:?}");
+        assert!(classes.contains(&("Aldric".into(), None)), "{classes:?}");
+        let mut equipped: Vec<String> =
+            world.query_filtered::<&Name, With<Equipped>>().iter(&world).map(|n| n.name.clone()).collect();
+        equipped.sort();
+        assert_eq!(equipped, ["Dagger"]);
+        let mut abilities: Vec<(usize, u8)> =
+            world.query::<&HeroAbility>().iter(&world).map(|a| (a.slot, a.left)).collect();
+        abilities.sort();
+        assert_eq!(abilities, [(0, 0), (1, 0)]);
+    }
+
+    #[test]
     fn a_save_from_before_gold_loads_with_an_empty_purse() {
         let mut json = serde_json::to_value(save_with_gold()).unwrap();
         json.as_object_mut().unwrap().remove("gold");

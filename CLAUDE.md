@@ -35,16 +35,18 @@ cargo run -- --screenshot out.png --depth 2 --reveal-map --cursor 720,430 \
   --console "spawn fireball" --target "Fireball Scroll"
 # --click X,Y left-clicks grid cell X,Y (repeatable; the next input waits for the
 # walk to end; a click on another hero selects them). --keys presses keys through the
-# real input: g . (pick up, take the stairs), i (inventory), t (town ledger), n (Tab:
-# select the next hero), e (end the party phase in combat), f (attack the nearest hostile in
-# reach), o (overwatch), h (hunker down),
+# real input: g . (pick up, take the stairs), i (inventory), r (remove equipment), t (town
+# ledger), n (Tab: select the next hero), space (wait), e (end the party phase in combat),
+# f (attack the nearest hostile in reach), o (overwatch), h (hunker down), 1 and 2 (the
+# active hero's abilities),
 # w a s d (pan: each holds the key for 10 frames, about 2.3 tiles), c (recentre),
 # + and - (one wheel notch to zoom). The camera eases (about a second to settle), and the
 # capture is taken at the fixed frame --frames, so a short --frames shows it mid-glide.
 # --every N also saves every Nth frame before the last as out-FFFF.png beside out.png, a frame
 # sequence for checking motion (glides, lunges, floaters, falls, the camera).
 # Input is fed only while the game waits for it and nothing plays (`Presentation::busy`), a shop is
-# open or the inventory is open (a to j use that line). They run in the order given,
+# open, the inventory is open (a to j use that line) or the targeting screen is up (a --click
+# there confirms the target on that cell). They run in the order given,
 # e.g. walk five tiles east so explored-but-unseen tiles show:
 cargo run -- --screenshot fog.png --seed 42 --depth 2 --click 45,20 --frames 120
 # Select the third hero (Tab twice) and walk them; at seed 42 depth 2 the party
@@ -55,23 +57,46 @@ cargo run -- --screenshot tab.png --seed 42 --depth 2 --keys nn --click 43,25 --
 cargo run -- --screenshot fx.png --depth 2 --console "effect missile" --frames 12
 # Walk south-west until two goblins see the party (combat, round 1, Aldric on (36,24)).
 # Aldric moves (1 AP, 1 left), Tab, Brenna dashes (2 AP), E ends the phase: the goblins
-# close in (one moves four tiles over two moves). Tab twice back to Aldric, who attacks
-# the goblin beside him, which ends his turn:
+# close in (one moves four tiles over two moves; "Hobgoblin #0 attacks Brenna: miss (55%)").
+# Tab twice back to Aldric, who attacks the goblin beside him, which ends his turn
+# ("Aldric attacks Goblin #0: hit for 7 (65%)"):
 cargo run -- --screenshot combat.png --depth 2 --reveal-map --console godmode \
   --click 30,28 --click 34,27 --keys n --click 35,28 --keys enn --click 33,28 --frames 300
 # --press X,Y left-clicks a point of the 1600x1000 capture through the HUD's own click
 # handling (queued with the other inputs; each press waits a frame for the HUD layout).
-# In the party phase the action buttons sit on y=944 at x=548 Attack, 620 Overwatch,
-# 692 Hunker, 764 Use Item, 836 Wait, 908 End Turn; exploring, Use Item and Wait sit at
-# 692 and 764; the party cards are at x=150, y=889 + 30 per slot. Wait starts combat with
-# a goblin placed four tiles east, End Turn shows the "Round 2" banner, the second card
-# selects Brenna and Attack hits the goblin beside her:
+# In the party phase the action buttons sit on y=944 at x=406 Attack, 498 and 590 the two
+# abilities, 682 Overwatch, 774 Hunker, 866 Use Item, 958 Wait, 1050 End Turn; exploring,
+# the abilities, Use Item and Wait sit at 590, 682, 774 and 866 (every class has two
+# abilities, so the bar is the same for every hero); the party cards are at x=150,
+# y=889 + 30 per slot. Wait starts combat with a goblin placed four tiles east, End Turn
+# shows the "Round 2" banner, the second card selects Brenna and Attack shoots the goblin
+# beside her ("Brenna shoots Goblin: critical hit for 8 (75%, flanked)"):
 cargo run -- --screenshot hud.png --depth 2 --reveal-map --console godmode --console "place 4 0 Goblin" \
-  --console "place 3 0 Table" --press 764,944 --press 908,944 --press 150,919 --press 548,944 --frames 160
+  --console "place 3 0 Table" --press 866,944 --press 1050,944 --press 150,919 --press 406,944 --frames 160
+# Abilities (see `abilities.rs`). Space (wait) starts combat with goblins placed beside
+# Aldric; 1 is his Cleave, which attacks both ("Aldric cleaves.", "Aldric attacks Goblin:
+# miss (65%)", "Aldric attacks Goblin: critical hit for 11 (65%, flanked)"). After E and Tab
+# round to him in round 2, its button reads "Cooldown 2" and 1 logs "Cleave: Cooldown.":
+cargo run -- --screenshot cooldown.png --depth 2 --reveal-map --console godmode \
+  --console "place 1 -1 Goblin" --console "place -1 -1 Goblin" --keys ' 1ennn1' --frames 200
+# A targeted ability opens the targeting screen and --click confirms the cell. Brenna's
+# Aimed Shot at seven tiles ("Brenna takes an aimed shot.", "Brenna shoots Goblin: miss
+# (75%, flanked)": +20 aim; add --cursor 1005,612 and drop the click to see the 75% preview):
+cargo run -- --screenshot aimed.png --depth 2 --reveal-map --console godmode \
+  --console "place 8 0 Goblin" --keys ' n1' --click 48,21 --frames 150
+# Corin's Fireball between two goblins ("Corin casts Fireball.", "Fireball hits Goblin for
+# 15 hp.", "... for 10 hp."); --frames 40 catches the blast:
+cargo run -- --screenshot fireball.png --depth 2 --reveal-map --console godmode \
+  --console "place 4 -1 Goblin" --console "place 4 1 Goblin" --keys ' nn1' --click 44,21 --frames 40
+# "hurt N" takes N hit points off the active hero. Dagny heals Aldric in combat ("Dagny uses
+# Heal on Aldric, healing 10 hp.": his card goes from 20/34 to 30/34). Exploring, heals work
+# too: drop the goblin and the space:
+cargo run -- --screenshot heal.png --depth 2 --reveal-map --console godmode --console "hurt 15" \
+  --console "place 6 0 Goblin" --keys ' nnn1' --click 40,21 --frames 150
 # The harness prints the whole game log as "log>" lines when it captures. Keys also reach the
-# inventory: `.gia.` picks up a spawned bow and equips it (the leading and trailing `.` pad the
-# frame where the item spawns and the one where the inventory closes). Aldric shoots the goblin
-# two tiles away in round 2 ("hit for 8 (65%)" at seed 42):
+# inventory: `.gia.` picks up a spawned bow and equips it in place of Aldric's Longsword (the
+# leading and trailing `.` pad the frame where the item spawns and the one where the inventory
+# closes). Aldric shoots ("Aldric shoots Hobgoblin #0: miss (65%)" at seed 42):
 cargo run -- --screenshot bow.png --depth 2 --reveal-map --console godmode --console "spawn bow" \
   --keys .gia. --click 30,28 --click 35,26 --click 33,30 --keys ennn --click 33,28 --frames 240
 # --shop VENDOR clicks that vendor (blacksmith, alchemist, clothier, barkeep, priest,
@@ -95,8 +120,9 @@ cargo run -- --screenshot loop.png --reveal-map --console "spawn dagger" \
   --keys iat --frames 900
 # "place DX DY NAME" spawns any raws entry (prop, monster or item, exact name) at an offset
 # from the active hero (at the start, Aldric on 40,21 at depth 2). Stage cover: tables east of
-# Aldric, a goblin closes in and attacks ("Goblin attacks Aldric: miss (45%, half cover)"),
-# Aldric hits it from beside its table ("(45%, half cover)") and Brenna flanks it ("(65%, flanked)"):
+# Aldric, a goblin closes in and attacks ("Goblin attacks Aldric: miss (40%, half cover)"),
+# Aldric hits it from beside its table ("hit for 7 (45%, half cover)") and Brenna flanks it
+# ("Brenna shoots Goblin: critical hit for 8 (75%, flanked)"):
 cargo run -- --screenshot cover.png --depth 2 --reveal-map --console godmode \
   --console "place 5 0 Goblin" --console "place 1 0 Table" --console "place 1 -1 Table" \
   --console "place 1 1 Table" --click 40,20 --keys e --click 41,21 --keys n --click 40,21 --click 41,21 --frames 120
@@ -105,12 +131,12 @@ cargo run -- --screenshot cover.png --depth 2 --reveal-map --console godmode \
 cargo run -- --screenshot ow.png --depth 2 --reveal-map --console godmode --console "spawn bow" \
   --console "place 6 0 Goblin" --keys .gia.oe --frames 120
 # A goblin hemmed in behind three others goes on overwatch ("Goblin goes on overwatch.") and
-# reacts when Aldric walks up beside it ("Overwatch! Goblin attacks Aldric: miss (45%)"):
+# reacts when Aldric walks up beside it ("Overwatch! Goblin attacks Aldric: hit for 1 (40%)"):
 cargo run -- --screenshot ow_monster.png --depth 2 --reveal-map --console godmode \
   --console "place 7 0 Goblin" --console "place 6 -1 Goblin" --console "place 6 0 Goblin" \
   --console "place 6 1 Goblin" --keys ee --click 46,20 --frames 260
 # Hunker down: in the cover staging Aldric hunkers (h) and the goblin's attack shows the
-# doubled cover ("Goblin attacks Aldric: miss (25%, half cover, hunkered)"):
+# doubled cover ("Goblin attacks Aldric: miss (20%, half cover, hunkered)"):
 cargo run -- --screenshot hunker.png --depth 2 --reveal-map --console godmode \
   --console "place 5 0 Goblin" --console "place 1 0 Table" --console "place 1 -1 Table" \
   --console "place 1 1 Table" --click 40,20 --keys he --frames 90
@@ -148,12 +174,14 @@ for that overhaul. Key points:
   pinch zooms, C recentres. G picks up, I inventory, X drops
   (D pans), R removes equipment, `.` takes the stairs, Space waits (in combat it ends that hero's
   turn), O puts the active hero on overwatch and H hunkers them down (combat only; each ends
-  that hero's turn), E ends the party phase in combat, T opens the ledger in town, Q saves and quits
+  that hero's turn), 1 and 2 use the active hero's abilities (a targeted one opens the
+  targeting screen), E ends the party phase in combat, T opens the ledger in town, Q saves and quits
 - **Mechanics**: Hunger/survival, items/equipment
 
 The Architecture section below describes the code as it is now. The current
 build is mid-conversion: the map and entities are grey-box 3D primitives on
-an isometric camera, with a party of four heroes. Exploring, the active hero
+an isometric camera, with a party of four heroes, one of each class (fighter, ranger, mage,
+cleric). Exploring, the active hero
 leads and the others follow; on contact the game drops into combat rounds where
 every unit spends 2 action points a round and attacks roll to hit, less the target's cover.
 
@@ -169,7 +197,7 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
   (explore or combat) and `advance`, the pure transition between them (see Game State)
 - **ResourcesPlugin** (`resources.rs`) - Loads shared resources like fonts
 - **PartyPlugin** (`party.rs`) - The party: `PartyMember { slot }` on every hero, the `ActiveUnit`
-  resource (the hero the input drives), `HEROES` (names and colours), and the pure rules
+  resource (the hero the input drives), `HEROES` (names, colours and raws class), and the pure rules
   `spawn_tiles`, `next_unit` (Tab, skipping the dead and, in combat, those out of AP) and
   `follow` (where followers step when the leader moves in explore)
 - **PlayerPlugin** (`player.rs`) - Input for the active hero: keys, Tab and a click on a hero to
@@ -189,8 +217,10 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
   one AP reaches, attack when a hero is in reach of its weapon, which ends its turn). Monsters
   have no weapons yet, so in practice they attack from beside a hero
 - **GuiPlugin** (`gui.rs`) - Main menu and builder-select menu (other UI lives in `ui/`)
-- **HudPlugin** (`ui/hud.rs`) - The bottom bar: party cards (portrait, health, AP pips, status
-  badges; a click selects the hero as Tab does), the action bar, depth/gold/mode and the log.
+- **HudPlugin** (`ui/hud.rs`) - The bottom bar: party cards (portrait, name, class, health, AP
+  pips, status badges; a click selects the hero as Tab does), the action bar (with a button per
+  ability of the active hero, named after it, its caption the hotkey or why it is refused,
+  "Cooldown 2" while resting), depth/gold/mode and the log.
   A button writes the key it stands for to the `ActionRequest` resource and
   `player::handle_player_input` takes it after the real key presses, so a button and its
   hotkey share one code path. The rules (which buttons, why one is disabled, the shot
@@ -220,6 +250,26 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
   left to glide). In combat the map input waits while `Presentation::busy`, and any key or
   click finishes the playing beats. Every speed and duration is a named constant at the top of
   the file; the path, glide, ordering and floater rules are pure and unit tested
+- **AbilitiesPlugin** (`abilities.rs`) - Classes and abilities. Raws `classes` (starting stats,
+  `gear`, `abilities` by name) and `abilities` (`cooldown` and an `effect`: `"cleave"`,
+  `{"aimed_shot": {"aim_bonus": N}}` or `{"spell": {...}}` with an item's consumable effect
+  keys, plus `"targeting": "ally"` for a heal on a hero). `raws::spawn_class_kit` gives a
+  hero `HeroClass`, the gear (first item per slot equipped, the rest in the backpack) and one
+  child entity per ability with `HeroAbility` (slot, effect, cooldown, rounds `left`); a
+  spell's entity also carries the scroll components, so it is cast as a `WantsToUseItem`
+  naming it, through the targeting screen and `inventory::item_use_system`, never used up.
+  `ability_system` (in the `PartyAction` chain before the item system) starts the cooldown,
+  records the AP rule in `HeroAction` and resolves Cleave and Aimed Shot through
+  `Strikes::strike`. One limit for all: the cooldown, in rounds, ticked down by
+  `tick_cooldowns` at the start of the heroes' turn (after each enemy phase; exploring, each
+  turn); used in round 1 with cooldown 3, ready in round 4. AP: an ability aimed at a hostile
+  ends the turn like an attack (and is combat only); one on the party (Heal, Second Wind)
+  costs 1 AP like an item and works exploring. Pure rules: `HeroAbility::target` (adjacent,
+  own, weapon reach, hostile, ally, tile with radius), `HeroAbility::action`, `refusal`
+  ("Combat only", "Cooldown", "No AP", "No target"), `has_target`, `cleave_targets`, `healed`.
+  `update_active_abilities` writes `ActiveAbilities` (the active hero's abilities this frame)
+  for the action bar and the 1 and 2 keys, so both decide alike. Aiming an Aimed Shot, the
+  tooltip's shot preview adds the bonus
 
 Non-plugin modules worth knowing:
 
@@ -271,7 +321,9 @@ Non-plugin modules worth knowing:
   optimal_range (default range) }`; `slot` "ranged" (the Shortbow: range 8, optimal 5) takes
   the weapon hand like "melee". Damage scrolls roll `spell_damage` (a quarter either side of
   their `damage`) and ignore armour; Magic Missile rolls to hit with aim +25 (`SPELL_AIM_BONUS`) less cover,
-  area scrolls hit everything in the radius, Confusion always lands
+  area scrolls hit everything in the radius (heroes too), Confusion always lands. A healing
+  item heals its user, or the unit on its target tile when aimed (Heal). The log names the
+  caster ("Corin casts Fireball.", "Brenna uses Snare on Goblin, confusing them for 2 turns.")
 - `overwatch.rs` - Overwatch and hunker down. `Overwatch` and `Hunkered` are components put on
   by the O and H keys (or the monster AI) and removed at the start of the unit's next turn
   (`combat::start_of_turn`). The pure rule `reactions(watchers, mover_party, path, sight)`:
@@ -308,7 +360,7 @@ Two pieces of state, both in `game_flow.rs`:
 - `PartyAction` - Resolving the active hero's action (move, attack, item, wait, end turn)
 - `EnemyTurn` - The monsters act (hunger ticks here too). It opens with `start_of_turn` for the
   monsters and ends with it for the heroes (the start of their next turn): `Poison` deals its
-  damage and `Confusion` counts down
+  damage and `Confusion` counts down; ability cooldowns tick down there too
 - `ShowInventory` / `ShowDropItem` / `ShowRemoveItem` / `ShowTargeting` / `ShowLedger` / `ShowShop` - UI
   overlays; they return to `AwaitingInput` and leave `Mode` alone
 - `NextLevel`, `MagicMapReveal`, `GameOver`, and the visualiser's `MapBuilderSelect` / `MapGeneration`
@@ -324,7 +376,8 @@ of mode or phase goes through `advance(mode, step, situation)`, a pure function 
 - Combat party phase: each hero has `AP_PER_ROUND` action points, spent in any order across
   heroes (`Mode::ap_left`, `Mode::can_act`). The map input records the `Action` it took in the
   `HeroAction` resource and `Step::PartyActed(hero, action)` spends it; the inventory and
-  targeting screens leave it unset, which counts as an item (1 AP). A hero with AP left stays
+  targeting screens leave it unset, which counts as an item (1 AP), unless an ability is used
+  (`abilities::ability_system` sets its own rule). A hero with AP left stays
   active; one out of AP hands over to the next hero who can act. The phase ends when no living
   hero has AP left or on E, then `EnemyTurn` is the enemy phase
 - Status effects under AP: poison bites at the start of the unit's turn (Giant Spider melee hits
@@ -425,8 +478,11 @@ of the same logic. The build should stay at zero warnings.
 - Saves on quit (Q key), loads on Continue from main menu
 - The save holds the whole party (`SaveData::party`, in slot order), the active hero's slot, and
   each backpack item's owner by slot, and the `Delve` (deepest depth, levels since town)
-- Not saved yet (P01): `Poison` on a unit, a mob's poison bite (`PoisonsOnHit`), and
-  `Overwatch` and `Hunkered`
+- Each hero's class is saved (`SerializedMember::class`, missing in older saves). On load a
+  hero with a class gets the class's starting gear equipped afresh and their abilities ready
+- Not saved yet (P01): `Poison` on a unit, a mob's poison bite (`PoisonsOnHit`),
+  `Overwatch` and `Hunkered`, equipment (equipped items are left out of the save; a hero
+  without a class, from an older save, loses it) and ability cooldowns
 - Permadeath: save file deleted on load and when the last hero dies. A fallen hero leaves play
   and drops what they carried; the selection moves to the next living hero
 - WASM: save/load disabled (no filesystem access)

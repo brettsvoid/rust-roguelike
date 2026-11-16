@@ -10,18 +10,21 @@
 //! "spawn fireball" --target "Fireball Scroll"`). `--keys`, `--click`, `--press` and `--shop` queue
 //! input in the order given, fed through the real input systems one at a time
 //! while the game waits for input: `--keys` presses keys (`g`, `.`, `i` for the
-//! inventory, `t` for the town ledger, `n` for Tab to select the next hero, `e`
-//! to end the party phase in combat, `o` overwatch and `h` hunker down, `w` `a` `s` `d` to pan, each held for
+//! inventory, `r` to remove equipment, `t` for the town ledger, `n` for Tab to select the next hero,
+//! space to wait, `e` to end the party phase in combat, `o` overwatch and `h` hunker down,
+//! `1` and `2` the active hero's abilities, `w` `a` `s` `d` to pan, each held for
 //! `PAN_HOLD_FRAMES` before the next input, `c` to recentre, `+` and `-` scroll the
 //! wheel a notch to zoom in and out; the camera eases, so a capture taken soon
 //! after shows it mid-motion); `--click X,Y` left-clicks grid cell X,Y as if the mouse hovered it (a click on another
-//! hero selects them), and the next input waits until the walk it starts ends;
+//! hero selects them; in the targeting screen it picks that cell as the target), and the next
+//! input waits until the walk it starts ends;
 //! `--press X,Y` left-clicks capture point X,Y (pixels of the 1600x1000
 //! image) through the HUD's own click handling, e.g. a party card or an action
 //! button. In the party phase with the default HUD the buttons sit on
-//! y = 944 at x = 548 (Attack), 620 (Overwatch), 692 (Hunker), 764 (Use Item),
-//! 836 (Wait) and 908 (End Turn); exploring, Use Item and Wait sit at 692 and
-//! 764; the party cards are at x = 150, y = 889 + 30 per slot;
+//! y = 944 at x = 406 (Attack), 498 and 590 (the abilities), 682 (Overwatch),
+//! 774 (Hunker), 866 (Use Item), 958 (Wait) and 1050 (End Turn); exploring, the
+//! abilities, Use Item and Wait sit at 590, 682, 774 and 866; the party cards are
+//! at x = 150, y = 889 + 30 per slot;
 //! `--shop VENDOR` clicks that vendor (e.g. `blacksmith`), so the active hero
 //! walks beside them and their shop opens (the vendor's tile must be explored,
 //! so pair it with `--reveal-map`). Inputs are also fed while a shop is open:
