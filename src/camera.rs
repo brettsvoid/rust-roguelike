@@ -110,8 +110,12 @@ fn spawn_cameras(mut commands: Commands) {
         iso_camera_transform(Vec3::ZERO),
         // GPU-driven drawing orders instances differently each run, so pixels
         // where neighbouring tiles tie on depth flicker between screenshots.
-        // CPU-built draws keep screenshots byte-identical. Revisit in F10.
+        // CPU-built draws keep screenshots byte-identical, and GPU-driven ones
+        // were no faster here (F10, tools/frametime.py).
         NoIndirectDrawing,
+        // Two samples look the same as the default four on a Retina screen and
+        // cost about 1 ms a frame less there (tools/frametime.py).
+        Msaa::Sample2,
     ));
     commands.spawn((
         Camera2d,
@@ -124,6 +128,9 @@ fn spawn_cameras(mut commands: Commands) {
             ..default()
         },
         IsDefaultUiCamera,
+        // It draws only flat UI and glyphs, where multisampling changed nothing to
+        // the eye and cost about 0.3 ms a frame on a Retina screen.
+        Msaa::Off,
     ));
 }
 

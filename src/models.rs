@@ -9,6 +9,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use bevy::asset::io::file::FileAssetReader;
+use bevy::light::NotShadowCaster;
 use bevy::prelude::*;
 use bevy::world_serialization::WorldInstanceReady;
 
@@ -211,7 +212,7 @@ struct DimmedMaterials(HashMap<AssetId<StandardMaterial>, Handle<StandardMateria
 fn model_ready(
     ready: On<WorldInstanceReady>,
     mut commands: Commands,
-    tiles: Query<&Revealed, With<TileMesh>>,
+    tiles: Query<(&Revealed, &TileMesh)>,
     parents: Query<&ChildOf>,
     children: Query<&Children>,
     mut meshes: Query<&mut MeshMaterial3d<StandardMaterial>>,
@@ -219,7 +220,7 @@ fn model_ready(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     // A tile model's scene is a child of the tile (see `attach_tile_mesh`).
-    let Ok(revealed) = parents.get(ready.entity).and_then(|c| tiles.get(c.parent())) else {
+    let Ok((revealed, TileMesh(tile))) = parents.get(ready.entity).and_then(|c| tiles.get(c.parent())) else {
         return;
     };
     for entity in children.iter_descendants(ready.entity) {
@@ -242,6 +243,9 @@ fn model_ready(
             material.0 = explored.clone();
         }
         commands.entity(entity).insert(ModelFog { visible, explored });
+        if !crate::map_render::casts_shadow(*tile) {
+            commands.entity(entity).insert(NotShadowCaster);
+        }
     }
 }
 

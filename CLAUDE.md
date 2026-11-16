@@ -28,6 +28,10 @@ tools/scenes.py combat cover     # only these ("abil*" matches a prefix); --list
 # the process right after saving: tearing the renderer down could wait on the GPU for minutes.
 # Defaults: --seed 42 --depth 0 --frames 60, fog on unless --reveal-map.
 cargo run -- --screenshot out.png --seed 42 --depth 2 --reveal-map --frames 60
+
+# Frame times of a release build on fixed scenes (see Performance below).
+cargo build --release --no-default-features
+tools/frametime.py
 ```
 
 Desktop only: there is no web build. F09 built `wasm32-unknown-unknown` once (Bevy 0.20.1) and
@@ -670,7 +674,9 @@ of the same logic. The build should stay at zero warnings.
   The harness also compiles shaders synchronously, so frame N is the same picture on any machine
 - `FRAME_TIME_LOG=1 cargo run --release` turns vsync off and logs frame times, for performance checks
 - Only the `MAX_SHADOW_LIGHTS` point lights nearest the active hero cast shadows (cube maps are six
-  passes each); the rest light through walls within their radius
+  passes each); the rest light through walls within their radius. Each one costs about 2 ms a
+  frame (see Performance); fewer than 4 lets the other hero torches light rooms through walls
+- Ground tiles (`map_render::casts_shadow`: floors, grass, road, water) cast no shadows
 - `apply_environment` switches on `Map::depth`: depth 0 (the town) gets a low warm directional sun
   with shadows and brighter ambient; dungeons get near-black ambient. Both get HDR, bloom,
   the default TonyMcMapface tonemapping and linear distance fog that darkens the far side of view
@@ -690,6 +696,36 @@ of the same logic. The build should stay at zero warnings.
 - Pieces share one unlit additive material per effect, whose alpha fades it; colours above 1
   bloom. Effects age on `Time` (fixed per frame in the harness) and despawn at the end of life
 - Effects have no `Position`, so they show through the fog of war like their light
+
+### Performance
+
+- Measure with `tools/frametime.py` on a release build (`--no-default-features`, so Bevy is
+  linked statically as a player gets it). It runs fixed harness scenes (the deepest level
+  explored with the party and 20 monsters, the same zoomed out, the same with the fog off, the
+  town, a combat with enemy turns and spells), 3 runs each, and prints the median and 95th
+  percentile frame time, the GPU wait and the CPU seconds. Compare binaries with `--bin a --bin b`
+  (runs interleave). It renders at Retina size (3200x2000, `HARNESS_SCALE=2`) unless `--scale 1`
+- Under `FRAME_TIME_LOG=1` the harness logs the frame times past a 120-frame warm-up. The
+  harness always holds the GPU to `FRAMES_IN_FLIGHT` (2) frames behind, as a window's swap
+  chain does. Before that, with no window to present to, a run queued frames without limit and
+  two runs at once took 4 times as long as one (now 1.7 times)
+- The machine is shared: the script waits for, and reruns past, any other harness game, and
+  notes the load. Chrome alone keeps the GPU about 27% busy. Run-to-run spread on a quiet
+  machine is about 0.3 ms
+- F10 numbers (M1, release, ms median / p95, before and after F10's levers):
+  Retina size: dungeon 15.1/18.9 to 14.0/17.9, zoomed out 14.3/18.5 to 13.2/17.5, fog off
+  19.1/24.3 to 18.0/23.3, town 15.9/20.0 to 14.8/18.9, combat 19.5/24.6 to 17.1/21.6.
+  1600x1000: dungeon 10.0/13.5 to 9.8/13.3, fog off 11.5/14.9 to 11.1/14.6, town 11.0/15.5 to 10.4/14.9, combat
+  11.6/15.3 to 11.0/14.3. So 60 fps holds at 1600x1000; at Retina size the median does but
+  the slowest 5% of frames do not
+- What the time goes on: the 4 shadow-casting torches, about 2 ms each at Retina size (24 cube
+  faces to draw; with none the dungeon takes 9.8 ms). The render thread's command encoding and
+  submission is the busiest CPU path; the GPU limits more as the pixels grow (multisampling
+  off would save about 1 ms more than 2 samples at Retina size, with jagged edges). Shadow map size (512) and GPU-driven drawing changed
+  nothing measurable
+- Kept: ground tiles cast no shadows; the 3D camera samples 2 times, not 4; the UI camera does
+  not multisample. Tried and dropped: fewer shadow-casting lights (the other torches light
+  rooms through walls), CPU light clustering (did not make captures repeat)
 
 ### Key Resources
 

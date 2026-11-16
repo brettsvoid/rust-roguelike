@@ -7,6 +7,7 @@
 
 use std::collections::HashMap;
 
+use bevy::light::NotShadowCaster;
 use bevy::prelude::*;
 
 use crate::map::{grid_to_world, Map, Position, Revealed, RevealedState, Tile, TileType};
@@ -183,7 +184,22 @@ pub fn attach_tile_mesh(
         })
         .visible
         .clone();
-    commands.entity(add.entity).insert((Mesh3d(mesh), MeshMaterial3d(material)));
+    let mut entity = commands.entity(add.entity);
+    entity.insert((Mesh3d(mesh), MeshMaterial3d(material)));
+    if !casts_shadow(*tile) {
+        entity.insert(NotShadowCaster);
+    }
+}
+
+/// Whether a tile casts shadows. Ground is flat with nothing beneath to
+/// shade, and leaving it out saves drawing every ground tile again into each
+/// face of every shadow-casting light (up to about 1 ms a frame in
+/// `tools/frametime.py`).
+pub fn casts_shadow(tile: TileType) -> bool {
+    !matches!(
+        tile,
+        TileType::Floor | TileType::WoodFloor | TileType::Road | TileType::Grass | TileType::ShallowWater | TileType::DeepWater
+    )
 }
 
 /// How freshly spawned tiles start out visibility-wise.
