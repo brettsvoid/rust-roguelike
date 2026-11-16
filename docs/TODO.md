@@ -384,7 +384,7 @@ and adds the `model` names to `raws/spawns.json`.
   seek cover and melee monsters close in.
 
 ### C08 Combat HUD
-- Status: todo
+- Status: in progress
 - Needs: C03
 - Party bar with portrait, health and AP pips. Action bar with hotkeys. Shot
   preview showing hit and crit chance and damage. Health bars over units in
