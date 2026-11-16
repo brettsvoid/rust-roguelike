@@ -473,6 +473,41 @@
         "You descend to level 1",
         "You carry the Heart of the Abyss out into daylight."
       ]
+    },
+    {
+      "name": "anim_walk",
+      "note": "A09: the party walks five tiles east, zoomed in; every 3rd frame saved for the walk cycle.",
+      "args": "--seed 42 --depth 2 --keys \"+++++++++\" --click 45,20 --every 3 --frames 90"
+    },
+    {
+      "name": "anim_melee",
+      "note": "A09: Aldric swings at a goblin north-east of him, then the goblin strikes back; every 2nd frame saved.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 1 -1 Goblin\" --keys \"+++++++++ \" --click 41,20 --keys e --every 2 --frames 200",
+      "expect": [
+        "Aldric attacks Goblin"
+      ]
+    },
+    {
+      "name": "anim_ranged",
+      "note": "A09: Brenna draws and shoots a goblin eight tiles east; every 2nd frame saved.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 8 0 Goblin\" --keys \"+++++++++ n\" --click 48,21 --every 2 --frames 120",
+      "expect": [
+        "Brenna shoots Goblin"
+      ]
+    },
+    {
+      "name": "anim_cast",
+      "note": "A09: Corin raises his staff to cast Fireball between a kobold and a rat, which fall limp; every 3rd frame saved.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 4 -1 Kobold\" --console \"place 4 1 Rat\" --keys \"+++++++++ nn1\" --click 44,21 --every 3 --frames 200",
+      "expect": [
+        "Corin casts Fireball.",
+        "is dead"
+      ]
+    },
+    {
+      "name": "anim_idle",
+      "note": "A09: the unusual bodies idling (wraith, rat, imp, hellhound, demon lord, bat, spider); every 8th frame saved.",
+      "args": "--seed 42 --depth 2 --console godmode --console \"place -1 -2 Wraith\" --console \"place 1 -2 Rat\" --console \"place 3 -2 Imp\" --console \"place 5 -2 Hellhound\" --console \"place -1 -4 Demon Lord\" --console \"place 1 -4 Giant Bat\" --console \"place 3 -4 Giant Spider\" --keys \"+++++++++\" --every 8 --frames 180"
     }
   ]
 }

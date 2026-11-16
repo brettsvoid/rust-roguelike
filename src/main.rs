@@ -8,6 +8,7 @@ use bevy::prelude::*;
 use map::{GRID_PX, MAP_WIDTH};
 
 mod abilities;
+mod animation;
 mod bystander;
 mod camera;
 mod combat;

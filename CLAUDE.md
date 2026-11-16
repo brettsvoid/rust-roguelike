@@ -209,8 +209,9 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
 - **PresentationPlugin** (`presentation.rs`) - How the rules' results play out. The rules stay
   instant (`Position` changes at once); where things happen, typed `Beat`s are pushed onto the
   `Presentation` queue: `Move` (heroes in `player.rs`, every combat move and monster step in
-  `overwatch::walk_under_watch`, cut at each reaction shot), `Lunge` / `Projectile`, `Floater`
-  and `Flinch` (`combat::Strikes::strike`), `Death` (`presentation::fall` from
+  `overwatch::walk_under_watch`, cut at each reaction shot), `Lunge` / `Projectile` (the shooter
+  draws for `DRAW_SECS`, then the bolt flies), `Floater` and `Flinch` (`combat::Strikes::strike`),
+  `Cast` (`inventory::item_use_system`, any item or spell used; holds nothing), `Death` (`presentation::fall` from
   `combat::delete_the_dead`: the unit is despawned at once and a stand-in body inherits its queued
   beats, falls and fades), `CameraFocus` and `Wait` (`monsters::monster_ai`, round each monster
   that acts in combat). `play_beats` alone sets creature (`EntityShape::Creature`) transforms; a
@@ -221,7 +222,17 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
   continuous glide (the walk takes its next step once the leader has `WALK_LEAD` tiles or less
   left to glide). In combat the map input waits while `Presentation::busy`, and any key or
   click finishes the playing beats. Every speed and duration is a named constant at the top of
-  the file; the path, glide, ordering and floater rules are pure and unit tested
+  the file; the path, glide, ordering and floater rules are pure and unit tested.
+  Body animation (`animation.rs`, registered by this plugin, A09) is procedural: `rig_model`
+  finds each creature model's parts by node name once (`Part::named`), picks a body plan from
+  them (`Plan`: biped, floater (wraith), quadruped (rat, hellhound), bat, spider) and puts a
+  `Rig` on the model scene; `animate` (after `play_beats` and `turn_models`) sets each part's
+  local transform to its rest pose plus `pose(plan, part, motion)` for the beat the unit plays
+  (`Presentation::playing`: walk in step with the tiles glided, the blow landing half way
+  through a lunge, a draw and release, a cast, a recoil, limp limbs in death), plus an idle
+  layer (breathing, sway) that eases in when no beat plays, plus wings and hovering that never
+  stop. Every motion is at rest at both ends, so motions hand over without a snap. All amounts
+  are constants at the top of `animation.rs`; a rig hidden by fog is not posed
 - **AbilitiesPlugin** (`abilities.rs`) - Classes and abilities. Raws `classes` (starting stats,
   `gear`, `abilities` by name) and `abilities` (`cooldown` and an `effect`: `"cleave"`,
   `{"aimed_shot": {"aim_bonus": N}}` or `{"spell": {...}}` with an item's consumable effect
@@ -476,10 +487,12 @@ scans the folder once at startup, so restart after adding a file).
   cloak, robe and hat, tabard and mantle) is baked in the HUD colour of the default party's
   hero of that class (`party::HEROES`); change both together. Townsfolk (raws `model` on each
   mob): `barkeep`, `patron`, `priest`, `blacksmith`, `clothier`, `alchemist`, `mom`, `peasant`,
-  `enchanter`. Built for a rig later (A09): each model is separate objects
+  `enchanter`. Rigged for animation (A09, `animation.rs`): each model is separate objects
   `<model>_head`, `_torso`, `_arm_l`, `_arm_r`, `_leg_l`, `_leg_r` and a held item (`_sword`,
   `_bow`, ...), each with its origin at its joint (neck, hips, shoulder, hip joint, grip), and the
-  export keeps them as separate glTF nodes. About 1.55 m to the crown, hats to 2 m, 360 to 560
+  export keeps them as separate glTF nodes. `Figure.finish` nests them: a held item under its arm,
+  the head, arms, wings and tail under the torso (a beast's body); torso and legs at the top, so
+  the feet stay planted when the torso leans. Keep part names when adding a model. About 1.55 m to the crown, hats to 2 m, 360 to 560
   triangles. Colour is mostly one white `dye` material tinted by the vertex colour (`"dye.red"`
   in the script is the `dye` material with `DYES["red"]`); `humanoid` and the hat and item
   helpers are there for the monsters (A05)

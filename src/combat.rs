@@ -259,7 +259,7 @@ impl Strikes<'_, '_> {
         };
         let ranged = weapon.range > 1;
         self.presentation.push(if ranged {
-            Beat::Projectile { from, to }
+            Beat::Projectile { unit: attacker.entity, from, to }
         } else {
             Beat::Lunge { unit: attacker.entity, from, to }
         });

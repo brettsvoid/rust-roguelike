@@ -57,7 +57,7 @@ class Beast(Figure):
     """A `Figure` with no parts yet, for bodies that are not humanoid."""
 
     def __init__(self, name, scale=1.0):
-        self.name, self.scale, self.parts = name, scale, {}
+        self.name, self.scale, self.parts, self.held = name, scale, {}, {}
 
 
 # --- shape helpers -------------------------------------------------------------

@@ -24,6 +24,7 @@ use bevy::prelude::*;
 use bevy::transform::TransformSystems;
 use bevy::ui::UiSystems;
 
+use crate::animation;
 use crate::combat::Outcome;
 use crate::effects::{EffectKind, Effects};
 use crate::entity_render::{EntityShape, ModelScene};
@@ -45,10 +46,14 @@ pub const HOP_HEIGHT: f32 = 0.06;
 /// than this many tiles left to glide, so steps chain with no stop.
 pub const WALK_LEAD: f32 = 1.5;
 /// A melee lunge out and back; the blow lands half way.
-pub const LUNGE_SECS: f32 = 0.2;
+pub const LUNGE_SECS: f32 = 0.3;
 pub const LUNGE_REACH: f32 = 0.35;
 /// The missile bolt's lead piece lands at 1/1.3 of its 0.45 s life (`effects.rs`).
 pub const PROJECTILE_SECS: f32 = 0.35;
+/// A shot opens with the shooter drawing; the bolt flies once it is drawn.
+pub const DRAW_SECS: f32 = 0.18;
+/// A spell cast or an item used: the hand goes up and down again.
+pub const CAST_SECS: f32 = 0.5;
 pub const FLOATER_SECS: f32 = 0.9;
 /// How far a floater rises over its life, in world units.
 pub const FLOATER_RISE: f32 = 0.6;
@@ -78,8 +83,11 @@ pub enum Beat {
     Move { unit: Entity, cells: Vec<(i32, i32)> },
     /// A melee blow: out towards `to` and back.
     Lunge { unit: Entity, from: (i32, i32), to: (i32, i32) },
-    /// A missile bolt from `from` to `to`.
-    Projectile { from: (i32, i32), to: (i32, i32) },
+    /// `unit` draws, then a missile bolt flies from `from` to `to`.
+    Projectile { unit: Entity, from: (i32, i32), to: (i32, i32) },
+    /// `unit` casts a spell or uses an item at `to` (its own tile for itself).
+    /// Holds nothing: the spell's effect plays at once.
+    Cast { unit: Entity, from: (i32, i32), to: (i32, i32) },
     /// Text over the target: miss, hit or critical, and the damage.
     Floater { at: (i32, i32), outcome: Outcome, damage: i32 },
     /// Knocked back from `from` with a spark.
@@ -97,7 +105,8 @@ impl Beat {
         match self {
             Beat::Move { cells, .. } => glide_secs(path_length(cells)),
             Beat::Lunge { .. } => LUNGE_SECS,
-            Beat::Projectile { .. } => PROJECTILE_SECS,
+            Beat::Projectile { .. } => DRAW_SECS + PROJECTILE_SECS,
+            Beat::Cast { .. } => CAST_SECS,
             Beat::Floater { .. } => FLOATER_SECS,
             Beat::Flinch { .. } => FLINCH_SECS,
             Beat::Death { .. } => DEATH_SECS,
@@ -109,7 +118,7 @@ impl Beat {
     /// Seconds later beats wait on this one once it starts.
     pub fn hold(&self) -> f32 {
         match self {
-            Beat::Floater { .. } | Beat::Death { .. } => 0.0,
+            Beat::Floater { .. } | Beat::Death { .. } | Beat::Cast { .. } => 0.0,
             Beat::Lunge { .. } => LUNGE_SECS / 2.0,
             _ => self.duration(),
         }
@@ -118,9 +127,12 @@ impl Beat {
     /// The body this beat moves, if any.
     fn unit(&self) -> Option<Entity> {
         match self {
-            Beat::Move { unit, .. } | Beat::Lunge { unit, .. } | Beat::Flinch { unit, .. } | Beat::Death { unit, .. } => {
-                Some(*unit)
-            }
+            Beat::Move { unit, .. }
+            | Beat::Lunge { unit, .. }
+            | Beat::Projectile { unit, .. }
+            | Beat::Cast { unit, .. }
+            | Beat::Flinch { unit, .. }
+            | Beat::Death { unit, .. } => Some(*unit),
             _ => None,
         }
     }
@@ -258,11 +270,21 @@ impl Presentation {
         self.beats.iter().any(|p| p.beat.unit() == Some(unit))
     }
 
+    /// The beat `unit` is playing and how far in, if any. A unit's beats never
+    /// overlap, so there is at most one.
+    pub fn playing(&self, unit: Entity) -> Option<(&Beat, f32)> {
+        self.beats.iter().find_map(|p| Some((&p.beat, p.elapsed?)).filter(|(beat, _)| beat.unit() == Some(unit)))
+    }
+
     /// Re-aims queued beats at a dead unit's stand-in.
     fn rename(&mut self, from: Entity, to: Entity) {
         for p in &mut self.beats {
-            if let Beat::Move { unit, .. } | Beat::Lunge { unit, .. } | Beat::Flinch { unit, .. } | Beat::Death { unit, .. } =
-                &mut p.beat
+            if let Beat::Move { unit, .. }
+            | Beat::Lunge { unit, .. }
+            | Beat::Projectile { unit, .. }
+            | Beat::Cast { unit, .. }
+            | Beat::Flinch { unit, .. }
+            | Beat::Death { unit, .. } = &mut p.beat
             {
                 if *unit == from {
                     *unit = to;
@@ -408,7 +430,9 @@ fn heading(beat: &Beat, t: f32) -> Option<(Entity, f32)> {
             let probe = 0.05;
             (*unit, path_point(cells, (s + probe).min(length)) - path_point(cells, (s - probe).max(0.0)))
         }
-        Beat::Lunge { unit, from, to } => (*unit, cell(*to) - cell(*from)),
+        Beat::Lunge { unit, from, to } | Beat::Projectile { unit, from, to } | Beat::Cast { unit, from, to } => {
+            (*unit, cell(*to) - cell(*from))
+        }
         Beat::Flinch { unit, at, from } => (*unit, cell(*from) - cell(*at)),
         _ => return None,
     };
@@ -471,9 +495,13 @@ impl Plugin for PresentationPlugin {
             .add_systems(OnEnter(RunState::PreRun), reset)
             .add_systems(OnEnter(RunState::NextLevel), reset)
             .add_systems(Update, skip_on_input.after(player::handle_player_input))
+            .add_observer(animation::rig_model)
             .add_systems(
                 PostUpdate,
-                (play_beats, turn_models).chain().before(TransformSystems::Propagate).before(UiSystems::Prepare),
+                (play_beats, turn_models, animation::animate)
+                    .chain()
+                    .before(TransformSystems::Propagate)
+                    .before(UiSystems::Prepare),
             );
     }
 }
@@ -583,7 +611,6 @@ fn play_beats(
     let view = camera.single().ok().map(|(camera, transform)| (camera, GlobalTransform::from(*transform)));
     for i in presentation.start_ready() {
         match presentation.beats[i].beat.clone() {
-            Beat::Projectile { from, to } => effects.play(EffectKind::MagicMissile { from }, to.0, to.1),
             Beat::Flinch { at, .. } => effects.play(EffectKind::HitSpark, at.0, at.1),
             Beat::CameraFocus { at } => {
                 let on_screen = view.as_ref().is_some_and(|(camera, rig)| {
@@ -647,6 +674,9 @@ fn play_beats(
                         material.base_color.set_alpha(1.0 - death_fade(t));
                     }
                 }
+            }
+            Beat::Projectile { from, to, .. } if t >= DRAW_SECS && t - time.delta_secs() < DRAW_SECS => {
+                effects.play(EffectKind::MagicMissile { from: *from }, to.0, to.1);
             }
             Beat::Floater { at, .. } => {
                 let (Some(text), Some((camera, rig))) = (playing.spawned, &view) else {
@@ -777,7 +807,8 @@ mod tests {
         let u = units(1)[0];
         assert_eq!(Beat::Lunge { unit: u, from: (0, 0), to: (1, 0) }.duration(), LUNGE_SECS);
         assert_eq!(Beat::Lunge { unit: u, from: (0, 0), to: (1, 0) }.hold(), LUNGE_SECS / 2.0);
-        assert_eq!(Beat::Projectile { from: (0, 0), to: (5, 0) }.hold(), PROJECTILE_SECS);
+        assert_eq!(Beat::Projectile { unit: u, from: (0, 0), to: (5, 0) }.hold(), DRAW_SECS + PROJECTILE_SECS);
+        assert_eq!(Beat::Cast { unit: u, from: (0, 0), to: (2, 0) }.hold(), 0.0);
         let floater = Beat::Floater { at: (0, 0), outcome: Outcome::Hit, damage: 3 };
         assert_eq!((floater.duration(), floater.hold()), (FLOATER_SECS, 0.0));
         assert_eq!(Beat::Death { unit: u, at: (0, 0) }.hold(), 0.0);
@@ -864,7 +895,7 @@ mod tests {
         assert!(!p.busy());
         p.push(Beat::Floater { at: (0, 0), outcome: Outcome::Miss, damage: 0 });
         assert!(!p.busy(), "floaters do not hold input");
-        p.push(Beat::Projectile { from: (0, 0), to: (4, 0) });
+        p.push(Beat::Projectile { unit: u[0], from: (0, 0), to: (4, 0) });
         p.push_move(u[0], &[(0, 0), (0, 1)]);
         assert!(p.busy());
         p.start_ready();

@@ -18,6 +18,7 @@ use crate::{
     overwatch::Hunkered,
     map::{Map, Position},
     effects::{EffectKind, Effects},
+    presentation::{Beat, Presentation},
     rng::GameRng,
     PendingMagicMap,
 };
@@ -70,7 +71,13 @@ pub fn item_collection_system(
 pub fn item_use_system(
     mut commands: Commands,
     mut gamelog: ResMut<GameLog>,
-    (mut effects, mut rng, map, hunkered): (ResMut<Effects>, ResMut<GameRng>, Res<Map>, Query<(), With<Hunkered>>),
+    (mut effects, mut rng, map, hunkered, mut presentation): (
+        ResMut<Effects>,
+        ResMut<GameRng>,
+        Res<Map>,
+        Query<(), With<Hunkered>>,
+        ResMut<Presentation>,
+    ),
     mut pending_magic_map: ResMut<PendingMagicMap>,
     use_query: Query<(Entity, &WantsToUseItem, &Position)>,
     consumable_query: Query<&Consumable>,
@@ -119,6 +126,8 @@ pub fn item_use_system(
             continue;
         }
         let caster = target_query.get(entity).map_or("You", |(.., name)| name.name.as_str());
+        let from = (user_pos.x, user_pos.y);
+        presentation.push(Beat::Cast { unit: entity, from, to: wants_use.target.unwrap_or(from) });
         // Apply healing if the item provides it: to the user, or to the unit
         // on the target tile (a healing ability aimed at a hero).
         if let Ok((healing, item_name)) = healing_query.get(wants_use.item) {
@@ -194,7 +203,6 @@ pub fn item_use_system(
                     }
                 } else {
                     // Single target - find entity at exact position
-                    let from = (user_pos.x, user_pos.y);
                     let aim = stats_query.get(entity).map_or(DEFAULT_AIM, |s| s.aim) + SPELL_AIM_BONUS;
                     // The targeting screen has already checked the range.
                     let range = ranged.map_or(1, |r| r.range);

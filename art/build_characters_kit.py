@@ -117,6 +117,7 @@ class Figure:
         self.name = name
         self.scale = scale
         self.parts = {}
+        self.held = {}  # held item key -> the side of the hand holding it
         self.part("torso", (0, 0, HIP))
         self.part("head", (0, 0, NECK))
         for side, key in ((1, "l"), (-1, "r")):
@@ -140,13 +141,29 @@ class Figure:
         """A held item, built round its grip at the origin, placed in a hand."""
         grip = self.hand(side) + Vector(offset)
         p = self.part(key, grip)
+        self.held[key] = side
         placed(p, lambda: build(p), at=grip, **turn)
         return p
 
     def finish(self):
+        """Makes the objects and joins them into a hierarchy the game poses
+        (A09): a held item hangs from its arm; the head, arms, wings and tail
+        from the torso (a beast's body); the torso and legs stand alone, so a
+        torso that leans leaves the feet planted."""
         col = dk.kit_collection(self.name)
-        for p in self.parts.values():
-            p.finish(col, self.scale)
+        objs = {key: p.finish(col, self.scale) for key, p in self.parts.items()}
+        world = {key: obj.location.copy() for key, obj in objs.items()}
+        root = "torso" if "torso" in objs else "body"
+        for key, obj in objs.items():
+            if key in self.held:
+                parent = "arm_l" if self.held[key] > 0 else "arm_r"
+            elif key == root or key.startswith("leg") or root not in objs:
+                continue
+            else:
+                parent = root
+            obj.parent = objs[parent]
+            # Parts carry no rotation, so the joint's offset is its local position.
+            obj.location = world[key] - world[parent]
         return col
 
 
