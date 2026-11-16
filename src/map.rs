@@ -22,7 +22,7 @@ pub const GRID_PX: Vec2 = Vec2 {
 };
 
 /// Grid based position
-#[derive(Component, Clone, Copy)]
+#[derive(Component, Clone, Copy, Debug)]
 pub struct Position {
     pub x: i32,
     pub y: i32,

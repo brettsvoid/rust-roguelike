@@ -9,7 +9,8 @@
 
 Each scene runs in its own scratch folder with a copy of tools/scenes-town.json,
 so it never touches the town.json or save in the repo and always sees the same
-town. A scene passes when the game exits cleanly and every `expect` string
+town. A scene's optional "files" maps file names to text written into that
+folder first (e.g. a damaged savegame.json). A scene passes when the game exits cleanly and every `expect` string
 appears in its game log, in order. The run ends with one table and one contact
 sheet (sheet.png) of every capture: read the table first, then look at the
 sheet once, instead of opening a picture per change.
@@ -53,6 +54,8 @@ def run_scene(scene, out):
     png.unlink(missing_ok=True)
     work = Path(tempfile.mkdtemp(prefix=f"scene-{name}-"))
     shutil.copy(TOWN, work / "town.json")
+    for file_name, text in scene.get("files", {}).items():
+        (work / file_name).write_text(text)
     command = [
         "cargo", "run", "-q", "--manifest-path", str(ROOT / "Cargo.toml"), "--",
         "--screenshot", str(png), *shlex.split(scene["args"]),

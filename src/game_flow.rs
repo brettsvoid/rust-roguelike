@@ -50,8 +50,7 @@ pub enum RunState {
     GameOver,
 }
 
-/// The tactical mode. Not saved: a loaded game starts in explore, and the
-/// next step drops back into combat if a hostile still sees the party.
+/// The tactical mode. Saved with the game (`saveload::SavedMode`).
 #[derive(Resource, Clone, Debug, Default, PartialEq, Eq)]
 pub enum Mode {
     /// A click moves the whole party; every step is a turn.
@@ -176,6 +175,11 @@ pub struct TurnEnded(pub bool);
 #[derive(Resource, Default)]
 pub struct HeroAction(pub Option<Action>);
 
+/// Set by a load: the next `PreRun` keeps the restored `Mode` instead of
+/// starting in explore.
+#[derive(Resource, Default)]
+pub struct KeepMode(pub bool);
+
 pub struct GameFlowPlugin;
 
 impl Plugin for GameFlowPlugin {
@@ -189,7 +193,12 @@ impl Plugin for GameFlowPlugin {
             .init_resource::<levels::PendingPortal>()
             .init_resource::<levels::Delve>()
             // PreRun: one frame of setup, then hand control to the party
-            .add_systems(OnEnter(RunState::PreRun), |mut mode: ResMut<Mode>| *mode = Mode::Explore)
+            .init_resource::<KeepMode>()
+            .add_systems(OnEnter(RunState::PreRun), |mut mode: ResMut<Mode>, mut keep: ResMut<KeepMode>| {
+                if !std::mem::take(&mut keep.0) {
+                    *mode = Mode::Explore;
+                }
+            })
             .add_systems(
                 Update,
                 transition_to_awaiting_input.run_if(in_state(RunState::PreRun)),

@@ -333,6 +333,44 @@
       "name": "items_7_zoom",
       "note": "Scroll of Inferno, Staff of the Archmage, Scroll of Meteor Storm and the Heart of the Abyss under the active hero in two rows north of the party, torchlit, zoomed in.",
       "args": "--seed 42 --depth 2 --console godmode --console \"place 3 0 Scroll of Inferno\" --console \"place 1 -2 Staff of the Archmage\" --console \"place 3 -2 Scroll of Meteor Storm\" --console \"spawn heart\" --console \"teleport 41 23\" --keys \"++++++++\" --frames 180"
+    },
+    {
+      "name": "save_combat",
+      "note": "The combat scene saved and loaded back mid-combat, before Aldric's attack: same round, AP, gear and monsters, then the fight goes on.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --click 30,28 --click 34,27 --keys n --click 35,28 --keys enn --click 33,28 --reload --keys f --frames 300",
+      "expect": [
+        "Goblin #0 goes on overwatch.",
+        "Reload: mode combat round 2, AP spent [\"Aldric 1\"]; the loaded game matches the saved one",
+        "Aldric attacks Hobgoblin #0"
+      ]
+    },
+    {
+      "name": "save_town",
+      "note": "Buy from the blacksmith, equip it from the inventory, save and load in town (vendors, townsfolk and props), then show the inventory.",
+      "args": "--seed 42 --depth 0 --reveal-map --console \"gold 40\" --shop blacksmith --keys 'a!ia' --reload --keys i --frames 900",
+      "expect": [
+        "Bought the Dagger",
+        "You equip the Dagger.",
+        "Reload: mode explore; the loaded game matches the saved one"
+      ]
+    },
+    {
+      "name": "save_bad",
+      "note": "Continue with an unreadable savegame.json: reported, moved aside, the main menu stays.",
+      "args": "--load --frames 30",
+      "files": {"savegame.json": "{ not json"},
+      "expect": [
+        "The saved game could not be loaded: it is not readable"
+      ]
+    },
+    {
+      "name": "save_old",
+      "note": "Continue with a save from before versions: reported, moved aside, the main menu stays.",
+      "args": "--load --frames 30",
+      "files": {"savegame.json": "{\"map\": {}, \"party\": []}"},
+      "expect": [
+        "The saved game could not be loaded: it is from an older version of the game"
+      ]
     }
   ]
 }

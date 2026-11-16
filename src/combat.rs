@@ -24,7 +24,7 @@ use crate::saveload;
 use crate::viewshed::line_of_sight;
 use crate::RunState;
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CombatStats {
     pub max_hp: i32,
     pub hp: i32,

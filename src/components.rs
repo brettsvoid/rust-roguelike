@@ -71,7 +71,7 @@ pub struct Confusion {
 }
 
 /// Loses `damage` hp at the start of each of its next `turns` turns.
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Poison {
     pub damage: i32,
     pub turns: i32,
@@ -174,7 +174,7 @@ pub enum HungerState {
     Starving,
 }
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct HungerClock {
     pub state: HungerState,
     pub duration: i32,

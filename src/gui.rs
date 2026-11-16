@@ -2,7 +2,7 @@ use bevy::input::keyboard::KeyboardInput;
 use bevy::input::ButtonState;
 use bevy::prelude::*;
 
-use crate::components::{EntryTrigger, Item};
+use crate::components::Item;
 use crate::economy::town::TownState;
 use crate::gamelog::GameLog;
 use crate::levels;
@@ -65,14 +65,28 @@ fn cleanup_game_entities(
     game_log.entries.clear();
 }
 
-fn spawn_main_menu(mut commands: Commands, font: Res<UiFont>, background: Res<MenuBackground>) {
-    let has_save = saveload::has_save_file();
-
-    let menu_text = if has_save {
-        "Rust Roguelike\n\n(N) New Game\n(C) Continue\n(V) Map Visualizer\n(Q) Quit"
-    } else {
-        "Rust Roguelike\n\n(N) New Game\n(V) Map Visualizer\n(Q) Quit"
+fn spawn_main_menu(
+    mut commands: Commands,
+    font: Res<UiFont>,
+    background: Res<MenuBackground>,
+    mut game_log: ResMut<GameLog>,
+) {
+    let (has_save, report) = match saveload::save_status() {
+        Ok(has_save) => (has_save, None),
+        Err(report) => {
+            game_log.entries.push(report.clone());
+            (false, Some(report))
+        }
     };
+
+    let mut menu_text = if has_save {
+        "Rust Roguelike\n\n(N) New Game\n(C) Continue\n(V) Map Visualizer\n(Q) Quit".to_string()
+    } else {
+        "Rust Roguelike\n\n(N) New Game\n(V) Map Visualizer\n(Q) Quit".to_string()
+    };
+    if let Some(report) = report {
+        menu_text.push_str(&format!("\n\n{report}"));
+    }
 
     commands
         .spawn((
@@ -125,10 +139,7 @@ fn handle_main_menu_input(
     mut evr_kbd: MessageReader<KeyboardInput>,
     mut next_state: ResMut<NextState<RunState>>,
     mut exit: MessageWriter<AppExit>,
-    // Resources needed for loading/new game
-    entities_to_despawn: Query<Entity, Or<(With<PartyMember>, With<Monster>, With<Item>, With<Tile>, With<EntryTrigger>)>>,
     mut map: ResMut<Map>,
-    mut game_log: ResMut<GameLog>,
     mut rng: ResMut<crate::rng::GameRng>,
     font: Res<UiFont>,
     mut selected_builder: ResMut<SelectedBuilder>,
@@ -148,16 +159,9 @@ fn handle_main_menu_input(
             }
             KeyCode::KeyC => {
                 // Continue - load from save file
-                if saveload::has_save_file()
-                    && saveload::load_game(
-                        &mut commands,
-                        &entities_to_despawn,
-                        &mut map,
-                        &mut game_log,
-                        &font,
-                    ) {
-                        next_state.set_if_different(RunState::PreRun);
-                    }
+                if saveload::has_save_file() {
+                    commands.queue(saveload::continue_game);
+                }
             }
             KeyCode::KeyV => {
                 // Map Visualizer - go to builder selection

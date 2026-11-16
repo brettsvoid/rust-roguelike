@@ -54,7 +54,7 @@ pub enum Archetype {
 }
 
 /// Whether a monster knows the party is about.
-#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, Deserialize)]
 pub enum Alertness {
     /// Waits where it is and does nothing.
     #[default]

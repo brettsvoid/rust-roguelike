@@ -34,6 +34,12 @@
 //! Portal (`spawn heart` drops a stand-in Heart of the Abyss to test the refusal).
 //! `--every N` also saves every Nth frame before the last as `out-FFFF.png`
 //! next to `out.png`, a sequence to look at motion with.
+//! `--reload`, queued with the inputs, saves the game, loads it back and logs
+//! "Reload: ..." with the mode and whether the loaded game snapshots the same
+//! as the saved one (`saveload::snapshot`). `--load` takes Continue at the main
+//! menu instead of starting a new game (a scene's `files` can put a
+//! `savegame.json` beside it); without a save that loads, the capture shows
+//! the main menu.
 //! Every visual change is verified with it.
 
 use std::path::PathBuf;
@@ -111,10 +117,14 @@ impl Plugin for ScreenshotPlugin {
                         .before(player::handle_player_input),
                     // Models load async; starting only once they are in keeps the
                     // picture the same run to run.
-                    start_game.run_if(in_state(RunState::MainMenu)).run_if(models_loaded),
+                    start_game
+                        .run_if(in_state(RunState::MainMenu))
+                        .run_if(not(resource_exists::<Started>))
+                        .run_if(models_loaded),
                     (prepare_capture, enter_targeting).run_if(in_state(RunState::AwaitingInput)),
                     reveal_each_level.run_if(in_state(RunState::AwaitingInput)).before(feed_next_input),
-                    capture_after_frames.run_if(not(in_state(RunState::MainMenu))),
+                    // A `--load` that fails stays at the main menu, which is then the picture.
+                    capture_after_frames.run_if(not(in_state(RunState::MainMenu)).or_else(resource_exists::<Started>)),
                 ),
             );
     }
@@ -133,6 +143,8 @@ pub struct ScreenshotArgs {
     pub cursor: Option<Vec2>,
     pub target: Option<String>,
     pub inputs: Vec<HarnessInput>,
+    /// Continue a saved game instead of starting a new one.
+    pub load: bool,
 }
 
 /// One queued `--keys` key or `--click`.
@@ -146,6 +158,8 @@ pub enum HarnessInput {
     Press(Vec2),
     /// Click the vendor's townsperson.
     Shop(Vendor),
+    /// Save, then load the save back (`reload_game`).
+    Reload,
 }
 
 fn key_input(c: char) -> Option<HarnessInput> {
@@ -191,6 +205,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
     let mut cursor = None;
     let mut target = None;
     let mut inputs = Vec::new();
+    let mut load = false;
 
     let mut args = args.into_iter();
     while let Some(flag) = args.next() {
@@ -200,6 +215,14 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
         }
         if flag == "--ledger" {
             ledger = true;
+            continue;
+        }
+        if flag == "--reload" {
+            inputs.push(HarnessInput::Reload);
+            continue;
+        }
+        if flag == "--load" {
+            load = true;
             continue;
         }
         let value = args.next().ok_or(format!("{flag} needs a value"))?;
@@ -252,6 +275,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
         cursor,
         target,
         inputs,
+        load,
     }))
 }
 
@@ -294,7 +318,13 @@ fn ignore_mouse(mut cursor: Single<&mut CursorOptions, With<PrimaryWindow>>) {
     cursor.hit_test = false;
 }
 
-/// Skip the main menu: build the requested level as a new game.
+/// Set once the harness has started the game (or tried to load it).
+#[derive(Resource)]
+struct Started;
+
+/// Skip the main menu: build the requested level as a new game, or with
+/// `--load` continue the saved one.
+#[allow(clippy::too_many_arguments)]
 fn start_game(
     mut commands: Commands,
     args: Res<ScreenshotArgs>,
@@ -305,16 +335,21 @@ fn start_game(
     mut town: ResMut<TownState>,
     mut next_state: ResMut<NextState<RunState>>,
 ) {
+    commands.insert_resource(Started);
+    if args.reveal_map {
+        debug_state.reveal_map = true;
+        debug_state.no_fog = true;
+    }
+    if args.load {
+        commands.queue(crate::saveload::continue_game);
+        return;
+    }
     // Town commands run before the level is built, so the town shows them.
     for cmd in args.console.iter().filter(|c| is_town_command(c)) {
         let parts: Vec<&str> = cmd.split_whitespace().collect();
         info!("console> {cmd}: {}", super::commands::cmd_town(&parts, &mut town));
     }
     levels::spawn_new_game(&mut commands, &mut map, &mut rng, &font, &mut town, args.depth);
-    if args.reveal_map {
-        debug_state.reveal_map = true;
-        debug_state.no_fog = true;
-    }
     next_state.set_if_different(RunState::PreRun);
 }
 
@@ -408,6 +443,7 @@ const PAN_HOLD_FRAMES: u32 = 10;
 /// queued input. Runs after picking and before the player's input handling,
 /// so a click lands on its cell this frame.
 fn feed_next_input(
+    mut commands: Commands,
     args: Res<ScreenshotArgs>,
     mut next: Local<usize>,
     mut held: Local<Option<(KeyCode, u32)>>,
@@ -489,7 +525,33 @@ fn feed_next_input(
             mouse.release(MouseButton::Left);
             mouse.press(MouseButton::Left);
         }
+        HarnessInput::Reload => commands.queue(reload_game),
     }
+}
+
+/// `--reload`: save, load the file back, and log whether the loaded game is
+/// the saved one.
+fn reload_game(world: &mut World) {
+    use crate::saveload::{first_difference, load_game, save_game, snapshot};
+    let saved = snapshot(world);
+    save_game(world);
+    let line = if load_game(world) {
+        let loaded = snapshot(world);
+        for (a, b) in saved.iter().zip(&loaded) {
+            if let Some(diff) = first_difference(std::slice::from_ref(a), std::slice::from_ref(b)) {
+                info!("reload differs: {diff}");
+            }
+        }
+        let mode = loaded.iter().find(|l| l.starts_with("mode ")).cloned().unwrap_or_default();
+        match first_difference(&saved, &loaded) {
+            None => format!("Reload: {mode}; the loaded game matches the saved one ({} lines).", loaded.len()),
+            Some(diff) => format!("Reload: {mode}; the loaded game differs: {diff}"),
+        }
+    } else {
+        "Reload: the save did not load.".to_string()
+    };
+    world.resource_mut::<GameLog>().entries.push(line);
+    world.resource_mut::<NextState<RunState>>().set(RunState::PreRun);
 }
 
 /// Counts frames after the game starts, then captures the picture once.
@@ -542,7 +604,7 @@ mod tests {
     #[test]
     fn all_flags() {
         assert_eq!(
-            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10 --every 2 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger --keys g.in --click 3,-4 --press 800,950.5 --keys wasdc+-e --shop Priest --keys bj!"),
+            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10 --every 2 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger --keys g.in --click 3,-4 --press 800,950.5 --keys wasdc+-e --shop Priest --keys bj! --reload --load"),
             Ok(Some(ScreenshotArgs {
                 path: PathBuf::from("a.png"),
                 seed: 7,
@@ -573,7 +635,9 @@ mod tests {
                     HarnessInput::Key(KeyCode::KeyB),
                     HarnessInput::Key(KeyCode::KeyJ),
                     HarnessInput::Key(KeyCode::Escape),
+                    HarnessInput::Reload,
                 ],
+                load: true,
             }))
         );
     }
@@ -594,6 +658,7 @@ mod tests {
                 cursor: None,
                 target: None,
                 inputs: vec![],
+                load: false,
             }))
         );
     }

@@ -120,9 +120,9 @@ pub fn spawn_named_entity(
     if raws.item_index.contains_key(key) {
         return spawn_named_item(raws, commands, key, x, y).is_some();
     } else if raws.mob_index.contains_key(key) {
-        return spawn_named_mob(raws, commands, key, x, y, monster_id);
+        return spawn_named_mob(raws, commands, key, x, y, monster_id).is_some();
     } else if raws.prop_index.contains_key(key) {
-        return spawn_named_prop(raws, commands, key, x, y);
+        return spawn_named_prop(raws, commands, key, x, y).is_some();
     }
     false
 }
@@ -278,10 +278,7 @@ fn equipment_slot(item: &super::Item) -> Option<EquipmentSlot> {
 /// (`abilities::HeroAbility`). Spells carry the scroll components of their
 /// effects, so the item code casts them. Warns and skips names the raws lack.
 pub fn spawn_class_kit(raws: &RawMaster, commands: &mut Commands, hero: Entity, class: &super::Class) {
-    if let Some(model) = &class.model {
-        // Re-inserting the shape re-dresses the hero in the model (see `attach_entity_mesh`).
-        commands.entity(hero).insert((Model(model.clone()), EntityShape::Creature));
-    }
+    spawn_class_abilities(raws, commands, hero, class);
     let mut worn = Vec::new();
     for name in &class.gear {
         let (Some(item), Some(template)) = (
@@ -302,6 +299,15 @@ pub fn spawn_class_kit(raws: &RawMaster, commands: &mut Commands, hero: Entity, 
                 item.insert(InBackpack { owner: hero });
             }
         }
+    }
+}
+
+/// The class's model and abilities (ready), without its gear: a loaded hero
+/// keeps the gear they had.
+pub fn spawn_class_abilities(raws: &RawMaster, commands: &mut Commands, hero: Entity, class: &super::Class) {
+    if let Some(model) = &class.model {
+        // Re-inserting the shape re-dresses the hero in the model (see `attach_entity_mesh`).
+        commands.entity(hero).insert((Model(model.clone()), EntityShape::Creature));
     }
     for (slot, name) in class.abilities.iter().enumerate() {
         let Some(ability) = raws.raws.abilities.iter().find(|a| &a.name == name) else {
@@ -337,10 +343,8 @@ pub fn spawn_named_mob(
     x: i32,
     y: i32,
     monster_id: Option<usize>,
-) -> bool {
-    let Some(&idx) = raws.mob_index.get(key) else {
-        return false;
-    };
+) -> Option<Entity> {
+    let &idx = raws.mob_index.get(key)?;
     let mob_template = &raws.raws.mobs[idx];
 
     // Build name with optional ID
@@ -410,7 +414,7 @@ pub fn spawn_named_mob(
         insert_renderable(&mut entity, renderable, EntityShape::Creature);
     }
 
-    true
+    Some(entity.id())
 }
 
 /// Spawn a prop from raw data
@@ -420,10 +424,8 @@ pub fn spawn_named_prop(
     key: &str,
     x: i32,
     y: i32,
-) -> bool {
-    let Some(&idx) = raws.prop_index.get(key) else {
-        return false;
-    };
+) -> Option<Entity> {
+    let &idx = raws.prop_index.get(key)?;
     let prop_template = &raws.raws.props[idx];
 
     let mut entity = commands.spawn((
@@ -493,7 +495,7 @@ pub fn spawn_named_prop(
         });
     }
 
-    true
+    Some(entity.id())
 }
 
 /// Build a RandomTable for a specific depth from JSON spawn data

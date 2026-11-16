@@ -20,7 +20,7 @@ pub const XP_STEP: i32 = 50;
 pub const LEVEL_AIM: i32 = 2;
 
 /// A hero's level and the experience gathered so far (a running total).
-#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Experience {
     pub level: i32,
     pub xp: i32,

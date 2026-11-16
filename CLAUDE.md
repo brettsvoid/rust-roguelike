@@ -70,6 +70,10 @@ The coordinator runs the same suite before every merge.
 --target ITEM      enter targeting with an item
 --ledger           open the town ledger
 --every N          also save every Nth frame as out-FFFF.png (a sequence for motion)
+--reload           queued with the inputs: save, load the save back, log "Reload: <mode>; the
+                   loaded game matches the saved one" or the first difference
+--load             take Continue at the main menu instead of a new game; a scene's "files"
+                   puts a savegame.json in its folder (a bad one leaves the main menu)
 ```
 
 Inputs run in the order given, one at a time, while the game waits for input and nothing is
@@ -356,8 +360,7 @@ of mode or phase goes through `advance(mode, step, situation)`, a pure function 
   alerted. Stepping out of sight does not end a fight while the monsters hunt; it ends once
   they give up (`enemy_ai::HUNT_TURNS`) or fall
 - Game over: no hero left alive
-- `Mode` is not saved: a loaded game starts in explore and drops back into combat at the next
-  step if a hostile still sees the party
+- `Mode` is saved: a game saved in combat loads in the same round with the same AP spent
 
 ### Models
 
@@ -487,18 +490,32 @@ of the same logic. The build should stay at zero warnings.
 
 ### Save/Load
 
-- `saveload.rs` - Serializes game state to `savegame.json` using serde
-- Saves on quit (Q key), loads on Continue from main menu
-- The save holds the whole party (`SaveData::party`, in slot order), the active hero's slot, and
-  each backpack item's owner by slot, and the `Delve` (deepest depth, levels since town)
-- Each hero's class is saved (`SerializedMember::class`, missing in older saves). On load a
-  hero with a class gets the class's starting gear equipped afresh and their abilities ready.
-  Level and experience are saved too (`level`, `xp`; an older save loads at level 1)
-- Not saved yet (P01): `Poison` on a unit, a mob's poison bite (`PoisonsOnHit`), a monster's
-  `Alertness`, `Archetype`, own `Weapon` (a loaded monster is an idle, unarmed brute) and raws
-  `xp` (a loaded monster is worth `mob_xp`),
-  `Overwatch` and `Hunkered`, equipment (equipped items are left out of the save; a hero
-  without a class, from an older save, loses it) and ability cooldowns
+- `saveload.rs` - Saves the game to `savegame.json` (serde) on quit (Q, `save_on_quit`, an
+  exclusive system); Continue on the main menu loads it (`continue_game`)
+- Every entity is saved by what it was spawned from plus the state that changes in play, and
+  loaded by spawning it afresh and writing that state over it. Heroes (`SavedHero`): slot,
+  name, raws class (the model and abilities are spawned from it, `raws::spawn_class_abilities`,
+  never the starting gear), position, `CombatStats`, `HungerClock`, `Experience`, status and
+  each ability's cooldown. Mobs, bystanders and vendors, props (doors, traps, torches) and items
+  (`SavedThing`): the raws name (a mob's name less ` #id`), the shown name, where it is (on
+  the ground, in a hero's backpack, or worn by a hero in an `EquipmentSlot`), and when present
+  `CombatStats`, `Alertness`, `Gold`, an open door, `Hidden`. So weapons, archetypes,
+  `PoisonsOnHit`, raws `xp`, models, lights and cover come back from the raws. Status on both:
+  `Poison`, `Confusion`, `Overwatch`, `Hunkered`. Also saved: the map (tiles, explored tiles,
+  depth, bloodstains), `Mode` (round and AP spent by slot; `game_flow::KeepMode` makes the next
+  `PreRun` keep it), the active hero's slot, the purse, `Delve` and the game log
+- `snapshot(world)` lists every named entity's gameplay values and the type of every component
+  it has, by name not `Entity` id. The round-trip test saves a world mid-combat, loads it into
+  a fresh world and compares snapshots, so a component the save forgets shows up as a
+  difference. The harness's `--reload` does the same in a running game ("Reload: ... the loaded
+  game matches the saved one"). Component names need `--features bevy/debug`; without it the
+  difference shows type ids
+- Versioned (`SAVE_VERSION`). A save that is unreadable, from another version or naming a
+  class the raws lack is moved to `savegame.json.bad-<secs>` and reported in the game log and
+  on the main menu (`save_status`, checked when the menu opens); the menu then has no Continue
+- Not saved: the camera, presentation beats, a walk under way, the targeting or a menu open
+  (a loaded game starts waiting for input); visible tiles and viewsheds (recomputed); a lit
+  effect
 - Permadeath: save file deleted on load and when the last hero dies. A fallen hero leaves play
   and drops what they carried; the selection moves to the next living hero
 - WASM: save/load disabled (no filesystem access)
