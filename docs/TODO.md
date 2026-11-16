@@ -225,7 +225,7 @@ Settled questions (owner, 15 November 2026):
   pan landing between tiles, and the owner confirms the feel.
 
 ### F10 Performance pass
-- Status: todo
+- Status: in progress
 - Notes from a first attempt (not finished; run it alone on a quiet machine):
   the unfocused-window 60 Hz cap made early timings worthless
   (`WinitSettings::continuous()` under `FRAME_TIME_LOG=1` fixes that, on branch
