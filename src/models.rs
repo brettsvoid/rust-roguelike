@@ -12,7 +12,10 @@ use bevy::asset::io::file::FileAssetReader;
 use bevy::prelude::*;
 use bevy::world_serialization::WorldInstanceReady;
 
-use crate::map::{Revealed, RevealedState, TileType};
+use crate::components::Door;
+use crate::entity_render::ModelScene;
+use crate::lighting::wall_offset;
+use crate::map::{Map, Position, Revealed, RevealedState, TileType};
 use crate::map_render::{dimmed, TileMesh};
 
 pub struct ModelsPlugin;
@@ -22,7 +25,7 @@ impl Plugin for ModelsPlugin {
         app.init_resource::<AvailableModels>()
             .init_resource::<DimmedMaterials>()
             .add_observer(model_ready)
-            .add_systems(Update, update_model_fog);
+            .add_systems(Update, (update_model_fog, face_prop_models));
     }
 }
 
@@ -57,6 +60,16 @@ impl AvailableModels {
     /// The scene to spawn for `name`, or `None` to keep the primitive.
     pub fn scene(&self, name: &str) -> Option<WorldAssetRoot> {
         self.0.get(name).cloned().map(WorldAssetRoot)
+    }
+
+    /// The scene for a tile: `<name>`, `<name>_2` or `<name>_3` picked by
+    /// `tile_variant`, falling back to `<name>` when that variant has no file.
+    pub fn tile_scene(&self, name: &str, x: i32, y: i32) -> Option<WorldAssetRoot> {
+        match tile_variant(x, y) {
+            1 => None,
+            n => self.scene(&format!("{name}_{n}")),
+        }
+        .or_else(|| self.scene(name))
     }
 
     /// True once every model has loaded or failed (a bad file logs one error).
@@ -101,6 +114,51 @@ pub fn tile_model_name(tile: TileType, wall_mask: u8) -> String {
         TileType::UpStairs => "up_stairs",
     };
     format!("tile_{name}")
+}
+
+/// Which of three variants (1 to 3) a cell shows, from a hash of the cell
+/// so the same map always looks the same.
+pub fn tile_variant(x: i32, y: i32) -> u32 {
+    let mut h = (x as u32).wrapping_mul(0x9E37_79B1) ^ (y as u32).wrapping_mul(0x85EB_CA77);
+    h ^= h >> 15;
+    h = h.wrapping_mul(0x2C1B_3C6D);
+    h ^= h >> 12;
+    h % 3 + 1
+}
+
+/// How far to turn a prop's model about the vertical axis. Models face south
+/// (+z); a prop on a wall (a wall torch) turns to its open side, the side
+/// `lighting::wall_offset` hangs the flame on, and a door between walls to
+/// its north and south turns a quarter so it spans the passage.
+pub fn model_yaw(map: &Map, pos: Position, is_door: bool) -> f32 {
+    let is_wall = |x: i32, y: i32| {
+        x >= 0 && y >= 0 && x < map.width && y < map.height && map.tiles[map.xy_idx(x, y)] == TileType::Wall
+    };
+    let open = wall_offset(map, pos);
+    if open != Vec2::ZERO {
+        open.x.atan2(open.y)
+    } else if is_door && is_wall(pos.x, pos.y - 1) && is_wall(pos.x, pos.y + 1) {
+        std::f32::consts::FRAC_PI_2
+    } else {
+        0.0
+    }
+}
+
+/// Turns each new prop model to the map (see `model_yaw`). A door that opens
+/// gets a new model scene, so it is turned again.
+fn face_prop_models(
+    mut scenes: Query<(&ChildOf, &mut Transform), Added<ModelScene>>,
+    props: Query<(&Position, Has<Door>)>,
+    map: Option<Res<Map>>,
+) {
+    let Some(map) = map else {
+        return;
+    };
+    for (child_of, mut transform) in &mut scenes {
+        if let Ok((&pos, is_door)) = props.get(child_of.parent()) {
+            transform.rotation = Quat::from_rotation_y(model_yaw(&map, pos, is_door));
+        }
+    }
 }
 
 /// The bright and dim material of one mesh inside a tile model.
@@ -214,6 +272,34 @@ mod tests {
         assert_eq!(tile_model_name(TileType::Floor, 0), "tile_floor");
         assert_eq!(tile_model_name(TileType::DownStairs, 0), "tile_down_stairs");
         assert_eq!(tile_model_name(TileType::Wall, 10), "tile_wall_10");
+    }
+
+    #[test]
+    fn tile_variants_are_fixed_per_cell_and_all_used() {
+        let mut counts = [0; 3];
+        for y in 0..30 {
+            for x in 0..30 {
+                let v = tile_variant(x, y);
+                assert_eq!(v, tile_variant(x, y));
+                counts[v as usize - 1] += 1;
+            }
+        }
+        assert!(counts.iter().all(|&n| n > 250), "uneven variants: {counts:?}");
+    }
+
+    #[test]
+    fn props_turn_to_their_walls() {
+        // Row 1 is a wall with floor south of (1, 1); column 3 is a door between walls north and south.
+        let mut map = Map::new(5, 5, 2);
+        for (x, y) in [(1, 2), (3, 2), (1, 3), (2, 2)] {
+            let idx = map.xy_idx(x, y);
+            map.tiles[idx] = TileType::Floor;
+        }
+        let quarter = std::f32::consts::FRAC_PI_2;
+        assert_eq!(model_yaw(&map, Position { x: 1, y: 1 }, false), 0.0, "torch faces south");
+        assert_eq!(model_yaw(&map, Position { x: 0, y: 2 }, false), quarter, "torch faces east");
+        assert_eq!(model_yaw(&map, Position { x: 3, y: 2 }, true), quarter, "door between north and south walls");
+        assert_eq!(model_yaw(&map, Position { x: 1, y: 2 }, true), 0.0, "door between east and west walls");
     }
 
     #[test]

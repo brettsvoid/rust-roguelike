@@ -80,7 +80,7 @@ fn give_hero_torch(add: On<Add<PartyMember>>, mut commands: Commands) {
 /// Where a light sits relative to its tile centre on the floor plane. A light
 /// on a wall tile (a wall torch) hangs just off the face of the first open
 /// side, so the wall shadows the room behind it.
-fn wall_offset(map: &Map, pos: Position) -> Vec2 {
+pub fn wall_offset(map: &Map, pos: Position) -> Vec2 {
     let is_wall = |x: i32, y: i32| {
         x < 0 || y < 0 || x >= map.width || y >= map.height || map.tiles[map.xy_idx(x, y)] == TileType::Wall
     };
