@@ -394,7 +394,7 @@ and adds the `model` names to `raws/spawns.json`.
   seek cover and melee monsters close in.
 
 ### C08 Combat HUD
-- Status: in progress
+- Status: done
 - Needs: C03
 - Party bar with portrait, health and AP pips. Action bar with hotkeys. Shot
   preview showing hit and crit chance and damage. Health bars over units in
@@ -414,7 +414,7 @@ and adds the `model` names to `raws/spawns.json`.
   a kill.
 
 ### C10 Classes and abilities
-- Status: todo
+- Status: in progress
 - Needs: C04
 - Fighter, ranger, mage and cleric defined in the raws with starting stats,
   gear and one or two abilities each (for example cleave, aimed shot,
