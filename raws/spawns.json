@@ -1295,6 +1295,7 @@
       "cover": "none",
       "renderable": {
         "glyph": "^",
+        "model": "bear_trap",
         "fg": "#FF0000",
         "bg": "#000000",
         "order": 0
@@ -1310,6 +1311,7 @@
       "cover": "half",
       "renderable": {
         "glyph": "o",
+        "model": "keg",
         "fg": "#8B4513",
         "bg": "#000000",
         "order": 0
@@ -1320,6 +1322,7 @@
       "cover": "half",
       "renderable": {
         "glyph": "T",
+        "model": "table",
         "fg": "#8B4513",
         "bg": "#000000",
         "order": 0
@@ -1330,6 +1333,7 @@
       "cover": "none",
       "renderable": {
         "glyph": "h",
+        "model": "chair",
         "fg": "#8B4513",
         "bg": "#000000",
         "order": 0
@@ -1340,6 +1344,7 @@
       "cover": "none",
       "renderable": {
         "glyph": "i",
+        "model": "candle",
         "fg": "#FFD700",
         "bg": "#000000",
         "order": 0
@@ -1351,6 +1356,7 @@
       "cover": "half",
       "renderable": {
         "glyph": "A",
+        "model": "anvil",
         "fg": "#808080",
         "bg": "#000000",
         "order": 0
@@ -1361,6 +1367,7 @@
       "cover": "half",
       "renderable": {
         "glyph": "~",
+        "model": "water_trough",
         "fg": "#00FFFF",
         "bg": "#000000",
         "order": 0
@@ -1371,6 +1378,7 @@
       "cover": "full",
       "renderable": {
         "glyph": "W",
+        "model": "weapon_rack",
         "fg": "#808080",
         "bg": "#000000",
         "order": 0
@@ -1381,6 +1389,7 @@
       "cover": "full",
       "renderable": {
         "glyph": "S",
+        "model": "armour_stand",
         "fg": "#808080",
         "bg": "#000000",
         "order": 0
@@ -1391,6 +1400,7 @@
       "cover": "half",
       "renderable": {
         "glyph": "C",
+        "model": "chemistry_set",
         "fg": "#00FF00",
         "bg": "#000000",
         "order": 0
@@ -1401,6 +1411,7 @@
       "cover": "none",
       "renderable": {
         "glyph": "&",
+        "model": "dead_thing",
         "fg": "#FF0000",
         "bg": "#000000",
         "order": 0
@@ -1411,6 +1422,7 @@
       "cover": "full",
       "renderable": {
         "glyph": "H",
+        "model": "cabinet",
         "fg": "#8B4513",
         "bg": "#000000",
         "order": 0
@@ -1421,6 +1433,7 @@
       "cover": "half",
       "renderable": {
         "glyph": "8",
+        "model": "bed",
         "fg": "#FF0000",
         "bg": "#000000",
         "order": 0
@@ -1431,6 +1444,7 @@
       "cover": "half",
       "renderable": {
         "glyph": "=",
+        "model": "loom",
         "fg": "#8B4513",
         "bg": "#000000",
         "order": 0
@@ -1441,6 +1455,7 @@
       "cover": "full",
       "renderable": {
         "glyph": "n",
+        "model": "hide_rack",
         "fg": "#8B4513",
         "bg": "#000000",
         "order": 0
@@ -1451,6 +1466,7 @@
       "cover": "full",
       "renderable": {
         "glyph": "m",
+        "model": "market_stall",
         "fg": "#DAA520",
         "bg": "#000000",
         "order": 0
@@ -1461,6 +1477,7 @@
       "cover": "half",
       "renderable": {
         "glyph": "!",
+        "model": "lamp_post",
         "fg": "#FFD700",
         "bg": "#000000",
         "order": 0

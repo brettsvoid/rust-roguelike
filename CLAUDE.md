@@ -345,7 +345,9 @@ scans the folder once at startup, so restart after adding a file).
   (a hash of the cell, so a map always looks the same); a missing variant falls back to `<name>`.
 - Facing: models face south (+z, Blender -Y). `models::face_prop_models` turns a prop on a wall
   tile (the wall torch) to its open side, the side `lighting::wall_offset` hangs the flame on,
-  and a door with walls north and south a quarter turn (`model_yaw`).
+  a door with walls north and south a quarter turn, and any other prop beside a wall turns its
+  back to that wall (trying north, west, east, then south), so a cabinet or bed faces into the
+  room (`model_yaw`). Creatures and items are not turned.
 - Export: Blender sources live in `art/`. Each top-level collection becomes one `.glb` named
   after it: `blender art/<file>.blend --background --python art/export.py` (or run the script
   in a live Blender with `__file__` set). Collections named `_...` are skipped.
@@ -368,6 +370,20 @@ scans the folder once at startup, so restart after adding a file).
   grass) shows a bank, not a gap; water sits at -0.08 (shallow) and -0.14 (deep). Nine materials;
   the window material is emissive. Pieces stay under about 270 triangles, terrain under 100. The
   door is the dungeon kit's `door`, and doorways and hovels keep the dungeon's `tile_floor`
+- Props kit (A03): `art/build_props_kit.py` builds one model per prop in `art/props_kit.blend`,
+  reusing the town script (and through it the dungeon helpers and the town's stone and wood),
+  plus a `_preview` row and a `_cam` at the game's angle. Pieces (raws `model` on each prop):
+  `bear_trap`, `keg`, `table`, `chair`, `candle`, `anvil`, `water_trough`, `weapon_rack`,
+  `armour_stand` (the raws name is Armor Stand), `chemistry_set`, `dead_thing`, `cabinet`, `bed`,
+  `loom`, `hide_rack`, `market_stall`, `lamp_post`; the door and wall torch stay the dungeon
+  kit's. Each fits its tile and faces south. Heights follow `cover`: none-cover props stay low,
+  half cover reaches 0.5 to 1.2 m, full cover 1.6 to 2.2 m. The game draws a lit prop's flame
+  (`lighting.rs`, a teardrop whose 0.09 m round base is centred at the raws `light` height), so
+  the candle's wax top sits at `CANDLE_FLAME - FLAME_BASE` and the lamp's burner plate just under
+  `LAMP_FLAME - FLAME_BASE`; change those numbers in the script with the raws heights. Eight
+  materials of its own (cloth, linen, leather, wax, steel, glass, flesh, blood) beside the town's
+  stone, wood, iron and shallows (the trough's water); glass glows faintly. Props stay under
+  about 380 triangles
 - `art/make_test_model.py` writes `assets/models/test_pyramid.glb` (no Blender needed). Copy it to
   a used name, e.g. `tile_floor.glb`, to check the pipeline, and delete the copy afterwards.
 - Every model is loaded at startup and kept. The harness starts the game only once they have
