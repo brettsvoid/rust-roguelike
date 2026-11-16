@@ -237,7 +237,7 @@ angle. Each ticket saves the `.blend` in `art/`, exports with `art/export.py`
 and adds the `model` names to `raws/spawns.json`.
 
 ### A01 Dungeon kit
-- Status: in progress
+- Status: done
 - Needs: F08
 - Stone floor (3 variants), wall pieces for every wall bitmask case, low wall
   stub for cutaway, door (open and closed), down stairs, up stairs, wall torch.
@@ -245,7 +245,7 @@ and adds the `model` names to `raws/spawns.json`.
   z-fighting.
 
 ### A02 Town terrain and building kit
-- Status: todo
+- Status: in progress
 - Needs: F08
 - Grass, road, wood floor, shallow and deep water, bridge, town wall, building
   walls with door and window variants, roofs as separate pieces.
