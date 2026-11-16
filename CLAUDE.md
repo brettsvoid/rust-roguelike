@@ -22,8 +22,10 @@ cargo run --features file_watcher
 # window size and works with the screen locked or asleep. --cursor points are in that image.
 # Depth 0 is the town, the dungeon is depths 1 to 12. Same seed and flags give a
 # byte-identical PNG.
-# Known exception: runs with clicks or a lit effect (missile, fireball) can differ by a
-# few isolated pixels between runs, with identical game state. Cause not found yet.
+# Known exception: two runs can differ by a handful of isolated pixels (about 5 to 20)
+# with identical game state, so compare by eye or with a pixel count, not a hash. The
+# lead is GPU light clustering order (see F10 in docs/TODO.md). The harness window is
+# hidden, so nothing flashes up on screen while it runs.
 # The harness reads and writes town.json in the working directory: copy a baseline
 # back before each run when you compare captures, since sales and purchases change it.
 # Defaults: --seed 42 --depth 0 --frames 60, fog on unless --reveal-map.

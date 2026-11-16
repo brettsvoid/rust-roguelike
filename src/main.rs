@@ -132,6 +132,10 @@ fn main() {
             )
                 .run_if(not(in_state(RunState::MapGeneration))),
         );
+    if screenshot {
+        // A hidden window gets no redraw requests, so the loop must not wait for one.
+        app.insert_resource(bevy::winit::WinitSettings::continuous());
+    }
     if frame_time_log {
         app.add_plugins((
             bevy::diagnostic::FrameTimeDiagnosticsPlugin::default(),
