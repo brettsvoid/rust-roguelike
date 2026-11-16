@@ -404,7 +404,7 @@ and adds the `model` names to `raws/spawns.json`.
   hotkey, shown in harness screenshots.
 
 ### C09 Combat presentation
-- Status: in progress
+- Status: done
 - Needs: C03
 - Separate the instant rules result from how it plays out. Units slide along
   their path, lunge on melee, fire a visible projectile, show hit, miss and
