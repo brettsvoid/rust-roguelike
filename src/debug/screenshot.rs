@@ -1,5 +1,5 @@
 //! Screenshot harness: `cargo run -- --screenshot out.png [--seed N] [--depth N]
-//! [--reveal-map] [--frames N] [--console CMD]... [--ledger] [--cursor X,Y]
+//! [--reveal-map] [--frames N] [--every N] [--console CMD]... [--ledger] [--cursor X,Y]
 //! [--target ITEM] [--keys KEYS]... [--click X,Y]... [--press X,Y]... [--shop VENDOR]...` starts
 //! a seeded new game, waits, saves a PNG of the window and exits. `--depth` 0 (the
 //! default) is the town, 1 to 12 the dungeon. `--console` runs a debug console
@@ -29,6 +29,8 @@
 //! `!` (Escape) closes it. Inputs are fed into the inventory too: `i` then `a`
 //! uses the first item, e.g. `--console "spawn portal" --keys gia` reads a Town
 //! Portal (`spawn heart` drops a stand-in Heart of the Abyss to test the refusal).
+//! `--every N` also saves every Nth frame before the last as `out-FFFF.png`
+//! next to `out.png`, a sequence to look at motion with.
 //! Every visual change is verified with it.
 
 use std::path::PathBuf;
@@ -119,6 +121,7 @@ pub struct ScreenshotArgs {
     pub depth: i32,
     pub reveal_map: bool,
     pub frames: u32,
+    pub every: Option<u32>,
     pub console: Vec<String>,
     pub ledger: bool,
     pub cursor: Option<Vec2>,
@@ -172,6 +175,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
     let mut depth = levels::TOWN_DEPTH;
     let mut reveal_map = false;
     let mut frames = 60;
+    let mut every = None;
     let mut console = Vec::new();
     let mut ledger = false;
     let mut cursor = None;
@@ -195,6 +199,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
             "--seed" => seed = value.parse().map_err(|_| bad())?,
             "--depth" => depth = value.parse().map_err(|_| bad())?,
             "--frames" => frames = value.parse().map_err(|_| bad())?,
+            "--every" => every = Some(value.parse().ok().filter(|&n| n > 0).ok_or_else(bad)?),
             "--console" => console.push(value),
             "--cursor" => {
                 let (x, y) = value.split_once(',').ok_or_else(bad)?;
@@ -231,6 +236,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
         depth,
         reveal_map,
         frames,
+        every,
         console,
         ledger,
         cursor,
@@ -486,6 +492,11 @@ fn capture_after_frames(
     mut frame: Local<u32>,
 ) {
     *frame += 1;
+    if args.every.is_some_and(|n| *frame % n == 0 && *frame < args.frames) {
+        let stem = args.path.file_stem().unwrap_or_default().to_string_lossy();
+        let path = args.path.with_file_name(format!("{stem}-{:04}.png", *frame));
+        commands.spawn(Screenshot::image(target.0.clone())).observe(save_to_disk(path));
+    }
     if *frame != args.frames {
         return;
     }
@@ -517,13 +528,14 @@ mod tests {
     #[test]
     fn all_flags() {
         assert_eq!(
-            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger --keys g.in --click 3,-4 --press 800,950.5 --keys wasdc+-e --shop Priest --keys bj!"),
+            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10 --every 2 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger --keys g.in --click 3,-4 --press 800,950.5 --keys wasdc+-e --shop Priest --keys bj!"),
             Ok(Some(ScreenshotArgs {
                 path: PathBuf::from("a.png"),
                 seed: 7,
                 depth: 3,
                 reveal_map: true,
                 frames: 10,
+                every: Some(2),
                 console: vec!["heal".into(), "godmode".into()],
                 ledger: true,
                 cursor: Some(Vec2::new(640.0, 400.5)),
@@ -562,6 +574,7 @@ mod tests {
                 depth: 0,
                 reveal_map: false,
                 frames: 60,
+                every: None,
                 console: vec![],
                 ledger: false,
                 cursor: None,
@@ -575,6 +588,7 @@ mod tests {
     fn rejects_bad_input() {
         assert!(parse("--screenshot a.png --depth -1").is_err());
         assert!(parse("--screenshot a.png --frames 0").is_err());
+        assert!(parse("--screenshot a.png --every 0").is_err());
         assert!(parse("--screenshot a.png --seed x").is_err());
         assert!(parse("--screenshot").is_err());
         assert!(parse("--bogus 1").is_err());

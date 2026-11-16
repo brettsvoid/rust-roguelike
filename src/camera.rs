@@ -51,6 +51,8 @@ pub struct Camera {
     panned: bool,
     /// Jump straight to the active unit on the next update (new game, new level).
     snap: bool,
+    /// A grid point to glide to instead of the active unit (`look_at`).
+    look_at: Option<Vec2>,
 }
 
 impl Default for Camera {
@@ -62,6 +64,7 @@ impl Default for Camera {
             view_height: ISO_VIEW_HEIGHT,
             panned: false,
             snap: true,
+            look_at: None,
         }
     }
 }
@@ -72,6 +75,12 @@ impl Camera {
     pub fn world_to_screen(&self, x: i32, y: i32) -> (i32, i32) {
         let centre = self.focus.round().as_ivec2();
         (x - centre.x + SCREEN_WIDTH / 2, y - centre.y + SCREEN_HEIGHT / 2)
+    }
+
+    /// Glide to grid point `at` (action off-screen) instead of the active
+    /// unit, overriding a pan; `None` glides back to following the unit.
+    pub fn look_at(&mut self, at: Option<Vec2>) {
+        self.look_at = at;
     }
 }
 
@@ -191,12 +200,12 @@ fn update_camera(
             camera.panned = false;
             camera.focus = target;
         }
-        if unit_pos.is_changed() || active.is_changed() {
+        if unit_pos.is_changed() || active.is_changed() || camera.look_at.is_some() {
             camera.panned = false;
         }
         if !camera.panned {
             camera.velocity = Vec2::ZERO;
-            camera.focus = glide_vec(camera.focus, target, dt, FOLLOW_TIME);
+            camera.focus = glide_vec(camera.focus, camera.look_at.unwrap_or(target), dt, FOLLOW_TIME);
             return;
         }
     }

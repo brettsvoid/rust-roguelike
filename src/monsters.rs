@@ -97,7 +97,7 @@ pub fn monster_ai(
         }
         let mut ap = if combat { AP_PER_ROUND } else { 1 };
         // In combat a monster with a hero to go for acts in view: the camera
-        // owner decides whether its tile is off-screen.
+        // glides there if its tile is off-screen (`presentation::play_beats`).
         let acts = combat && monster_target((pos.x, pos.y), &party, |tile| viewshed.visible_tiles.contains(&tile)).is_some();
         if acts {
             strikes.presentation.push(Beat::CameraFocus { at: (pos.x, pos.y) });

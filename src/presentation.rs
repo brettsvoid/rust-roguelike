@@ -48,14 +48,19 @@ pub const PROJECTILE_SECS: f32 = 0.35;
 pub const FLOATER_SECS: f32 = 0.9;
 /// How far a floater rises over its life, in world units.
 pub const FLOATER_RISE: f32 = 0.6;
+/// A floater that starts while others show over the same tile sits this much
+/// higher per floater, so they do not overprint, in world units.
+pub const FLOATER_STACK: f32 = 0.45;
 pub const FLINCH_SECS: f32 = 0.2;
 pub const FLINCH_REACH: f32 = 0.15;
 pub const DEATH_SECS: f32 = 0.6;
 /// The part of a death spent falling over; the rest fades and sinks.
 pub const DEATH_FALL: f32 = 0.5;
-/// Hold for the camera to reach off-screen action. 0 until the camera glides
-/// to `FocusRequest` (F11); raise it then.
-pub const CAMERA_FOCUS_SECS: f32 = 0.0;
+/// Hold for the camera to glide to off-screen action (most of the way at
+/// `camera::FOLLOW_TIME`). Action already on screen does not wait.
+pub const CAMERA_FOCUS_SECS: f32 = 0.4;
+/// Action closer than this share of the screen to an edge counts as off-screen.
+pub const CAMERA_FOCUS_MARGIN: f32 = 0.1;
 /// A pause after each monster that acted in combat.
 pub const BETWEEN_UNITS_SECS: f32 = 0.15;
 
@@ -75,7 +80,7 @@ pub enum Beat {
     Flinch { unit: Entity, at: (i32, i32), from: (i32, i32) },
     /// The stand-in of a dead unit falls over and fades, then is despawned.
     Death { unit: Entity, at: (i32, i32) },
-    /// Ask the camera to look at `at`.
+    /// Glide the camera to `at` if it is off-screen, until the queue is idle.
     CameraFocus { at: (i32, i32) },
     Wait { secs: f32 },
 }
@@ -124,6 +129,8 @@ struct Playing {
     together: bool,
     /// A floater's text entity.
     spawned: Option<Entity>,
+    /// Its slot above the tile, so floaters showing together do not overprint.
+    stack: usize,
 }
 
 /// Whether `earlier` (still in the queue) keeps `later` from starting.
@@ -150,7 +157,7 @@ pub struct Presentation {
 
 impl Presentation {
     pub fn push(&mut self, beat: Beat) {
-        let new = Playing { beat, elapsed: None, together: self.explore, spawned: None };
+        let new = Playing { beat, elapsed: None, together: self.explore, spawned: None, stack: 0 };
         if let Beat::Move { unit, cells } = &new.beat {
             if cells.len() < 2 {
                 return;
@@ -258,11 +265,6 @@ impl Presentation {
         }
     }
 }
-
-/// A world point the camera should bring into view (off-screen action in
-/// combat). Written by `CameraFocus` beats; the camera owner consumes it.
-#[derive(Resource, Default)]
-pub struct FocusRequest(pub Option<Vec3>);
 
 /// The body of a dead unit while its fall plays; despawned at the end.
 #[derive(Component)]
@@ -432,21 +434,14 @@ pub struct PresentationPlugin;
 impl Plugin for PresentationPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Presentation>()
-            .init_resource::<FocusRequest>()
             .add_systems(OnEnter(RunState::PreRun), reset)
             .add_systems(OnEnter(RunState::NextLevel), reset)
-            .add_systems(Update, (consume_focus_request, skip_on_input.after(player::handle_player_input)))
+            .add_systems(Update, skip_on_input.after(player::handle_player_input))
             .add_systems(
                 PostUpdate,
                 play_beats.before(TransformSystems::Propagate).before(UiSystems::Prepare),
             );
     }
-}
-
-/// Seam for F11: the camera should glide to the point. Until it does, the
-/// request is dropped.
-fn consume_focus_request(mut focus: ResMut<FocusRequest>) {
-    focus.0 = None;
 }
 
 /// In combat, any key or click finishes what is playing. Runs after the map
@@ -533,7 +528,7 @@ fn play_beats(
     font: Res<UiFont>,
     mut presentation: ResMut<Presentation>,
     mut effects: ResMut<Effects>,
-    mut focus: ResMut<FocusRequest>,
+    mut follow: ResMut<crate::camera::Camera>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut bodies: Bodies,
     mut skins: Query<&mut MeshMaterial3d<StandardMaterial>>,
@@ -550,12 +545,25 @@ fn play_beats(
         }
     }
 
+    let view = camera.single().ok().map(|(camera, transform)| (camera, GlobalTransform::from(*transform)));
     for i in presentation.start_ready() {
         match presentation.beats[i].beat.clone() {
             Beat::Projectile { from, to } => effects.play(EffectKind::MagicMissile { from }, to.0, to.1),
             Beat::Flinch { at, .. } => effects.play(EffectKind::HitSpark, at.0, at.1),
-            Beat::CameraFocus { at } => focus.0 = Some(floor(at)),
-            Beat::Floater { outcome, damage, .. } => {
+            Beat::CameraFocus { at } => {
+                let on_screen = view.as_ref().is_some_and(|(camera, rig)| {
+                    let size = camera.logical_viewport_size().unwrap_or_default();
+                    let margin = size * CAMERA_FOCUS_MARGIN;
+                    camera.world_to_viewport(rig, floor(at)).is_ok_and(|p| p.cmpge(margin).all() && p.cmple(size - margin).all())
+                });
+                if on_screen {
+                    presentation.beats[i].elapsed = Some(CAMERA_FOCUS_SECS);
+                } else {
+                    follow.look_at(Some(cell(at)));
+                }
+            }
+            Beat::Floater { at, outcome, damage } => {
+                presentation.beats[i].stack = free_floater_slot(&presentation.beats, at);
                 let (text, colour) = floater_text(outcome, damage);
                 let size = if outcome == Outcome::Crit { 26.0 } else { 20.0 };
                 let entity = commands
@@ -584,7 +592,6 @@ fn play_beats(
         }
     }
 
-    let view = camera.single().ok().map(|(camera, transform)| (camera, GlobalTransform::from(*transform)));
     for playing in &presentation.beats {
         let Some(t) = playing.elapsed else {
             continue;
@@ -606,7 +613,7 @@ fn play_beats(
                     continue;
                 };
                 let u = t / FLOATER_SECS;
-                let point = floor(*at) + Vec3::Y * (1.7 + FLOATER_RISE * u);
+                let point = floor(*at) + Vec3::Y * (1.7 + FLOATER_RISE * u + FLOATER_STACK * playing.stack as f32);
                 if let Ok(screen) = camera.world_to_viewport(rig, point) {
                     node.left = Val::Px(screen.x - FLOATER_WIDTH / 2.0);
                     node.top = Val::Px(screen.y - 12.0);
@@ -628,7 +635,18 @@ fn play_beats(
         }
     }
 
+    if !presentation.busy() {
+        follow.look_at(None);
+    }
     presentation.explore = *mode == Mode::Explore;
+}
+
+/// The lowest stack slot over `at` no showing floater holds.
+fn free_floater_slot(beats: &[Playing], at: (i32, i32)) -> usize {
+    let taken = |slot| {
+        beats.iter().any(|p| p.spawned.is_some() && p.stack == slot && matches!(p.beat, Beat::Floater { at: a, .. } if a == at))
+    };
+    (0..).find(|&slot| !taken(slot)).unwrap_or(0)
 }
 
 /// Floaters are centred in a box this wide, in logical pixels.
@@ -804,6 +822,22 @@ mod tests {
         p.push(Beat::Flinch { unit: u[0], at: (1, 1), from: (0, 1) });
         p.rename(u[0], u[1]);
         assert_eq!(p.beats[0].beat, Beat::Flinch { unit: u[1], at: (1, 1), from: (0, 1) });
+    }
+
+    #[test]
+    fn floaters_over_one_tile_take_the_lowest_free_slot() {
+        let text = units(1)[0];
+        let floater = |at, stack| Playing {
+            beat: Beat::Floater { at, outcome: Outcome::Hit, damage: 1 },
+            elapsed: Some(0.0),
+            together: false,
+            spawned: Some(text),
+            stack,
+        };
+        assert_eq!(free_floater_slot(&[], (1, 1)), 0);
+        assert_eq!(free_floater_slot(&[floater((1, 1), 0)], (1, 1)), 1);
+        assert_eq!(free_floater_slot(&[floater((1, 1), 1)], (1, 1)), 0, "the bottom one ended");
+        assert_eq!(free_floater_slot(&[floater((2, 1), 0)], (1, 1)), 0, "another tile");
     }
 
     #[test]
