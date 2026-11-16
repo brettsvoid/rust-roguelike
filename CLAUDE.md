@@ -34,7 +34,8 @@ cargo run -- --screenshot out.png --depth 2 --reveal-map --cursor 720,430 \
 # --click X,Y left-clicks grid cell X,Y (repeatable; the next input waits for the
 # walk to end; a click on another hero selects them). --keys presses keys through the
 # real input: g . (pick up, take the stairs), i (inventory), t (town ledger), n (Tab:
-# select the next hero), e (end the party phase in combat), o (overwatch), h (hunker down),
+# select the next hero), e (end the party phase in combat), f (attack the nearest hostile in
+# reach), o (overwatch), h (hunker down),
 # w a s d (pan: each holds the key for 10 frames, about 2.3 tiles), c (recentre),
 # + and - (one wheel notch to zoom). The camera eases (about a second to settle), and the
 # capture is taken at the fixed frame --frames, so a short --frames shows it mid-glide.
@@ -54,6 +55,15 @@ cargo run -- --screenshot fx.png --depth 2 --console "effect missile" --frames 1
 # the goblin beside him, which ends his turn:
 cargo run -- --screenshot combat.png --depth 2 --reveal-map --console godmode \
   --click 30,28 --click 34,27 --keys n --click 35,28 --keys enn --click 33,28 --frames 300
+# --press X,Y left-clicks a point of the 1600x1000 capture through the HUD's own click
+# handling (queued with the other inputs; each press waits a frame for the HUD layout).
+# In the party phase the action buttons sit on y=944 at x=548 Attack, 620 Overwatch,
+# 692 Hunker, 764 Use Item, 836 Wait, 908 End Turn; exploring, Use Item and Wait sit at
+# 692 and 764; the party cards are at x=150, y=889 + 30 per slot. Wait starts combat with
+# a goblin placed four tiles east, End Turn shows the "Round 2" banner, the second card
+# selects Brenna and Attack hits the goblin beside her:
+cargo run -- --screenshot hud.png --depth 2 --reveal-map --console godmode --console "place 4 0 Goblin" \
+  --console "place 3 0 Table" --press 764,944 --press 908,944 --press 150,919 --press 548,944 --frames 160
 # The harness prints the whole game log as "log>" lines when it captures. Keys also reach the
 # inventory: `.gia.` picks up a spawned bow and equips it (the leading and trailing `.` pad the
 # frame where the item spawns and the one where the inventory closes). Aldric shoots the goblin
@@ -175,6 +185,18 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
   one AP reaches, attack when a hero is in reach of its weapon, which ends its turn). Monsters
   have no weapons yet, so in practice they attack from beside a hero
 - **GuiPlugin** (`gui.rs`) - Main menu and builder-select menu (other UI lives in `ui/`)
+- **HudPlugin** (`ui/hud.rs`) - The bottom bar: party cards (portrait, health, AP pips, status
+  badges; a click selects the hero as Tab does), the action bar, depth/gold/mode and the log.
+  A button writes the key it stands for to the `ActionRequest` resource and
+  `player::handle_player_input` takes it after the real key presses, so a button and its
+  hotkey share one code path. The rules (which buttons, why one is disabled, the shot
+  preview numbers, which banner a phase change shows) are pure functions in
+  `ui/combat_hud.rs`. Shared colours and sizes live in `ui/style.rs`
+- **TooltipPlugin** (`ui/tooltip.rs`) - Names what is under the cursor; in combat a hostile shows
+  the shot preview (hit, crit, damage, cover or flank) from `combat::aim_at`
+- **HealthBarsPlugin** (`ui/health_bars.rs`) - A bar over each unit, a UI node placed by
+  projecting the unit's `GlobalTransform` through the `Camera3d` each frame; hidden with the unit
+- **BannerPlugin** (`ui/banner.rs`) - The eased centred banner on a mode or phase change
 - **LightingPlugin** (`lighting.rs`) - `LightSource` point lights, flicker, the shadow caster cap,
   and the per-depth ambient light, fog, bloom and town sun (see Lighting)
 - **EffectsPlugin** (`effects.rs`) - Combat and spell effects (see Effects)

@@ -4,10 +4,6 @@ use bevy::prelude::*;
 // HUD Components
 // ============================================================================
 
-/// The HUD row for the hero in this party slot.
-#[derive(Component)]
-pub struct PartyRow(pub usize);
-
 #[derive(Component)]
 pub struct DepthText;
 

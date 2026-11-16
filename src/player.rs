@@ -25,7 +25,8 @@ use crate::{
     pathfinding::a_star_explored,
     picking::{self, HoveredTile, TileMarks, FULL_TILE},
     rng::GameRng,
-    tactics::{confused_step, move_range, Action, MoveRange},
+    tactics::{attack_target, confused_step, move_range, Action, MoveRange},
+    ui::ActionRequest,
     viewshed::Viewshed,
     RunState,
 };
@@ -328,7 +329,7 @@ pub(crate) fn handle_player_input(
     monsters: Query<(Entity, &Position, &Name), (With<Monster>, Without<PartyMember>, Without<Bystander>)>,
     mut doors: Query<(Entity, &mut Door, &mut Renderable), Without<PartyMember>>,
     mut positions: Query<&mut Position, Or<(With<Bystander>, With<PartyMember>)>>,
-    (debug_mode, mode, mut turn_ended, mut hero_action, range, confused, mut rng, arms): (
+    (debug_mode, mode, mut turn_ended, mut hero_action, range, confused, mut rng, arms, mut request): (
         Res<DebugMode>,
         Res<Mode>,
         ResMut<TurnEnded>,
@@ -337,6 +338,7 @@ pub(crate) fn handle_player_input(
         Query<(), With<Confusion>>,
         ResMut<GameRng>,
         Arms,
+        ResMut<ActionRequest>,
     ),
 ) {
     // Don't process player input if debug console is open
@@ -372,12 +374,9 @@ pub(crate) fn handle_player_input(
     let mut action = None;
     let mut move_result: Option<MoveResult> = None;
 
-    for ev in evr_kbd.read() {
-        // We don't care about key releases, only key presses (including repeats)
-        if ev.state == ButtonState::Released {
-            continue;
-        }
-
+    // Key presses (including repeats), then a key a HUD button pressed.
+    let pressed = evr_kbd.read().filter(|ev| ev.state != ButtonState::Released).map(|ev| ev.key_code);
+    for key_code in pressed.chain(request.0.take()) {
         // Only process one input per frame to allow turn cycle to complete
         if player_acted {
             break;
@@ -386,7 +385,7 @@ pub(crate) fn handle_player_input(
         // Any key stops a walk.
         *walk = WalkPath::default();
 
-        match &ev.key_code {
+        match key_code {
             // Skip turn / wait
             KeyCode::Space => {
                 // No healing with a hostile in view or while starving
@@ -439,7 +438,7 @@ pub(crate) fn handle_player_input(
 
             // Overwatch (O) or hunker down (H): end the hero's turn in that stance
             KeyCode::KeyO | KeyCode::KeyH => {
-                let (stance, status) = if ev.key_code == KeyCode::KeyO {
+                let (stance, status) = if key_code == KeyCode::KeyO {
                     (Action::Overwatch, "goes on overwatch")
                 } else {
                     (Action::Hunker, "hunkers down")
@@ -454,6 +453,19 @@ pub(crate) fn handle_player_input(
                     gamelog.entries.push(format!("{} {status}.", hero_name.name));
                     player_acted = true;
                     action = Some(stance);
+                }
+            }
+
+            // Attack the nearest hostile in reach
+            KeyCode::KeyF => {
+                let targets: Vec<_> = seen_hostiles.iter().map(|h| (h.0, h.1)).collect();
+                match attack_target(&map, &arms.weapon(player_entity), (player_x, player_y), &targets) {
+                    Some(foe) => {
+                        commands.entity(player_entity).insert(WantsToAttack { target: foe });
+                        player_acted = true;
+                        action = Some(Action::Attack);
+                    }
+                    None => gamelog.entries.push("No target in reach.".to_string()),
                 }
             }
 

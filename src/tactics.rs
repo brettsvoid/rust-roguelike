@@ -8,6 +8,8 @@ use std::collections::{BTreeMap, BinaryHeap};
 
 use bevy::prelude::*;
 
+use crate::combat::in_reach;
+use crate::components::Weapon;
 use crate::map::Map;
 
 /// Action points every unit gets at the start of its side's phase.
@@ -132,6 +134,16 @@ pub fn confused_step(
     (!exits.is_empty()).then(|| exits[roll(exits.len())])
 }
 
+/// The hostile the attack key (F) aims at: the nearest of `hostiles` that
+/// `weapon` reaches from `from` (`combat::in_reach`), the first given on a tie.
+pub fn attack_target<T: Copy>(map: &Map, weapon: &Weapon, from: (i32, i32), hostiles: &[(T, (i32, i32))]) -> Option<T> {
+    hostiles
+        .iter()
+        .filter_map(|&(hostile, at)| in_reach(map, weapon, from, at).ok().map(|distance| (distance, hostile)))
+        .min_by_key(|&(distance, _)| distance)
+        .map(|(_, hostile)| hostile)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -239,5 +251,20 @@ mod tests {
         assert_eq!(confused_step(&map, (2, 2), open, |n| { assert_eq!(n, 6); 0 }), Some((2, 1)));
         assert_eq!(confused_step(&map, (2, 2), open, |_| 5), Some((3, 3)));
         assert_eq!(confused_step(&map, (2, 2), |_| false, |_| 0), None);
+    }
+
+    #[test]
+    fn the_attack_key_aims_at_the_nearest_hostile_in_reach() {
+        let mut map = open_map(12, 7);
+        let bow = Weapon { damage: (1, 4), range: 8, optimal_range: 5, crit_chance: 10 };
+        let hostiles = [('a', (9, 2)), ('b', (4, 2)), ('c', (2, 3)), ('d', (2, 1))];
+        assert_eq!(attack_target(&map, &bow, (1, 2), &hostiles), Some('c'), "nearest, first of a tie");
+        assert_eq!(attack_target(&map, &Weapon::NATURAL, (1, 2), &hostiles[..2]), None, "none beside");
+        // A wall hides the first of two at the same distance.
+        let level = [('b', (4, 2)), ('e', (1, 5))];
+        assert_eq!(attack_target(&map, &bow, (1, 2), &level), Some('b'));
+        let idx = map.xy_idx(3, 2);
+        map.tiles[idx] = TileType::Wall;
+        assert_eq!(attack_target(&map, &bow, (1, 2), &level), Some('e'));
     }
 }

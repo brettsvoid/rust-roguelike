@@ -112,6 +112,8 @@ fn main() {
             picking::PickingPlugin,
             ui::HudPlugin,
             ui::TooltipPlugin,
+            ui::BannerPlugin,
+            ui::HealthBarsPlugin,
             ui::TargetingPlugin,
             ui::GameOverPlugin,
             ui::InventoryPlugin,

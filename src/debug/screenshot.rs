@@ -1,13 +1,13 @@
 //! Screenshot harness: `cargo run -- --screenshot out.png [--seed N] [--depth N]
 //! [--reveal-map] [--frames N] [--console CMD]... [--ledger] [--cursor X,Y]
-//! [--target ITEM] [--keys KEYS]... [--click X,Y]... [--shop VENDOR]...` starts
+//! [--target ITEM] [--keys KEYS]... [--click X,Y]... [--press X,Y]... [--shop VENDOR]...` starts
 //! a seeded new game, waits, saves a PNG of the window and exits. `--depth` 0 (the
 //! default) is the town, 1 to 12 the dungeon. `--console` runs a debug console
 //! command once play begins (repeatable); `town ...` commands run before the
 //! level is built instead, e.g. "town level smithing 4"; `--ledger` then opens
 //! the town ledger. `--cursor` fakes the mouse at window point X,Y (logical
-//! pixels); `--target` enters targeting with the named item (e.g. `--console
-//! "spawn fireball" --target "Fireball Scroll"`). `--keys`, `--click` and `--shop` queue
+//! pixels of the 1600x1000 capture); `--target` enters targeting with the named item (e.g. `--console
+//! "spawn fireball" --target "Fireball Scroll"`). `--keys`, `--click`, `--press` and `--shop` queue
 //! input in the order given, fed through the real input systems one at a time
 //! while the game waits for input: `--keys` presses keys (`g`, `.`, `i` for the
 //! inventory, `t` for the town ledger, `n` for Tab to select the next hero, `e`
@@ -16,6 +16,12 @@
 //! wheel a notch to zoom in and out; the camera eases, so a capture taken soon
 //! after shows it mid-motion); `--click X,Y` left-clicks grid cell X,Y as if the mouse hovered it (a click on another
 //! hero selects them), and the next input waits until the walk it starts ends;
+//! `--press X,Y` left-clicks capture point X,Y (pixels of the 1600x1000
+//! image) through the HUD's own click handling, e.g. a party card or an action
+//! button. In the party phase with the default HUD the buttons sit on
+//! y = 944 at x = 548 (Attack), 620 (Overwatch), 692 (Hunker), 764 (Use Item),
+//! 836 (Wait) and 908 (End Turn); exploring, Use Item and Wait sit at 692 and
+//! 764; the party cards are at x = 150, y = 889 + 30 per slot;
 //! `--shop VENDOR` clicks that vendor (e.g. `blacksmith`), so the active hero
 //! walks beside them and their shop opens (the vendor's tile must be explored,
 //! so pair it with `--reveal-map`). Inputs are also fed while a shop is open:
@@ -92,6 +98,7 @@ impl Plugin for ScreenshotPlugin {
                         .before(shop::click_vendor)
                         .before(shop::handle_shop_input)
                         .before(inventory::handle_inventory_input)
+                        .before(crate::ui::hud::click_hud)
                         .before(player::handle_player_input),
                     // Models load async; starting only once they are in keeps the
                     // picture the same run to run.
@@ -125,6 +132,8 @@ pub enum HarnessInput {
     /// Wheel notches, up (zoom in) positive.
     Scroll(f32),
     Click(i32, i32),
+    /// A left click at a capture point, for the HUD.
+    Press(Vec2),
     /// Click the vendor's townsperson.
     Shop(Vendor),
 }
@@ -199,6 +208,10 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
             "--click" => {
                 let (x, y) = value.split_once(',').ok_or_else(bad)?;
                 inputs.push(HarnessInput::Click(x.parse().map_err(|_| bad())?, y.parse().map_err(|_| bad())?));
+            }
+            "--press" => {
+                let (x, y) = value.split_once(',').ok_or_else(bad)?;
+                inputs.push(HarnessInput::Press(Vec2::new(x.parse().map_err(|_| bad())?, y.parse().map_err(|_| bad())?)));
             }
             "--shop" => inputs.push(HarnessInput::Shop(Vendor::from_name(&value).ok_or_else(bad)?)),
             _ => return Err(format!("unknown argument: {flag}")),
@@ -381,6 +394,7 @@ fn feed_next_input(
     args: Res<ScreenshotArgs>,
     mut next: Local<usize>,
     mut held: Local<Option<(KeyCode, u32)>>,
+    mut settled: Local<bool>,
     walk: Res<WalkPath>,
     window: Single<Entity, With<PrimaryWindow>>,
     mut keyboard: MessageWriter<KeyboardInput>,
@@ -415,6 +429,11 @@ fn feed_next_input(
     let Some(input) = args.inputs.get(*next) else {
         return;
     };
+    // A press waits a frame, so the HUD's layout catches up with the last input.
+    if matches!(input, HarnessInput::Press(_)) && !std::mem::replace(&mut *settled, true) {
+        return;
+    }
+    *settled = false;
     *next += 1;
     match *input {
         HarnessInput::Key(key_code) => {
@@ -434,6 +453,11 @@ fn feed_next_input(
         }
         HarnessInput::Click(x, y) => {
             hovered.tile = Some((x, y));
+            mouse.release(MouseButton::Left);
+            mouse.press(MouseButton::Left);
+        }
+        HarnessInput::Press(point) => {
+            *hovered = HoveredTile { cursor: Some(point), tile: None };
             mouse.release(MouseButton::Left);
             mouse.press(MouseButton::Left);
         }
@@ -490,7 +514,7 @@ mod tests {
     #[test]
     fn all_flags() {
         assert_eq!(
-            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger --keys g.in --click 3,-4 --keys wasdc+-e --shop Priest --keys bj!"),
+            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --frames 10 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger --keys g.in --click 3,-4 --press 800,950.5 --keys wasdc+-e --shop Priest --keys bj!"),
             Ok(Some(ScreenshotArgs {
                 path: PathBuf::from("a.png"),
                 seed: 7,
@@ -507,6 +531,7 @@ mod tests {
                     HarnessInput::Key(KeyCode::KeyI),
                     HarnessInput::Key(KeyCode::Tab),
                     HarnessInput::Click(3, -4),
+                    HarnessInput::Press(Vec2::new(800.0, 950.5)),
                     HarnessInput::Key(KeyCode::KeyW),
                     HarnessInput::Key(KeyCode::KeyA),
                     HarnessInput::Key(KeyCode::KeyS),
@@ -555,6 +580,7 @@ mod tests {
         assert!(parse("--screenshot a.png --keys gk").is_err());
         assert!(parse("--screenshot a.png --click 3").is_err());
         assert!(parse("--screenshot a.png --click 3,4.5").is_err());
+        assert!(parse("--screenshot a.png --press 800").is_err());
         assert!(parse("--screenshot a.png --shop baker").is_err());
     }
 }
