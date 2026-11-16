@@ -389,7 +389,7 @@ and adds the `model` names to `raws/spawns.json`.
   both sides.
 
 ### C07 Tactical enemy AI
-- Status: in progress
+- Status: done
 - Needs: C05, C06
 - Monsters wait in groups until alerted. Once active they score candidate
   tiles (cover, flank, distance, hit chance) and spend AP on the best move and
@@ -428,7 +428,7 @@ and adds the `model` names to `raws/spawns.json`.
   works in combat.
 
 ### C11 Experience, levelling and recruits
-- Status: todo
+- Status: in progress
 - Needs: C10, E03
 - Kills give experience, levels raise stats. Dead heroes are replaced by
   hiring recruits at the pub for gold. Recruit quality rises with the town's
