@@ -565,7 +565,7 @@ and adds the `model` names to `raws/spawns.json`.
 - Done when: harness screenshots of the menu and HUD show the new style.
 
 ### P04 Balance pass
-- Status: todo
+- Status: in progress
 - Needs: C07, C10, E05, E07
 - Tune hit chances, damage, monster counts per depth, prices and sector
   thresholds so a first run is hard but fair and the town's first level-up
@@ -573,7 +573,7 @@ and adds the `model` names to `raws/spawns.json`.
 - Done when: the tuned numbers and the reasoning are recorded in `design.md`.
 
 ### P05 The Heart and the ending
-- Status: in progress
+- Status: done
 - Needs: C07, P01
 - Found during A06: the Heart of the Abyss exists only as a debug spawn, there
   are up stairs only on depth 1, and nothing ends the game in victory. Place
