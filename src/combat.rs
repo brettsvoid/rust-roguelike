@@ -11,6 +11,7 @@ use crate::components::{
 use crate::debug::GodMode;
 use crate::gamelog::GameLog;
 use crate::economy::Gold;
+use crate::enemy_ai::Alertness;
 use crate::map::{Map, Position};
 use crate::overwatch::{Hunkered, Overwatch, OVERWATCH_AIM_PENALTY};
 use crate::effects::Effects;
@@ -158,13 +159,20 @@ pub fn spell_damage(damage: i32) -> (i32, i32) {
 #[derive(SystemParam)]
 pub struct Arms<'w, 's> {
     wielded: Query<'w, 's, (&'static Equipped, &'static Weapon)>,
+    /// A monster's own weapon (raws `weapon`), on the unit itself.
+    own: Query<'w, 's, &'static Weapon, Without<Item>>,
     worn: Query<'w, 's, (&'static Equipped, &'static DefenseBonus)>,
 }
 
 impl Arms<'_, '_> {
-    /// The unit's equipped weapon, or its natural attack.
+    /// The unit's equipped weapon, else its own, else its natural attack.
     pub fn weapon(&self, unit: Entity) -> Weapon {
-        self.wielded.iter().find(|(e, _)| e.owner == unit).map_or(Weapon::NATURAL, |(_, w)| *w)
+        self.wielded
+            .iter()
+            .find(|(e, _)| e.owner == unit)
+            .map(|(_, w)| *w)
+            .or_else(|| self.own.get(unit).ok().copied())
+            .unwrap_or(Weapon::NATURAL)
     }
 
     /// Armour from the unit's equipment, on top of its own.
@@ -303,15 +311,24 @@ pub fn attack_system(
     }
 }
 
+/// Applies each `SufferDamage`. A hurt monster is alerted, and keeps hunting
+/// afresh if it already was (`enemy_ai::Alertness`).
 pub fn damage_system(
     mut commands: Commands,
     god_mode: Res<GodMode>,
     mut map: ResMut<Map>,
-    mut query: Query<(Entity, &mut CombatStats, &SufferDamage)>,
+    mut query: Query<(Entity, &mut CombatStats, &SufferDamage, Option<&mut Alertness>)>,
     position_query: Query<&Position>,
     party: Query<(), With<PartyMember>>,
 ) {
-    for (entity, mut stats, damage) in &mut query {
+    for (entity, mut stats, damage, alert) in &mut query {
+        if let Some(mut alert) = alert {
+            let last_seen = match *alert {
+                Alertness::Alerted { last_seen, .. } => last_seen,
+                Alertness::Idle => None,
+            };
+            *alert = Alertness::Alerted { last_seen, unseen: 0 };
+        }
         // God mode spares the whole party
         if god_mode.0 && party.contains(entity) {
             commands.entity(entity).remove::<SufferDamage>();

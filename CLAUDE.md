@@ -24,7 +24,8 @@ tools/scenes.py combat cover     # only these ("abil*" matches a prefix); --list
 
 # One harness run: a seeded new game, wait N frames, save a PNG, exit. The window is hidden
 # and the picture is a fixed 1600x1000 off-screen image, so nothing shows on screen and it
-# works with the screen locked. Depth 0 is the town, the dungeon is depths 1 to 12.
+# works with the screen locked. Depth 0 is the town, the dungeon is depths 1 to 12. It exits
+# the process right after saving: tearing the renderer down could wait on the GPU for minutes.
 # Defaults: --seed 42 --depth 0 --frames 60, fog on unless --reveal-map.
 cargo run -- --screenshot out.png --seed 42 --depth 2 --reveal-map --frames 60
 ```
@@ -56,8 +57,8 @@ The coordinator runs the same suite before every merge.
                    level is built. Useful: godmode, "place DX DY NAME" (any raws entry at an
                    offset from the active hero), "spawn <item>", "gold N", "hurt N",
                    "effect <spark|fireball|missile|heal|confusion|blood>", "teleport X Y",
-                   "town level <sector> <1-5>", "town days N". Do not use kill_all: it hangs
-                   the run (a known bug).
+                   "town level <sector> <1-5>", "town days N", kill_all (every monster
+                   falls as if killed: stand-in body, gold, "is dead").
 --click X,Y        left-click grid cell X,Y: walk, attack, select a hero, confirm a target
 --press X,Y        left-click a point of the 1600x1000 picture (HUD buttons and cards)
 --cursor X,Y       hover the mouse at a point of the picture
@@ -143,11 +144,17 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
 - **PickingPlugin** (`picking.rs`) - Cursor to grid cell via the `Camera3d` ray on the floor plane, the `HoveredTile` resource, the hover highlight and `TileMarks` (flat unlit quads for tile overlays)
 - **OcclusionPlugin** (`occlusion.rs`) - Cuts walls down to stubs and hides town roofs so the party and the visible floor stay in view (see Coordinate System)
 - **MapGenVizPlugin** (`mapgen_viz.rs`) - The map generation visualizer (main menu tool)
-- **MonstersPlugin** (`monsters.rs`) - Monster spawning and AI. `monster_target` picks the nearest
-  hero a monster sees or stands next to. Exploring, `monster_ai` takes one step or attacks per
-  turn; in combat each monster spends its AP by the heroes' rules (move as far along its path as
-  one AP reaches, attack when a hero is in reach of its weapon, which ends its turn). Monsters
-  have no weapons yet, so in practice they attack from beside a hero
+- **MonstersPlugin** (`monsters.rs`) - Monster AI, applying the pure rules of `enemy_ai.rs`.
+  `Monster` requires `Alertness` (starts `Idle`) and `Archetype` (raws `archetype`, default
+  brute). `look_round` updates every monster's alertness (`enemy_ai::spread_alert`) and logs
+  the changes ("Goblin spots Aldric!", "Goblin is alerted.", "Goblin loses the party's
+  trail."): `spot_party` runs it after every party action (in the `PartyAction` chain before
+  `after_party_action`), `monster_ai` at the start of the enemy turn, where it also counts a
+  turn of the hunt. Then only alerted monsters act. Exploring, one step or an attack per turn.
+  In combat, `enemy_ai::plan` per AP: move to the best-scoring tile, attack (through
+  `Strikes::strike`, at once), hunker, go on overwatch or wait. One that sees no hero hunts:
+  a one-AP move at a time towards where it last saw one (a fleeing coward does not).
+  `monster_target` picks the nearest hero a monster sees or stands next to (the one it spots)
 - **GuiPlugin** (`gui.rs`) - Main menu and builder-select menu (other UI lives in `ui/`)
 - **HudPlugin** (`ui/hud.rs`) - The bottom bar: party cards (portrait, name, class, health, AP
   pips, status badges; a click selects the hero as Tab does), the action bar (with a button per
@@ -238,7 +245,8 @@ Non-plugin modules worth knowing:
   weapon, cover, height)` is `aim - defence - cover - 10 per tile past the weapon's optimal range
   + 10 per level above the target`, clamped to 5..95, and 0 past the weapon's range. Callers pass
   `cover::Exposure::aim_penalty` and `LEVEL_GROUND` until a map with height. `in_reach` checks range
-  (Chebyshev) and `viewshed::line_of_sight` (Bresenham, walls and `BlocksVisibility` block);
+  (Chebyshev) and `viewshed::line_of_sight` (Bresenham drawn both ways, both must be clear, so
+  no shot is one-way; walls and `BlocksVisibility` block);
   `aim_at` combines both with `cover::exposure` (hunkered or not) and returns the chance and the `Exposure`. `roll_attack` rolls hit then crit, `roll_damage` rolls the weapon's
   damage + power (+1 well fed), +half rounded up on a crit, less armour, never below 0. All
   rolls go through `GameRng`. Every attack resolves in `Strikes::strike` (`Strikes` is a
@@ -248,7 +256,28 @@ Non-plugin modules worth knowing:
   `WantsToAttack` (melee or ranged alike) through it. `Arms` (a `SystemParam`) gives a unit's
   equipped `Weapon` or `Weapon::NATURAL` (power -1..+1, range 1, 5% crit) and its worn armour.
   `CombatStats`: `armour` (raws and saves call it `defense`) cuts damage, `defence` cuts hit
-  chance, `aim` defaults to `DEFAULT_AIM` (65)
+  chance, `aim` defaults to `DEFAULT_AIM` (65). A monster's own `Weapon` component (raws mob
+  `"weapon": "<items entry>"`, e.g. the Goblin Archer's and Orc Shaman's Shortbow) is its
+  weapon when it holds none (`Arms::weapon`). `damage_system` alerts a hurt monster
+- `enemy_ai.rs` - The monsters' tactics, pure rules over plain data. `Alertness` is `Idle` or
+  `Alerted { last_seen, unseen }`. `spread_alert`: seeing a hero alerts (with that sighting);
+  being hurt alerts (`combat::damage_system`; last seen is then the nearest hero); then every
+  idle monster within `ALERT_RADIUS` (5, Chebyshev) of an alerted one is alerted too, chained,
+  so a group is whoever stands that close. An alerted monster that sees no hero hunts towards
+  where it last saw one and gives up (back to `Idle`) after `HUNT_TURNS` (3) of its turns
+  unseen. `score_tile` scores a tile the monster can reach (`tactics::move_range`) or its own:
+  `cover` (the aim penalty its cover puts on the worst shot of the heroes that see it, flanked
+  -20, unseen 40), `flank` (it can flank a hero in reach from there), `distance` (path steps to
+  the nearest hero off its `preferred`), `hit` (its best `aim_at` chance, only with AP left to
+  attack), `overwatch` (reaction shots the walk there draws, `overwatch::reactions`) and `reach`
+  (heroes within `THREAT_RANGE`, 5). `weights` per `Archetype` (cover, flank, distance, hit,
+  overwatch, reach; preferred): brute 0, 0, -20, 1, 0, 0; 1. Skirmisher 1, 30, -5, 1, -40, 0;
+  1. Ranged 1, 10, -5, 1, -40, -15; its weapon's optimal range. A coward with an alerted ally
+  within `ALERT_RADIUS` and above a third of its hit points fights as a skirmisher with flank
+  10; otherwise it flees: 1, 0, -10, 0, -40, -30; `FLEE_RANGE` (8). `plan` moves to the best
+  tile (its own tile wins a tie, then the cheaper tile, then lower x, then lower y), or on it
+  attacks the hero it hits most surely (a fleeing coward does not), else hunkers if in cover
+  and fleeing or wounded (never a brute), else goes on overwatch if it sees a hero, else waits
 - Weapons in the raws: `weapon { slot, damage: [min, max], crit_chance, range (default 1),
   optimal_range (default range) }`; `slot` "ranged" (the Shortbow: range 8, optimal 5) takes
   the weapon hand like "melee". Damage scrolls roll `spell_damage` (a quarter either side of
@@ -266,11 +295,9 @@ Non-plugin modules worth knowing:
   (20) less aim, logged "Overwatch! Aldric shoots Goblin: ..."; the watcher's overwatch is spent
   and a mover it kills stops there. A hero's combat move inserts `WantsToMove { path }`
   (`MoveRange::path`), walked by `move_system` first in the `PartyAction` chain; monster moves
-  call `walk_under_watch` from `monster_ai`. Stand-in monster rules until C07: in combat, a
-  monster at a third of its hit points or less in cover from the hero it targets hunkers
-  ("Goblin hunkers down."), and one that sees a hero but can neither attack it nor take a step
-  towards it with AP left goes on overwatch ("Goblin goes on overwatch."). The HUD party row
-  shows "Overwatch" or "Hunkered" after the AP
+  call `walk_under_watch` from `monster_ai`. Monsters hunker ("Goblin hunkers down.") and go on
+  overwatch ("Goblin goes on overwatch.") by `enemy_ai::plan`. The HUD party row shows
+  "Overwatch" or "Hunkered" after the AP
 - `levels.rs` - New-game setup and level changes (`change_level`, run in `RunState::NextLevel`).
   The town is depth 0 (`TOWN_DEPTH`), the dungeon depths 1 to 12. Down stairs go one level
   deeper, or from town to the deepest depth reached; the up stairs (only on depth 1, at the start)
@@ -299,12 +326,12 @@ Two pieces of state, both in `game_flow.rs`:
 
 `Mode` (a resource) is the tactical mode: `Explore`, or `Combat { round, ap_spent }`. Every change
 of mode or phase goes through `advance(mode, step, situation)`, a pure function over plain data
-(the living heroes, and per hostile whether it sees a hero and a hero sees it), unit tested in
+(the living heroes, and per hostile whether it sees a hero, a hero sees it and it is alerted), unit tested in
 `game_flow.rs`. The `PartyAction` and `EnemyTurn` chains end in a system that calls it.
 - Explore: each hero action is followed by `EnemyTurn` (one turn per step); the leader walks a
   click path and the others follow
-- Explore to combat: a hostile and a hero see each other. Combat starts at the party phase of
-  round 1
+- Explore to combat: a hero sees a hostile that is aware of the party (sees a hero, or is
+  alerted: `Sight::alerted`). Combat starts at the party phase of round 1
 - Combat party phase: each hero has `AP_PER_ROUND` action points, spent in any order across
   heroes (`Mode::ap_left`, `Mode::can_act`). The map input records the `Action` it took in the
   `HeroAction` resource and `Step::PartyActed(hero, action)` spends it; the inventory and
@@ -315,7 +342,9 @@ of mode or phase goes through `advance(mode, step, situation)`, a pure function 
 - Status effects under AP: poison bites at the start of the unit's turn (Giant Spider melee hits
   poison, raws `poison: [damage, turns]`); a confused unit's move goes to a random adjacent tile
   (`confused_step`, rolled through `GameRng`) and still costs the AP of the move it chose
-- Combat to explore: no hostile sees a living hero (dead or out of sight)
+- Combat to explore: no hostile is aware of the party: none sees a living hero and none is
+  alerted. Stepping out of sight does not end a fight while the monsters hunt; it ends once
+  they give up (`enemy_ai::HUNT_TURNS`) or fall
 - Game over: no hero left alive
 - `Mode` is not saved: a loaded game starts in explore and drops back into combat at the next
   step if a hostile still sees the party
@@ -432,7 +461,8 @@ of the same logic. The build should stay at zero warnings.
   each backpack item's owner by slot, and the `Delve` (deepest depth, levels since town)
 - Each hero's class is saved (`SerializedMember::class`, missing in older saves). On load a
   hero with a class gets the class's starting gear equipped afresh and their abilities ready
-- Not saved yet (P01): `Poison` on a unit, a mob's poison bite (`PoisonsOnHit`),
+- Not saved yet (P01): `Poison` on a unit, a mob's poison bite (`PoisonsOnHit`), a monster's
+  `Alertness`, `Archetype` and own `Weapon` (a loaded monster is an idle, unarmed brute),
   `Overwatch` and `Hunkered`, equipment (equipped items are left out of the save; a hero
   without a class, from an older save, loses it) and ability cooldowns
 - Permadeath: save file deleted on load and when the last hero dies. A fallen hero leaves play

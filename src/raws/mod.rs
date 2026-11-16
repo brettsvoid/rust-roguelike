@@ -52,6 +52,17 @@ mod tests {
     }
 
     #[test]
+    fn every_hostile_has_an_archetype_and_a_weapon_that_exists() {
+        let raws = shipped_raws();
+        for mob in raws.mobs.iter().filter(|m| m.ai.is_none()) {
+            assert!(mob.archetype.is_some(), "{} has no archetype", mob.name);
+            if let Some(weapon) = &mob.weapon {
+                assert!(raws.items.iter().any(|i| &i.name == weapon && i.weapon.is_some()), "{}: {weapon}", mob.name);
+            }
+        }
+    }
+
+    #[test]
     fn every_prop_but_doors_states_its_cover() {
         for prop in shipped_raws().props {
             // A closed door blocks sight, so `cover::cover_at` makes it a wall.
@@ -170,7 +181,7 @@ mod tests {
         assert_eq!(mobs_at(1), ["Kobold", "Rat", "Giant Bat", "Goblin", "Orc"]);
         assert_eq!(
             mobs_at(5),
-            ["Goblin", "Hobgoblin", "Orc", "Orc Warrior", "Orc Shaman"]
+            ["Goblin", "Hobgoblin", "Orc", "Orc Warrior", "Orc Shaman", "Goblin Archer"]
         );
         assert_eq!(mobs_at(8), ["Skeleton", "Wraith", "Lich", "Imp"]);
         assert_eq!(mobs_at(12), ["Imp", "Hellhound", "Demon Lord"]);

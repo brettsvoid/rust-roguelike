@@ -17,6 +17,7 @@ mod debug;
 mod distance;
 mod economy;
 mod effects;
+mod enemy_ai;
 mod entity_render;
 mod game_flow;
 mod gamelog;

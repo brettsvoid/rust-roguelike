@@ -214,12 +214,7 @@ pub fn spawn_named_item(
     if let Some(ref weapon) = item_template.weapon {
         let slot = equipment_slot(item_template).unwrap_or(EquipmentSlot::Melee);
         entity.insert(Equippable { slot });
-        entity.insert(Weapon {
-            damage: weapon.damage,
-            range: weapon.range,
-            optimal_range: weapon.optimal_range.unwrap_or(weapon.range),
-            crit_chance: weapon.crit_chance,
-        });
+        entity.insert(weapon_of(weapon));
     }
 
     // Handle shield
@@ -245,6 +240,16 @@ pub fn spawn_named_item(
     }
 
     Some(entity.id())
+}
+
+/// The `Weapon` component for a raws weapon.
+fn weapon_of(weapon: &super::Weapon) -> Weapon {
+    Weapon {
+        damage: weapon.damage,
+        range: weapon.range,
+        optimal_range: weapon.optimal_range.unwrap_or(weapon.range),
+        crit_chance: weapon.crit_chance,
+    }
 }
 
 /// The slot an item is worn or wielded in, `None` if it cannot be equipped.
@@ -375,6 +380,19 @@ pub fn spawn_named_mob(
 
     if let Some(range) = mob_template.gold {
         entity.insert(Gold { amount: roll_gold(range) });
+    }
+
+    if let Some(archetype) = mob_template.archetype {
+        entity.insert(archetype);
+    }
+
+    if let Some(name) = &mob_template.weapon {
+        match raws.item_index.get(name).and_then(|&i| raws.raws.items[i].weapon.as_ref()) {
+            Some(weapon) => {
+                entity.insert(weapon_of(weapon));
+            }
+            None => warn!("{}: no weapon {name}", mob_template.name),
+        }
     }
 
     if let Some(ref renderable) = mob_template.renderable {

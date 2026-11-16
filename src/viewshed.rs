@@ -27,11 +27,15 @@ fn opaque(map: &Map, x: i32, y: i32) -> bool {
 }
 
 /// Whether nothing opaque stands between `from` and `to` on the Bresenham
-/// line. The two end tiles themselves do not count.
+/// line, drawn both ways: the line can pass different cells each way, and a
+/// shot one way must also be possible back. The two end tiles do not count.
 pub fn line_of_sight(map: &Map, from: (i32, i32), to: (i32, i32)) -> bool {
-    let line = bresenham_line(from.0, from.1, to.0, to.1);
-    let between = line.len().saturating_sub(2);
-    !line.iter().skip(1).take(between).any(|&(x, y)| opaque(map, x, y))
+    let clear = |a: (i32, i32), b: (i32, i32)| {
+        let line = bresenham_line(a.0, a.1, b.0, b.1);
+        let between = line.len().saturating_sub(2);
+        !line.iter().skip(1).take(between).any(|&(x, y)| opaque(map, x, y))
+    };
+    clear(from, to) && clear(to, from)
 }
 
 pub fn update_viewshed(map: Res<Map>, mut query: Query<(&Position, &mut Viewshed)>) {
@@ -116,4 +120,25 @@ fn calculate_fov(
     }
 
     visible_cells
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::map::TileType;
+
+    #[test]
+    fn line_of_sight_is_the_same_both_ways() {
+        let mut map = Map::new(5, 5, 1);
+        for idx in 0..map.tiles.len() {
+            map.tiles[idx] = TileType::Floor;
+        }
+        // Bresenham from (1, 1) to (3, 2) passes (2, 2); back it passes (2, 1).
+        assert!(bresenham_line(1, 1, 3, 2).contains(&(2, 2)) && bresenham_line(3, 2, 1, 1).contains(&(2, 1)));
+        assert!(line_of_sight(&map, (1, 1), (3, 2)));
+        let idx = map.xy_idx(2, 2);
+        map.tiles[idx] = TileType::Wall;
+        assert!(!line_of_sight(&map, (1, 1), (3, 2)));
+        assert!(!line_of_sight(&map, (3, 2), (1, 1)));
+    }
 }

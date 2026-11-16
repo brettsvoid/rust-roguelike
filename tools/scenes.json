@@ -32,19 +32,21 @@
     },
     {
       "name": "combat",
-      "note": "Walk into two goblins: a move, a dash, End Turn, the enemy phase, an attack.",
-      "args": "--seed 42 --depth 2 --reveal-map --console godmode --click 30,28 --click 34,27 --keys n --click 35,28 --keys enn --click 33,28 --frames 300",
+      "note": "Walk into two goblins: a move, a dash, End Turn, the enemy phase (the goblin waits on overwatch), a step that draws its reaction, an attack on the hobgoblin beside Aldric.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --click 30,28 --click 34,27 --keys n --click 35,28 --keys enn --click 33,28 --keys f --frames 300",
       "expect": [
-        "Hobgoblin #0 attacks Brenna",
-        "Aldric attacks Goblin #0: hit for 7 (65%)"
+        "Hobgoblin #0 attacks Aldric",
+        "Goblin #0 goes on overwatch.",
+        "Overwatch! Goblin #0 attacks Aldric",
+        "Aldric attacks Hobgoblin #0"
       ]
     },
     {
       "name": "hud",
       "note": "HUD buttons by --press: Wait starts combat, End Turn, the second card selects Brenna, Attack.",
-      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 4 0 Goblin\" --console \"place 3 0 Table\" --press 866,944 --press 1050,944 --press 150,919 --press 406,944 --frames 160",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 4 0 Orc\" --console \"place 3 0 Table\" --press 866,944 --press 1050,944 --press 150,919 --press 406,944 --frames 160",
       "expect": [
-        "Brenna shoots Goblin: critical hit for 8 (75%, flanked)"
+        "Brenna shoots Orc"
       ]
     },
     {
@@ -95,8 +97,8 @@
     },
     {
       "name": "cover",
-      "note": "Tables give half cover; Brenna flanks.",
-      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 5 0 Goblin\" --console \"place 1 0 Table\" --console \"place 1 -1 Table\" --console \"place 1 1 Table\" --click 40,20 --keys e --click 41,21 --keys n --click 40,21 --click 41,21 --frames 120",
+      "note": "Tables give half cover; Brenna flanks. The orc is a brute, so it closes in.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 5 0 Orc\" --console \"place 1 0 Table\" --console \"place 1 -1 Table\" --console \"place 1 1 Table\" --click 40,20 --keys e --click 41,21 --keys n --click 40,21 --click 41,21 --frames 120",
       "expect": [
         "half cover)",
         "flanked)"
@@ -113,20 +115,21 @@
     },
     {
       "name": "ow_monster",
-      "note": "A hemmed-in goblin goes on overwatch and reacts when Aldric walks up.",
-      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 7 0 Goblin\" --console \"place 6 -1 Goblin\" --console \"place 6 0 Goblin\" --console \"place 6 1 Goblin\" --keys ee --click 46,20 --frames 260",
+      "note": "A goblin in full cover at 43,26 (pillar west of it) faces Brenna on overwatch: moving draws a shot and gains nothing, so it goes on overwatch, and reacts when the next hero (Corin) walks up beside it.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 3 5 Goblin\" --keys ' noe' --click 42,25 --frames 260",
       "expect": [
+        "Brenna goes on overwatch.",
         "Goblin goes on overwatch.",
-        "Overwatch! Goblin attacks Aldric"
+        "Overwatch! Goblin attacks"
       ]
     },
     {
       "name": "hunker",
-      "note": "A hunkered Aldric behind a table: doubled cover in the odds.",
-      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 5 0 Goblin\" --console \"place 1 0 Table\" --console \"place 1 -1 Table\" --console \"place 1 1 Table\" --click 40,20 --keys he --frames 90",
+      "note": "Aldric hunkers behind a table; the orc picks the easier target, Dagny (its best hit chance).",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 5 0 Orc\" --console \"place 1 0 Table\" --console \"place 1 -1 Table\" --console \"place 1 1 Table\" --click 40,20 --keys he --frames 90",
       "expect": [
         "Aldric hunkers down.",
-        "half cover, hunkered)"
+        "Orc attacks Dagny"
       ]
     },
     {
@@ -181,6 +184,53 @@
       "name": "chars_walk",
       "note": "Walk five tiles east: the heroes turn to face the way they glide.",
       "args": "--seed 42 --depth 2 --keys \"..++\" --click 45,20 --every 10 --frames 120"
+    },
+    {
+      "name": "kill_all",
+      "note": "kill_all fells every monster (a placed goblin beside the party too), then the party walks to where the combat scene meets goblins.",
+      "args": "--seed 42 --depth 2 --reveal-map --console \"place 2 0 Goblin\" --console kill_all --click 30,28 --keys ' ' --frames 400",
+      "expect": [
+        "Goblin is dead",
+        "Goblin #0 is dead"
+      ]
+    },
+    {
+      "name": "ai_ranged",
+      "note": "A Goblin Archer (ranged) spots the party and moves north to 47,18, where the pillar at 46,18 gives it full cover from all four heroes and only Dagny has a line of sight; it shoots Dagny.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 8 0 Goblin Archer\" --keys ' e' --frames 200",
+      "expect": [
+        "Goblin Archer spots",
+        "Goblin Archer shoots Dagny"
+      ]
+    },
+    {
+      "name": "ai_brute",
+      "note": "An Orc (brute) dashes in from seven tiles beside Aldric, then attacks in the next enemy phase.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 7 0 Orc\" --keys ' ee' --frames 300",
+      "expect": [
+        "Orc spots",
+        "Orc attacks"
+      ]
+    },
+    {
+      "name": "ai_group",
+      "note": "Kobolds (vision 4) four tiles apart in a line east: the nearest spots the party and wakes the next two in a chain; the fourth, seven tiles on, sleeps.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place 4 0 Kobold\" --console \"place 8 0 Kobold\" --console \"place 12 0 Kobold\" --console \"place 19 0 Kobold\" --keys ' e' --frames 200",
+      "expect": [
+        "Kobold spots",
+        "Kobold is alerted.",
+        "Kobold is alerted."
+      ]
+    },
+    {
+      "name": "ai_hunt",
+      "note": "A rat (vision 4) sees only Corin and starts a fight; Corin steps out of its sight, yet combat goes on (his overwatch works) until it gives up four enemy phases later.",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"place -5 0 Rat\" --keys ' nn' --click 41,23 --keys oeeee --frames 700",
+      "expect": [
+        "Rat spots Corin!",
+        "Corin goes on overwatch.",
+        "Rat loses the party's trail."
+      ]
     }
   ]
 }

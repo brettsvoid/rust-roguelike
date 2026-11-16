@@ -843,6 +843,7 @@
   "mobs": [
     {
       "name": "Goblin",
+      "archetype": "skirmisher",
       "gold": [2, 8],
       "renderable": {
         "glyph": "g",
@@ -861,6 +862,7 @@
     },
     {
       "name": "Orc",
+      "archetype": "brute",
       "gold": [5, 15],
       "renderable": {
         "glyph": "o",
@@ -879,6 +881,7 @@
     },
     {
       "name": "Kobold",
+      "archetype": "coward",
       "gold": [1, 4],
       "renderable": {
         "glyph": "k",
@@ -897,6 +900,7 @@
     },
     {
       "name": "Rat",
+      "archetype": "coward",
       "renderable": {
         "glyph": "r",
         "fg": "#A52A2A",
@@ -1086,6 +1090,7 @@
     },
     {
       "name": "Giant Bat",
+      "archetype": "skirmisher",
       "renderable": {
         "glyph": "b",
         "fg": "#8B6914",
@@ -1105,6 +1110,7 @@
     },
     {
       "name": "Giant Spider",
+      "archetype": "skirmisher",
       "poison": [1, 3],
       "gold": [1, 5],
       "renderable": {
@@ -1124,6 +1130,7 @@
     },
     {
       "name": "Hobgoblin",
+      "archetype": "brute",
       "gold": [5, 12],
       "renderable": {
         "glyph": "g",
@@ -1142,6 +1149,7 @@
     },
     {
       "name": "Orc Warrior",
+      "archetype": "brute",
       "gold": [8, 20],
       "renderable": {
         "glyph": "o",
@@ -1160,6 +1168,8 @@
     },
     {
       "name": "Orc Shaman",
+      "archetype": "ranged",
+      "weapon": "Shortbow",
       "gold": [10, 25],
       "renderable": {
         "glyph": "o",
@@ -1178,6 +1188,7 @@
     },
     {
       "name": "Skeleton",
+      "archetype": "brute",
       "gold": [5, 15],
       "renderable": {
         "glyph": "z",
@@ -1196,6 +1207,7 @@
     },
     {
       "name": "Wraith",
+      "archetype": "skirmisher",
       "gold": [15, 30],
       "renderable": {
         "glyph": "W",
@@ -1214,6 +1226,7 @@
     },
     {
       "name": "Lich",
+      "archetype": "skirmisher",
       "gold": [40, 80],
       "renderable": {
         "glyph": "L",
@@ -1232,6 +1245,7 @@
     },
     {
       "name": "Imp",
+      "archetype": "skirmisher",
       "gold": [10, 25],
       "renderable": {
         "glyph": "i",
@@ -1250,6 +1264,7 @@
     },
     {
       "name": "Hellhound",
+      "archetype": "brute",
       "gold": [15, 35],
       "renderable": {
         "glyph": "d",
@@ -1268,6 +1283,7 @@
     },
     {
       "name": "Demon Lord",
+      "archetype": "brute",
       "gold": [100, 200],
       "renderable": {
         "glyph": "&",
@@ -1283,6 +1299,26 @@
         "power": 15
       },
       "vision_range": 10
+    },
+    {
+      "name": "Goblin Archer",
+      "archetype": "ranged",
+      "weapon": "Shortbow",
+      "gold": [3, 10],
+      "renderable": {
+        "glyph": "g",
+        "fg": "#FF8040",
+        "bg": "#000000",
+        "order": 1
+      },
+      "blocks_tile": true,
+      "stats": {
+        "max_hp": 12,
+        "hp": 12,
+        "defense": 0,
+        "power": 1
+      },
+      "vision_range": 9
     }
   ],
   "props": [
@@ -1522,6 +1558,7 @@
     { "name": "Imp", "weight": 8, "min_depth": 8, "max_depth": 100 },
     { "name": "Hellhound", "weight": 6, "min_depth": 9, "max_depth": 100 },
     { "name": "Demon Lord", "weight": 2, "min_depth": 10, "max_depth": 100 },
+    { "name": "Goblin Archer", "weight": 6, "min_depth": 3, "max_depth": 5 },
     { "name": "Gold", "weight": 6, "min_depth": 0, "max_depth": 100 },
     { "name": "Health Potion", "weight": 7, "min_depth": 0, "max_depth": 100 },
     { "name": "Rations", "weight": 10, "min_depth": 0, "max_depth": 100 },

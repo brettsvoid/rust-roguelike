@@ -20,6 +20,7 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 
 use crate::combat::CombatStats;
+use crate::enemy_ai::Alertness;
 use crate::map::{self, Map, Position, Revealed, RevealedState, Tile};
 use crate::monsters::Monster;
 use crate::party::{next_unit, ActiveUnit, PartyMember};
@@ -89,13 +90,23 @@ pub enum Step {
     EnemiesActed,
 }
 
-/// What one hostile and the party can see of each other.
+/// What one hostile knows of the party, and whether the party sees it.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Sight {
-    /// It sees a living hero: it is aware of the party.
+    /// It sees a living hero.
     pub sees_party: bool,
     /// A living hero sees it.
     pub seen_by_party: bool,
+    /// It is alerted (`enemy_ai::Alertness`): hunting the party even unseen,
+    /// until it gives up.
+    pub alerted: bool,
+}
+
+impl Sight {
+    /// It sees the party or is hunting it.
+    fn aware(self) -> bool {
+        self.sees_party || self.alerted
+    }
 }
 
 /// The plain facts `advance` decides from.
@@ -107,16 +118,17 @@ pub struct Situation {
     pub hostiles: Vec<Sight>,
 }
 
-/// The mode and the frame-loop state after `step`. Combat starts when a
-/// hostile and a hero see each other, always with the party phase of round 1.
-/// It ends when no hostile is aware of the party. A party with nobody left
-/// alive is game over.
+/// The mode and the frame-loop state after `step`. Combat starts when a hero
+/// sees a hostile that is aware of the party (sees a hero or is alerted),
+/// always with the party phase of round 1. It goes on while any hostile is
+/// aware, so stepping out of sight does not end it while the monsters hunt,
+/// and ends when none is. A party with nobody left alive is game over.
 pub fn advance(mode: &Mode, step: Step, situation: &Situation) -> (Mode, RunState) {
     if situation.party.is_empty() {
         return (mode.clone(), RunState::GameOver);
     }
-    let aware = situation.hostiles.iter().any(|h| h.sees_party);
-    let contact = situation.hostiles.iter().any(|h| h.sees_party && h.seen_by_party);
+    let aware = situation.hostiles.iter().any(|h| h.aware());
+    let contact = situation.hostiles.iter().any(|h| h.aware() && h.seen_by_party);
     match (mode, step) {
         (Mode::Explore, _) if contact => (Mode::Combat { round: 1, ap_spent: HashMap::new() }, RunState::AwaitingInput),
         (Mode::Explore, Step::PartyActed(..)) => (Mode::Explore, RunState::EnemyTurn),
@@ -199,6 +211,7 @@ impl Plugin for GameFlowPlugin {
                     combat::damage_system,
                     combat::delete_the_dead,
                     viewshed::update_viewshed,
+                    monsters::spot_party,
                     after_party_action,
                 )
                     .chain()
@@ -244,8 +257,12 @@ fn transition_to_awaiting_input(mut next_state: ResMut<NextState<RunState>>) {
 
 type PartySight<'w, 's> =
     Query<'w, 's, (Entity, &'static PartyMember, &'static CombatStats, &'static Position, &'static Viewshed)>;
-type HostileSight<'w, 's> =
-    Query<'w, 's, (&'static CombatStats, &'static Position, &'static Viewshed), (With<Monster>, Without<PartyMember>)>;
+type HostileSight<'w, 's> = Query<
+    'w,
+    's,
+    (&'static CombatStats, &'static Position, &'static Viewshed, &'static Alertness),
+    (With<Monster>, Without<PartyMember>),
+>;
 
 /// Applies `step` to the mode and the frame loop. In combat, the walk stops
 /// and a hero out of AP hands control to the next one who can act.
@@ -264,9 +281,10 @@ fn take_step(
         hostiles: hostiles
             .iter()
             .filter(|(stats, ..)| stats.hp > 0)
-            .map(|(_, pos, view)| Sight {
+            .map(|(_, pos, view, alert)| Sight {
                 sees_party: living.iter().any(|m| view.visible_tiles.contains(&(m.3.x, m.3.y))),
                 seen_by_party: living.iter().any(|m| m.4.visible_tiles.contains(&(pos.x, pos.y))),
+                alerted: alert.alerted(),
             })
             .collect(),
     };
@@ -368,7 +386,7 @@ mod tests {
             party: party.to_vec(),
             hostiles: hostiles
                 .iter()
-                .map(|&(sees_party, seen_by_party)| Sight { sees_party, seen_by_party })
+                .map(|&(sees_party, seen_by_party)| Sight { sees_party, seen_by_party, alerted: false })
                 .collect(),
         }
     }
@@ -466,6 +484,22 @@ mod tests {
         let s = situation(&p, &[(false, true)]);
         assert_eq!(advance(&combat(4, &[]), Step::EnemiesActed, &s), explore);
         assert_eq!(advance(&combat(4, &[]), Step::EndTurn, &s), explore);
+    }
+
+    #[test]
+    fn combat_goes_on_while_an_alerted_hostile_hunts_out_of_sight() {
+        let p = heroes(2);
+        // The party stepped out of sight: nobody sees anybody, but it hunts.
+        let hunting = Situation { party: p.clone(), hostiles: vec![Sight { alerted: true, ..Sight::default() }] };
+        assert_eq!(advance(&combat(2, &[]), Step::EnemiesActed, &hunting), (combat(3, &[]), RunState::AwaitingInput));
+        assert_eq!(advance(&combat(2, &[]), Step::EndTurn, &hunting), (combat(2, &[]), RunState::EnemyTurn));
+        // Unseen, it does not start a fight; once a hero sees it, it does.
+        assert_eq!(advance(&Mode::Explore, Step::EnemiesActed, &hunting), (Mode::Explore, RunState::AwaitingInput));
+        let seen = Situation { party: p.clone(), hostiles: vec![Sight { alerted: true, seen_by_party: true, ..Sight::default() }] };
+        assert_eq!(advance(&Mode::Explore, Step::EnemiesActed, &seen), (combat(1, &[]), RunState::AwaitingInput));
+        // Once it gives up, the fight is over.
+        let gave_up = situation(&p, &[(false, true)]);
+        assert_eq!(advance(&combat(5, &[]), Step::EnemiesActed, &gave_up), (Mode::Explore, RunState::AwaitingInput));
     }
 
     #[test]
