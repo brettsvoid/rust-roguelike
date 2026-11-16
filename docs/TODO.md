@@ -542,7 +542,7 @@ and adds the `model` names to `raws/spawns.json`.
 ## P: Persistence, polish and docs
 
 ### P01 Save and load for the new game
-- Status: in progress
+- Status: done
 - Needs: C03, E01
 - Rework `saveload.rs` for the party, equipment, gold, combat mode and AP
   state. Fixes the known gap that equipment and bystanders are not saved.
@@ -573,7 +573,7 @@ and adds the `model` names to `raws/spawns.json`.
 - Done when: the tuned numbers and the reasoning are recorded in `design.md`.
 
 ### P05 The Heart and the ending
-- Status: todo
+- Status: in progress
 - Needs: C07, P01
 - Found during A06: the Heart of the Abyss exists only as a debug spawn, there
   are up stairs only on depth 1, and nothing ends the game in victory. Place
