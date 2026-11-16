@@ -33,7 +33,8 @@ ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "tools" / "scenes.json"
 TOWN = ROOT / "tools" / "scenes-town.json"
 TIMEOUT_SECS = 400
-TOWN_LOCK = Path(tempfile.gettempdir()) / "abyss-town-scene.lock"
+FIRST_TRY_SECS = 150
+GPU_LOCK = Path(tempfile.gettempdir()) / "abyss-scene.lock"
 SHEET_COLUMNS = 4
 SHEET_TILE = "800x500"
 FONT = "/System/Library/Fonts/Supplemental/Arial.ttf"
@@ -54,32 +55,35 @@ def run_scene(scene, out):
     name = scene["name"]
     png = out / f"{name}.png"
     png.unlink(missing_ok=True)
-    work = Path(tempfile.mkdtemp(prefix=f"scene-{name}-"))
-    shutil.copy(TOWN, work / "town.json")
-    for file_name, text in scene.get("files", {}).items():
-        (work / file_name).write_text(text)
     command = [
         "cargo", "run", "-q", "--manifest-path", str(ROOT / "Cargo.toml"), "--",
         "--screenshot", str(png), *shlex.split(scene["args"]),
     ]
-    # Two town games at once starve each other on the GPU (320 s each against 18 s alone),
-    # so town scenes take turns, across every runner on the machine.
+    # Games starve each other on the GPU: two town games at once take 320 s each against
+    # 18 s alone, and now and then a dungeon game stalls beside another. So town scenes run
+    # alone on the machine (across every runner), dungeon scenes share it, and a scene that
+    # stalls is run once more alone.
     town = "--depth 0" in scene["args"] or "--depth" not in scene["args"]
-    turn = open(TOWN_LOCK, "w") if town else None
-    if turn:
-        fcntl.flock(turn, fcntl.LOCK_EX)
     started = time.monotonic()
-    try:
-        done = subprocess.run(command, cwd=work, capture_output=True, text=True, timeout=TIMEOUT_SECS)
-        output, problem = done.stdout + done.stderr, None
-        if done.returncode != 0:
-            problem = f"exit code {done.returncode}"
-    except subprocess.TimeoutExpired as hung:
-        output = (hung.stdout or b"").decode(errors="replace") + (hung.stderr or b"").decode(errors="replace")
-        problem = f"hung for {TIMEOUT_SECS}s"
-    if turn:
-        turn.close()
-    shutil.rmtree(work, ignore_errors=True)
+    for alone, limit in ((town, FIRST_TRY_SECS), (True, TIMEOUT_SECS)):
+        work = Path(tempfile.mkdtemp(prefix=f"scene-{name}-"))
+        shutil.copy(TOWN, work / "town.json")
+        for file_name, text in scene.get("files", {}).items():
+            (work / file_name).write_text(text)
+        with open(GPU_LOCK, "w") as turn:
+            fcntl.flock(turn, fcntl.LOCK_EX if alone else fcntl.LOCK_SH)
+            try:
+                done = subprocess.run(command, cwd=work, capture_output=True, text=True, timeout=limit)
+                output, problem = done.stdout + done.stderr, None
+                if done.returncode != 0:
+                    problem = f"exit code {done.returncode}"
+            except subprocess.TimeoutExpired as hung:
+                output = (hung.stdout or b"").decode(errors="replace") + (hung.stderr or b"").decode(errors="replace")
+                problem = f"hung for {limit}s"
+        shutil.rmtree(work, ignore_errors=True)
+        if problem is None or not problem.startswith("hung"):
+            break
+        png.unlink(missing_ok=True)
     log = [line.split("log> ", 1)[1] for line in output.splitlines() if "log> " in line]
     (out / f"{name}.log").write_text("\n".join(log) + "\n")
     for line in output.splitlines():
