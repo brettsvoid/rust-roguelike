@@ -200,7 +200,7 @@ Settled questions (owner, 15 November 2026):
   with no code change, shown in a harness screenshot.
 
 ### F09 Delete the in-game ASCII renderer
-- Status: todo
+- Status: in progress
 - Needs: F08, A01, A02, A03, A04, A05
 - Remove glyph rendering of entities and in-game tiles and the 2D gameplay
   camera maths that nothing uses. Keep `spawn_map_tiles` and `tile_glyph` for
@@ -558,7 +558,7 @@ and adds the `model` names to `raws/spawns.json`.
 - Done when: the three documents agree with this file.
 
 ### P03 Main menu and UI restyle
-- Status: in progress
+- Status: done
 - Needs: F07
 - Restyle the main menu, HUD and modals to suit the dark 3D look. A lit 3D
   scene behind the main menu.
