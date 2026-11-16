@@ -2,7 +2,7 @@ use bevy::input::keyboard::KeyboardInput;
 use bevy::input::ButtonState;
 use bevy::prelude::*;
 
-use crate::components::{EntryTrigger, Item};
+use crate::components::Item;
 use crate::economy::town::TownState;
 use crate::gamelog::GameLog;
 use crate::levels;
