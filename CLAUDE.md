@@ -466,8 +466,8 @@ scans the folder once at startup, so restart after adding a file).
   `GROW` (1.25) to at most `MAX_SPAN` (1.05 m) at `finish`. Long things lie along the north-east
   diagonal, across the camera's view; shields lean towards the camera. Potions, the Heart, the
   portal seal and magic trims glow; steel here is brighter and not metallic, as metal with
-  nothing to reflect reads near black. 32 to 190 triangles. A loaded game puts each item's
-  model back from the raws (`RawMaster::item_model`)
+  nothing to reflect reads near black. 32 to 190 triangles. A loaded game respawns each
+  item from the raws, model included
 - Facing: a creature's model scene (not the entity, so a hero's torch stays put) turns to the
   way it last moved, struck or was struck from, eased over `presentation::TURN_SECS`
   (`presentation::heading`, `Facing`, `turn_models`)

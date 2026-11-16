@@ -18,6 +18,7 @@ sheet once, instead of opening a picture per change.
 
 import argparse
 import concurrent.futures
+import fcntl
 import json
 import os
 import shlex
@@ -32,6 +33,7 @@ ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "tools" / "scenes.json"
 TOWN = ROOT / "tools" / "scenes-town.json"
 TIMEOUT_SECS = 400
+TOWN_LOCK = Path(tempfile.gettempdir()) / "abyss-town-scene.lock"
 SHEET_COLUMNS = 4
 SHEET_TILE = "800x500"
 FONT = "/System/Library/Fonts/Supplemental/Arial.ttf"
@@ -60,6 +62,12 @@ def run_scene(scene, out):
         "cargo", "run", "-q", "--manifest-path", str(ROOT / "Cargo.toml"), "--",
         "--screenshot", str(png), *shlex.split(scene["args"]),
     ]
+    # Two town games at once starve each other on the GPU (320 s each against 18 s alone),
+    # so town scenes take turns, across every runner on the machine.
+    town = "--depth 0" in scene["args"] or "--depth" not in scene["args"]
+    turn = open(TOWN_LOCK, "w") if town else None
+    if turn:
+        fcntl.flock(turn, fcntl.LOCK_EX)
     started = time.monotonic()
     try:
         done = subprocess.run(command, cwd=work, capture_output=True, text=True, timeout=TIMEOUT_SECS)
@@ -69,6 +77,8 @@ def run_scene(scene, out):
     except subprocess.TimeoutExpired as hung:
         output = (hung.stdout or b"").decode(errors="replace") + (hung.stderr or b"").decode(errors="replace")
         problem = f"hung for {TIMEOUT_SECS}s"
+    if turn:
+        turn.close()
     shutil.rmtree(work, ignore_errors=True)
     log = [line.split("log> ", 1)[1] for line in output.splitlines() if "log> " in line]
     (out / f"{name}.log").write_text("\n".join(log) + "\n")
