@@ -57,7 +57,7 @@ use bevy::input::touch::TouchPhase;
 use bevy::input::ButtonState;
 use bevy::camera::{ImageRenderTarget, RenderTarget, ShadowLodOrigin};
 use bevy::prelude::*;
-use bevy::render::render_resource::TextureFormat;
+use bevy::render::render_resource::{PollType, TextureFormat};
 use bevy::render::view::screenshot::{save_to_disk, Screenshot, ScreenshotCaptured};
 use bevy::time::TimeUpdateStrategy;
 use bevy::window::{CursorOptions, PrimaryWindow};
@@ -98,7 +98,14 @@ impl Plugin for ScreenshotPlugin {
         if let Some(cursor) = args.cursor {
             app.insert_resource(FakeCursor(cursor));
         }
-        app.insert_resource(GameRng::seeded(args.seed))
+        let gpu_wait = GpuWait::default();
+        if let Some(render_app) = app.get_sub_app_mut(bevy::render::RenderApp) {
+            render_app
+                .insert_resource(gpu_wait.clone())
+                .add_systems(bevy::render::Render, pace_gpu.in_set(bevy::render::RenderSystems::Cleanup));
+        }
+        app.insert_resource(gpu_wait)
+            .insert_resource(GameRng::seeded(args.seed))
             // Fixed steps make anything driven by `Time` (flickering lights)
             // the same every run.
             .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(1.0 / 60.0)))
@@ -312,15 +319,19 @@ const CAPTURE_SIZE: UVec2 = UVec2::new(1600, 1000);
 
 /// Points both cameras at an off-screen image. A window's picture depends on
 /// its size (window managers resize it) and is black while the screen is
-/// locked or asleep; an image is neither.
+/// locked or asleep; an image is neither. `HARNESS_SCALE=2` draws it twice as
+/// wide and high, the pixels a Retina window draws, for frame timing: the world
+/// shows the same, the HUD at half size (an image target with a scale factor
+/// of 2 drew nothing).
 fn render_to_image(
     mut commands: Commands,
     cameras: Query<(Entity, Has<Camera3d>), With<Camera>>,
     mut images: ResMut<Assets<Image>>,
 ) {
+    let scale = std::env::var("HARNESS_SCALE").ok().and_then(|s| s.parse::<u32>().ok()).unwrap_or(1).max(1);
     let handle = images.add(Image::new_target_texture(
-        CAPTURE_SIZE.x,
-        CAPTURE_SIZE.y,
+        CAPTURE_SIZE.x * scale,
+        CAPTURE_SIZE.y * scale,
         TextureFormat::Rgba8UnormSrgb,
         None,
     ));
@@ -612,16 +623,92 @@ fn reload_game(world: &mut World) {
     world.resource_mut::<NextState<RunState>>().set(RunState::PreRun);
 }
 
+/// How many frames the GPU may lag behind the CPU. A window's swap chain holds
+/// a game to about this; the harness draws into an image, which holds it to
+/// nothing, so without this a run queued frames until Metal's 4096 command
+/// buffer cap, and two runs at once starved each other of the GPU.
+const FRAMES_IN_FLIGHT: usize = 2;
+
+/// Nanoseconds the render thread has spent waiting for the GPU (`pace_gpu`),
+/// shared by the render world and the main world.
+#[derive(Resource, Clone, Default)]
+struct GpuWait(std::sync::Arc<std::sync::atomic::AtomicU64>);
+
+/// Waits until the GPU has finished the frame `FRAMES_IN_FLIGHT` back.
+fn pace_gpu(
+    device: Res<bevy::render::renderer::RenderDevice>,
+    queue: Res<bevy::render::renderer::RenderQueue>,
+    wait: Res<GpuWait>,
+    mut submitted: Local<std::collections::VecDeque<PollType>>,
+) {
+    // An empty submit names everything submitted so far, this frame included.
+    submitted.push_back(PollType::Wait { submission_index: Some(queue.submit([])), timeout: None });
+    if submitted.len() <= FRAMES_IN_FLIGHT {
+        return;
+    }
+    let start = std::time::Instant::now();
+    if let Some(oldest) = submitted.pop_front() {
+        let _ = device.poll(oldest);
+    }
+    wait.0.fetch_add(start.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Frames skipped before `FRAME_TIME_LOG=1` starts timing: level spawn, shader
+/// compiles and first uploads.
+const TIMING_WARMUP: u32 = 120;
+
+/// Wall-clock frame times past the warm-up, and the GPU wait at its start.
+#[derive(Default)]
+struct FrameTimes {
+    last: Option<std::time::Instant>,
+    millis: Vec<f64>,
+    gpu_wait_start: u64,
+}
+
+/// "frame time: median 9.1 ms, p95 10.4 ms, mean 9.3 ms (110 fps) over 480 frames; GPU wait 6.2 ms a frame".
+fn frame_time_line(times: &FrameTimes, gpu_wait_nanos: u64) -> String {
+    let mut sorted = times.millis.clone();
+    sorted.sort_by(f64::total_cmp);
+    let n = sorted.len().max(1);
+    let median = sorted.get(n / 2).copied().unwrap_or_default();
+    let p95 = sorted.get((n * 95).div_ceil(100).saturating_sub(1)).copied().unwrap_or_default();
+    let mean = sorted.iter().sum::<f64>() / n as f64;
+    let wait = (gpu_wait_nanos - times.gpu_wait_start) as f64 / 1e6 / n as f64;
+    format!(
+        "frame time: median {median:.2} ms, p95 {p95:.2} ms, mean {mean:.2} ms ({:.0} fps) over {} frames; GPU wait {wait:.2} ms a frame",
+        1000.0 / median.max(f64::EPSILON),
+        sorted.len()
+    )
+}
+
 /// Counts frames after the game starts, then captures the picture once.
 /// Saves the PNG and logs the game log, so a run can be checked by its state too.
+/// With `FRAME_TIME_LOG=1` it also logs the frame times past the warm-up.
 fn capture_after_frames(
     mut commands: Commands,
     args: Res<ScreenshotArgs>,
     target: Res<CaptureTarget>,
     log: Res<GameLog>,
+    gpu_wait: Res<GpuWait>,
     mut frame: Local<u32>,
+    mut times: Local<FrameTimes>,
+    meshes: Query<(), With<Mesh3d>>,
+    lights: Query<&PointLight>,
 ) {
     *frame += 1;
+    if std::env::var_os("FRAME_TIME_LOG").is_some() && *frame > TIMING_WARMUP {
+        let now = std::time::Instant::now();
+        match times.last {
+            Some(last) => times.millis.push((now - last).as_secs_f64() * 1000.0),
+            None => times.gpu_wait_start = gpu_wait.0.load(std::sync::atomic::Ordering::Relaxed),
+        }
+        times.last = Some(now);
+        if *frame == args.frames {
+            info!("{}", frame_time_line(&times, gpu_wait.0.load(std::sync::atomic::Ordering::Relaxed)));
+            let shadowed = lights.iter().filter(|l| l.shadow_maps_enabled).count();
+            info!("scene: {} meshes, {} point lights ({shadowed} with shadows)", meshes.iter().count(), lights.iter().count());
+        }
+    }
     if args.every.is_some_and(|n| frame.is_multiple_of(n) && *frame < args.frames) {
         let stem = args.path.file_stem().unwrap_or_default().to_string_lossy();
         let path = args.path.with_file_name(format!("{stem}-{:04}.png", *frame));
@@ -652,6 +739,19 @@ mod tests {
 
     fn parse(line: &str) -> Result<Option<ScreenshotArgs>, String> {
         parse_args(line.split_whitespace().map(String::from))
+    }
+
+    #[test]
+    fn frame_time_line_takes_median_and_95th_percentile() {
+        let times = FrameTimes {
+            last: None,
+            millis: (1..=20).rev().map(f64::from).collect(),
+            gpu_wait_start: 1_000_000,
+        };
+        assert_eq!(
+            frame_time_line(&times, 41_000_000),
+            "frame time: median 11.00 ms, p95 19.00 ms, mean 10.50 ms (91 fps) over 20 frames; GPU wait 2.00 ms a frame"
+        );
     }
 
     #[test]
