@@ -11,8 +11,10 @@
 //! input in the order given, fed through the real input systems one at a time
 //! while the game waits for input: `--keys` presses keys (`g`, `.`, `i` for the
 //! inventory, `t` for the town ledger, `n` for Tab to select the next hero, `e`
-//! to end the party phase in combat, `o` overwatch and `h` hunker down, `w` `a` `s` `d` to pan, `c` to recentre, `+` and `-` scroll the
-//! wheel to zoom in and out); `--click X,Y` left-clicks grid cell X,Y as if the mouse hovered it (a click on another
+//! to end the party phase in combat, `o` overwatch and `h` hunker down, `w` `a` `s` `d` to pan, each held for
+//! `PAN_HOLD_FRAMES` before the next input, `c` to recentre, `+` and `-` scroll the
+//! wheel a notch to zoom in and out; the camera eases, so a capture taken soon
+//! after shows it mid-motion); `--click X,Y` left-clicks grid cell X,Y as if the mouse hovered it (a click on another
 //! hero selects them), and the next input waits until the walk it starts ends;
 //! `--shop VENDOR` clicks that vendor (e.g. `blacksmith`), so the active hero
 //! walks beside them and their shop opens (the vendor's tile must be explored,
@@ -330,12 +332,18 @@ fn enter_targeting(
     }
 }
 
+/// How long a `--keys` pan key (`w` `a` `s` `d`) is held, in frames. Ten frames
+/// pan about 2.3 tiles at the default zoom (ease in and out included), so a
+/// pan lands between tile centres.
+const PAN_HOLD_FRAMES: u32 = 10;
+
 /// While the game waits for input and no walk is under way, feeds the next
 /// queued input. Runs after picking and before the player's input handling,
 /// so a click lands on its cell this frame.
 fn feed_next_input(
     args: Res<ScreenshotArgs>,
     mut next: Local<usize>,
+    mut held: Local<Option<(KeyCode, u32)>>,
     walk: Res<WalkPath>,
     window: Single<Entity, With<PrimaryWindow>>,
     mut keyboard: MessageWriter<KeyboardInput>,
@@ -345,6 +353,24 @@ fn feed_next_input(
     vendors: Query<(&Position, &Name), With<Bystander>>,
     debug_state: Res<DebugState>,
 ) {
+    let mut key = |key_code, state| {
+        keyboard.write(KeyboardInput {
+            key_code,
+            logical_key: Key::Unidentified(NativeKey::Unidentified),
+            state,
+            text: None,
+            repeat: false,
+            window: *window,
+        });
+    };
+    if let Some((key_code, frames_left)) = held.as_mut() {
+        *frames_left -= 1;
+        if *frames_left == 0 {
+            key(*key_code, ButtonState::Released);
+            *held = None;
+        }
+        return;
+    }
     // A pending reveal would leave a click's target unexplored.
     if walk.is_active() || debug_state.reveal_map {
         return;
@@ -355,14 +381,10 @@ fn feed_next_input(
     *next += 1;
     match *input {
         HarnessInput::Key(key_code) => {
-            keyboard.write(KeyboardInput {
-                key_code,
-                logical_key: Key::Unidentified(NativeKey::Unidentified),
-                state: ButtonState::Pressed,
-                text: None,
-                repeat: false,
-                window: *window,
-            });
+            key(key_code, ButtonState::Pressed);
+            if matches!(key_code, KeyCode::KeyW | KeyCode::KeyA | KeyCode::KeyS | KeyCode::KeyD) {
+                *held = Some((key_code, PAN_HOLD_FRAMES));
+            }
         }
         HarnessInput::Scroll(y) => {
             wheel.write(MouseWheel {

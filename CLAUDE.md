@@ -33,8 +33,10 @@ cargo run -- --screenshot out.png --depth 2 --reveal-map --cursor 720,430 \
 # walk to end; a click on another hero selects them). --keys presses keys through the
 # real input: g . (pick up, take the stairs), i (inventory), t (town ledger), n (Tab:
 # select the next hero), e (end the party phase in combat), o (overwatch), h (hunker down),
-# w a s d (pan), c (recentre),
-# + and - (scroll to zoom). Input is fed only while the game waits for it, a shop is
+# w a s d (pan: each holds the key for 10 frames, about 2.3 tiles), c (recentre),
+# + and - (one wheel notch to zoom). The camera eases (about a second to settle), and the
+# capture is taken at the fixed frame --frames, so a short --frames shows it mid-glide.
+# Input is fed only while the game waits for it, a shop is
 # open or the inventory is open (a to j use that line). They run in the order given,
 # e.g. walk five tiles east so explored-but-unseen tiles show:
 cargo run -- --screenshot fog.png --seed 42 --depth 2 --click 45,20 --frames 120
@@ -126,7 +128,8 @@ for that overhaul. Key points:
   combat shows the active hero's chance to hit it in the tooltip (with "half cover", "full
   cover" or "flanked"); hovering a tile in the move range shows cover shields on its covered sides. A click on another hero, or Tab, selects them
   (no turn passes; in combat only heroes with AP left).
-  WASD pans the camera, the scroll wheel zooms, C recentres. G picks up, I inventory, X drops
+  Holding WASD pans the camera smoothly, the scroll wheel, two-finger touchpad scroll or a
+  pinch zooms, C recentres. G picks up, I inventory, X drops
   (D pans), R removes equipment, `.` takes the stairs, Space waits (in combat it ends that hero's
   turn), O puts the active hero on overwatch and H hunkers them down (combat only; each ends
   that hero's turn), E ends the party phase in combat, T opens the ledger in town, Q saves and quits
@@ -350,8 +353,13 @@ of the same logic. The build should stay at zero warnings.
 - 3D: `map::grid_to_world` is the only grid-to-world mapping. Grid `(x, y)` is the tile centre at
   world `(x, 0, y)`, one tile is one world unit, the floor is `y = 0`, walls are 2 units tall
 - The 3D camera is orthographic, yaw 45 degrees, pitch 35 degrees, and follows the logical
-  `Camera` resource. That resource follows the active hero until WASD sets `panned`; that hero
-  moving, selecting another, or C clears it. Move that resource to move the view. Zoom is the projection's `viewport_height`
+  `Camera` resource: a continuous focus (fractional grid x, y) and a view height. It glides to
+  the active hero (exponential smoothing, `FOLLOW_TIME`) until held WASD pans it (`PAN_SPEED`,
+  scaled by zoom, eased by `PAN_EASE_TIME`); that hero moving, selecting another, or C ends
+  the pan. Leaving `PreRun` (new game, load, new level) snaps instead. Zoom eases the
+  projection's `viewport_height` to a target (`ZOOM_EASE_TIME`). Every speed and the wheel,
+  touchpad and pinch directions are named constants at the top of `camera.rs`. All of it is
+  driven by `Time`, so harness captures repeat
 - Camera layering: the `Camera3d` (order 0) draws the world and clears the screen; the `Camera2d`
   (order 1, `IsDefaultUiCamera`) draws UI and any `Text2d` on top. The 3D camera is HDR and the
   2D one is not, so each has its own texture: the 2D camera clears to transparent and Bevy
