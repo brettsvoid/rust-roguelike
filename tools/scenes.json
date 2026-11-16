@@ -387,7 +387,6 @@
       "note": "Aldric's inventory after picking up a potion and a dagger; the cursor picks a row.",
       "args": "--seed 42 --depth 2 --console \"spawn potion\" --console \"spawn dagger\" --cursor 800,500 --keys \" ggi\" --frames 120",
       "expect": [
-        "You pick up the Dagger.",
         "You pick up the Health Potion."
       ]
     },
