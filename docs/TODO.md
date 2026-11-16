@@ -200,7 +200,7 @@ Settled questions (owner, 15 November 2026):
   with no code change, shown in a harness screenshot.
 
 ### F09 Delete the in-game ASCII renderer
-- Status: in progress
+- Status: done
 - Needs: F08, A01, A02, A03, A04, A05
 - Remove glyph rendering of entities and in-game tiles and the 2D gameplay
   camera maths that nothing uses. Keep `spawn_map_tiles` and `tile_glyph` for
@@ -314,7 +314,7 @@ and adds the `model` names to `raws/spawns.json`.
 - Note: A05 modelled every monster in the raws. A06 covers every item. Close this when A06 lands.
 
 ### A09 Skeletal animation
-- Status: todo
+- Status: in progress
 - Needs: A04, A05, C09
 - Rig heroes and monsters. Idle, walk, attack, hit and death clips, played by
   the presentation layer from C09.
