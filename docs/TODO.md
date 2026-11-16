@@ -255,14 +255,14 @@ and adds the `model` names to `raws/spawns.json`.
   z-fighting.
 
 ### A02 Town terrain and building kit
-- Status: in progress
+- Status: done
 - Needs: F08
 - Grass, road, wood floor, shallow and deep water, bridge, town wall, building
   walls with door and window variants, roofs as separate pieces.
 - Done when: a harness town screenshot uses only kit pieces.
 
 ### A03 Props
-- Status: todo
+- Status: in progress
 - Needs: F08
 - The 16 props in the raws: door, bear trap, keg, table, chair, candle, anvil,
   water trough, weapon rack, armour stand, chemistry set, dead thing, cabinet,
