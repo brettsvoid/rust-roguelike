@@ -572,6 +572,18 @@ and adds the `model` names to `raws/spawns.json`.
   arrives within two or three runs.
 - Done when: the tuned numbers and the reasoning are recorded in `design.md`.
 
+### P05 The Heart and the ending
+- Status: todo
+- Needs: C07, P01
+- Found during A06: the Heart of the Abyss exists only as a debug spawn, there
+  are up stairs only on depth 1, and nothing ends the game in victory. Place
+  the Heart on depth 12 (guarded), give every dungeon level up stairs so the
+  party can climb out, and end the run with a victory screen when the party
+  reaches town carrying the Heart. Fix the dungeon seeds that generate with no
+  stairs (100 and 231 are known).
+- Done when: a harness run takes the Heart on depth 12, climbs, and reaches
+  the victory screen; no seed from 1 to 300 builds a level without stairs.
+
 ---
 
 ## Order of work
