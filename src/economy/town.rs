@@ -11,13 +11,11 @@ use std::ops::RangeInclusive;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[cfg(not(target_arch = "wasm32"))]
 use std::path::{Path, PathBuf};
 
 /// Bump when `TownState` changes in a way old files cannot load into.
 pub const TOWN_VERSION: u32 = 1;
 
-#[cfg(not(target_arch = "wasm32"))]
 const TOWN_FILE: &str = "town.json";
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -211,7 +209,6 @@ pub fn parse_town(json: &str) -> Result<TownState, String> {
 /// or wrong-version file is renamed aside (never overwritten) and also gives
 /// a fresh town. The flag is false only when that rename failed, meaning the
 /// bad file is still in place and must not be saved over.
-#[cfg(not(target_arch = "wasm32"))]
 pub fn load_town(path: &Path, fresh_seed: u64) -> (TownState, bool) {
     let problem = match std::fs::read_to_string(path) {
         Ok(json) => match parse_town(&json) {
@@ -246,7 +243,6 @@ pub fn load_town(path: &Path, fresh_seed: u64) -> (TownState, bool) {
 
 /// Write via a temporary file and rename, so a crash mid-write cannot leave
 /// a half-written town behind.
-#[cfg(not(target_arch = "wasm32"))]
 pub fn save_town(path: &Path, town: &TownState) -> std::io::Result<()> {
     let json = serde_json::to_string_pretty(town).map_err(std::io::Error::other)?;
     let tmp = path.with_extension("json.tmp");
@@ -259,7 +255,6 @@ pub fn save_town(path: &Path, town: &TownState) -> std::io::Result<()> {
 // ============================================================================
 
 /// Where the town is stored. A resource so tests can point it at a temp dir.
-#[cfg(not(target_arch = "wasm32"))]
 #[derive(Resource)]
 pub struct TownFile {
     pub path: PathBuf,
@@ -267,7 +262,6 @@ pub struct TownFile {
     pub writable: bool,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl Default for TownFile {
     fn default() -> Self {
         TownFile {
@@ -281,7 +275,6 @@ pub struct TownPlugin;
 
 impl Plugin for TownPlugin {
     fn build(&self, app: &mut App) {
-        #[cfg(not(target_arch = "wasm32"))]
         app.init_resource::<TownFile>();
         // Saving on every change also writes a fresh town at once, which
         // pins its seed.
@@ -292,14 +285,12 @@ impl Plugin for TownPlugin {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub fn load_town_system(mut commands: Commands, mut file: ResMut<TownFile>) {
     let (town, writable) = load_town(&file.path, rand::random());
     file.writable = writable;
     commands.insert_resource(town);
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub fn save_town_system(town: Res<TownState>, file: Res<TownFile>) {
     if !file.writable {
         return;
@@ -308,15 +299,6 @@ pub fn save_town_system(town: Res<TownState>, file: Res<TownFile>) {
         error!("Failed to save {}: {e}", file.path.display());
     }
 }
-
-/// WASM has no filesystem: the town lives in memory for the session.
-#[cfg(target_arch = "wasm32")]
-pub fn load_town_system(mut commands: Commands) {
-    commands.insert_resource(TownState::fresh(rand::random()));
-}
-
-#[cfg(target_arch = "wasm32")]
-pub fn save_town_system(_town: Res<TownState>) {}
 
 #[cfg(test)]
 mod tests {

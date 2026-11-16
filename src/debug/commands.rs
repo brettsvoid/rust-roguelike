@@ -261,7 +261,7 @@ fn cmd_spawn(
                 Name { name: HEART_OF_THE_ABYSS.to_string() },
                 Position { x, y },
                 Model("heart_of_the_abyss".to_string()),
-                RenderableBundle::new("*", Color::srgb(0.9, 0.05, 0.1), EntityShape::Item),
+                RenderableBundle::new(Color::srgb(0.9, 0.05, 0.1), EntityShape::Item),
             ));
             return format!("Spawned {HEART_OF_THE_ABYSS} at ({x}, {y})");
         }

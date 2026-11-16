@@ -9,10 +9,6 @@ use crate::map::{Map, Position};
 use crate::party::{ActiveUnit, PartyMember};
 use crate::RunState;
 
-// Screen dimensions in tiles (viewport)
-pub const SCREEN_WIDTH: i32 = 80;
-pub const SCREEN_HEIGHT: i32 = 43;
-
 /// Pan speed in tiles per second at the default zoom. It scales with the view
 /// height, so a pan crosses the same share of the screen at any zoom.
 pub const PAN_SPEED: f32 = 14.0;
@@ -70,13 +66,6 @@ impl Default for Camera {
 }
 
 impl Camera {
-    /// Screen cell of grid cell `(x, y)` for the map visualiser's 80 by 43 glyph grid,
-    /// centred on the focus cell.
-    pub fn world_to_screen(&self, x: i32, y: i32) -> (i32, i32) {
-        let centre = self.focus.round().as_ivec2();
-        (x - centre.x + SCREEN_WIDTH / 2, y - centre.y + SCREEN_HEIGHT / 2)
-    }
-
     /// Glide to grid point `at` (action off-screen) instead of the active
     /// unit, overriding a pan; `None` glides back to following the unit.
     pub fn look_at(&mut self, at: Option<Vec2>) {
@@ -346,13 +335,6 @@ mod tests {
         assert_eq!(scroll_zoom_steps(MouseScrollUnit::Pixel, -100.0), 1.0);
         assert_eq!(scroll_zoom_steps(MouseScrollUnit::Pixel, 250.0), -2.5);
         assert!(zoomed_view_height(24.0, scroll_zoom_steps(MouseScrollUnit::Pixel, -100.0)) < 24.0);
-    }
-
-    #[test]
-    fn the_visualiser_grid_centres_on_the_rounded_focus() {
-        let camera = Camera { focus: Vec2::new(10.4, 20.6), ..default() };
-        assert_eq!(camera.world_to_screen(10, 21), (40, 21));
-        assert_eq!(camera.world_to_screen(0, 0), (30, 0));
     }
 
     #[test]

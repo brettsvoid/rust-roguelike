@@ -48,8 +48,3 @@ opt-level = 3
 [profile.release]
 codegen-units = 1
 lto = "thin"
-
-[profile.wasm-release]
-inherits = "release"
-opt-level = "s"
-strip = "debuginfo"

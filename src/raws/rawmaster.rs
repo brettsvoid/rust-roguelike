@@ -132,7 +132,7 @@ fn insert_renderable(entity: &mut EntityCommands, renderable: &super::Renderable
     if let Some(model) = &renderable.model {
         entity.insert(Model(model.clone()));
     }
-    entity.insert(RenderableBundle::new(&renderable.glyph, parse_color(&renderable.fg), shape));
+    entity.insert(RenderableBundle::new(parse_color(&renderable.fg), shape));
 }
 
 /// The components for a scroll's `effects` (also cast by spell abilities).

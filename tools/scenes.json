@@ -383,6 +383,11 @@
       "args": "--menu --cursor 250,607 --frames 150"
     },
     {
+      "name": "ui_visualiser",
+      "note": "The Map Visualiser mid-generation on Cellular Automata (builder 3): the flipbook's Text2d glyphs and the builder panel.",
+      "args": "--visualise 3 --frames 75"
+    },
+    {
       "name": "ui_inventory",
       "note": "Aldric's inventory after picking up a potion and a dagger; the cursor picks a row.",
       "args": "--seed 42 --depth 2 --console \"spawn potion\" --console \"spawn dagger\" --cursor 800,500 --keys \" ggi\" --frames 120",

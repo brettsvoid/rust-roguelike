@@ -444,7 +444,7 @@ late (A09).
 ### Platforms
 
 - Desktop (Windows, macOS, Linux)
-- Web (WASM): kept only if 3D lighting works there. F09 decides.
+- Web (WASM): dropped in F09, the build fails (see `CLAUDE.md`).
 
 ### Status
 

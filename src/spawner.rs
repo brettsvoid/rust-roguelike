@@ -36,7 +36,7 @@ pub fn party_member(slot: usize, x: i32, y: i32, class: &Class) -> impl Bundle {
             state: HungerState::WellFed,
             duration: 200,
         },
-        RenderableBundle::new("☺", colour.into(), EntityShape::Creature),
+        RenderableBundle::new(colour.into(), EntityShape::Creature),
     )
 }
 

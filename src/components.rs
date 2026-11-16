@@ -10,12 +10,9 @@ pub struct RenderableBundle {
 }
 
 impl RenderableBundle {
-    pub fn new(glyph: &str, fg: Color, shape: EntityShape) -> Self {
+    pub fn new(fg: Color, shape: EntityShape) -> Self {
         Self {
-            renderable: Renderable {
-                glyph: glyph.to_string(),
-                fg,
-            },
+            renderable: Renderable { fg },
             shape,
             visibility: Visibility::Inherited,
         }

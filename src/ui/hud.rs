@@ -40,9 +40,10 @@ impl Plugin for HudPlugin {
 
         app.init_resource::<ActionRequest>()
             .add_systems(Startup, setup_hud)
-            // The main menu shows its scene, not the bar.
+            // The main menu shows its scene and the visualiser its map, not the bar.
             .add_systems(Update, |state: Res<State<RunState>>, mut bar: Query<&mut Visibility, With<HudBar>>| {
-                let shown = if *state.get() == RunState::MainMenu { Visibility::Hidden } else { Visibility::Inherited };
+                let menu = matches!(state.get(), RunState::MainMenu | RunState::MapBuilderSelect | RunState::MapGeneration);
+                let shown = if menu { Visibility::Hidden } else { Visibility::Inherited };
                 bar.iter_mut().for_each(|mut v| {
                     v.set_if_neq(shown);
                 });

@@ -18,7 +18,7 @@ use crate::{
     },
     debug::DebugMode,
     economy::town::Vendor,
-    entity_render::{EntityShape, Renderable},
+    entity_render::EntityShape,
     game_flow::{HeroAction, Mode, TurnEnded},
     gamelog::GameLog,
     map::{is_stairs, tile_walkable, xy_idx, Map, Position},
@@ -238,7 +238,7 @@ fn try_move_player(
     delta_x: i32,
     delta_y: i32,
     combat_stats: &Query<&CombatStats, Without<PartyMember>>,
-    doors: &mut Query<(Entity, &mut Door, &mut Renderable), Without<PartyMember>>,
+    doors: &mut Query<(Entity, &mut Door), Without<PartyMember>>,
     swappable: &Query<&mut Position, Or<(With<Bystander>, With<PartyMember>)>>,
 ) -> MoveResult {
     let dest_x = player_x + delta_x;
@@ -274,11 +274,10 @@ fn try_move_player(
 
     // Check for doors
     for potential_door in map.tile_content[destination_idx].iter() {
-        if let Ok((door_entity, mut door, mut door_glyph)) = doors.get_mut(*potential_door) {
+        if let Ok((door_entity, mut door)) = doors.get_mut(*potential_door) {
             if !door.open {
                 // Open the door
                 door.open = true;
-                door_glyph.glyph = "/".to_string();
                 commands.entity(door_entity).insert(EntityShape::OpenDoor);
                 commands.entity(door_entity).remove::<BlocksTile>();
                 commands.entity(door_entity).remove::<BlocksVisibility>();
@@ -332,7 +331,7 @@ pub(crate) fn handle_player_input(
     other_combat_stats: Query<&CombatStats, Without<PartyMember>>,
     items: Query<(Entity, &Position), (With<Item>, Without<PartyMember>, Without<Bystander>)>,
     monsters: Query<(Entity, &Position, &Name), (With<Monster>, Without<PartyMember>, Without<Bystander>)>,
-    mut doors: Query<(Entity, &mut Door, &mut Renderable), Without<PartyMember>>,
+    mut doors: Query<(Entity, &mut Door), Without<PartyMember>>,
     mut positions: Query<&mut Position, Or<(With<Bystander>, With<PartyMember>)>>,
     (debug_mode, mode, mut turn_ended, mut hero_action, range, confused, mut rng, arms, mut request, mut presentation, abilities, mut targeting, ability_names): (
         Res<DebugMode>,

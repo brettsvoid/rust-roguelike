@@ -2,9 +2,9 @@ use bevy::prelude::*;
 
 use crate::combat::CombatStats;
 use crate::components::{HungerClock, Item};
-use crate::map::{Map, Position, Revealed, RevealedState, Tile, TileType, GRID_PX};
+use crate::map::{Map, Position, Revealed, RevealedState, Tile, TileType};
 use crate::monsters::Monster;
-use crate::picking::HoveredTile;
+use crate::picking::{HoveredTile, TileMarks, FULL_TILE};
 use crate::party::{ActiveUnit, PartyMember};
 use crate::resources::UiFont;
 use crate::viewshed::Viewshed;
@@ -62,7 +62,8 @@ pub fn toggle_debug_overlays(keyboard: Res<ButtonInput<KeyCode>>, mut debug: Res
 pub fn update_fov_overlay(
     mut commands: Commands,
     debug: Res<DebugMode>,
-    window: Query<&Window>,
+    map: Res<Map>,
+    marks: Res<TileMarks>,
     party: Query<&Viewshed, With<PartyMember>>,
     overlay_query: Query<Entity, With<FovOverlay>>,
 ) {
@@ -75,28 +76,9 @@ pub fn update_fov_overlay(
         return;
     }
 
-    let Ok(window) = window.single() else {
-        return;
-    };
-
-
-    let half_width = window.width() / 2.0;
-    let half_height = window.height() / 2.0;
-
-    // Spawn overlay for each visible tile
-    for &(x, y) in party.iter().flat_map(|v| v.visible_tiles.iter()) {
-        let screen_x = (x as f32) * GRID_PX.x + (GRID_PX.x / 2.0) - half_width;
-        let screen_y = (y as f32) * -GRID_PX.y - (GRID_PX.y / 2.0) + half_height;
-
-        commands.spawn((
-            FovOverlay,
-            Sprite {
-                color: Color::srgba(0.0, 1.0, 1.0, 0.15),
-                custom_size: Some(Vec2::new(GRID_PX.x, GRID_PX.y)),
-                ..default()
-            },
-            Transform::from_xyz(screen_x, screen_y, 5.0),
-        ));
+    // Mark each visible tile
+    for &cell in party.iter().flat_map(|v| v.visible_tiles.iter()) {
+        commands.spawn((FovOverlay, marks.mark(&marks.area, &map, cell, FULL_TILE, 0.0)));
     }
 }
 

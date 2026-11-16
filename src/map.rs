@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 
-use crate::camera::Camera;
 use crate::components::Hidden;
 use crate::cover::Cover;
 use crate::debug::DebugState;
@@ -388,7 +387,6 @@ impl Plugin for MapPlugin {
                     // The visualiser's 2D glyph tiles
                     translate_glyphs,
                     // These only run during actual gameplay
-                    update_revealed_state.run_if(in_gameplay.clone()),
                     update_tile_mesh_visibility.run_if(in_gameplay.clone()),
                     update_revealed_tiles.run_if(in_gameplay.clone()),
                     update_visible_tiles.run_if(in_gameplay.clone()),
@@ -424,22 +422,6 @@ fn update_revealed_tiles(
             revealed.0 = RevealedState::Visible;
         } else if matches!(revealed.0, RevealedState::Visible) {
             revealed.0 = RevealedState::Explored;
-        }
-    }
-}
-
-fn update_revealed_state(mut tiles_query: Query<(&mut TextColor, &Revealed), With<Tile>>) {
-    for (mut text_color, revealed) in &mut tiles_query {
-        match revealed.0 {
-            RevealedState::Explored => {
-                text_color.0.set_alpha(0.1);
-            }
-            RevealedState::Visible => {
-                text_color.0.set_alpha(1.0);
-            }
-            RevealedState::Hidden => {
-                text_color.0.set_alpha(0.0);
-            }
         }
     }
 }
@@ -484,11 +466,10 @@ pub fn translate_positions(
     }
 }
 
-/// Places the visualiser's 2D glyph tiles in screen pixels.
+/// Places the visualiser's 2D glyph tiles in screen pixels: the whole map, from the top left.
 fn translate_glyphs(
     mut commands: Commands,
     window: Single<&Window>,
-    camera: Res<Camera>,
     query: Query<(Entity, &Position), With<Text2d>>,
 ) {
     let half_height = window.height() / 2.;
@@ -499,14 +480,11 @@ fn translate_glyphs(
         // so every cell gets its own z. Screenshots then match run to run.
         let z = xy_idx(position.x, position.y) as f32 * 1e-6;
 
-        // Convert world position to screen position using camera
-        let (screen_x, screen_y) = camera.world_to_screen(position.x, position.y);
-
         // Map screen coords to pixel coords. Y runs in the opposite direction to the pixel
         // coords. Use try_insert to handle entities that may be despawned during load.
         commands.entity(entity).try_insert(Transform::from_xyz(
-            (screen_x as f32) * GRID_PX.x + (GRID_PX.x / 2.) - half_width,
-            (screen_y as f32) * -GRID_PX.y - (GRID_PX.y / 2.) + half_height,
+            (position.x as f32) * GRID_PX.x + (GRID_PX.x / 2.) - half_width,
+            (position.y as f32) * -GRID_PX.y - (GRID_PX.y / 2.) + half_height,
             z,
         ));
     }
@@ -590,10 +568,7 @@ fn update_bloodstains(
                 // Turned per tile, so neighbouring splats don't match.
                 entity_transform(EntityShape::Stain, pos).with_rotation(Quat::from_rotation_y(idx as f32 * 2.4)),
                 EntityShape::Stain,
-                Renderable {
-                    glyph: String::new(),
-                    fg: Color::srgb(0.35, 0.0, 0.0),
-                },
+                Renderable { fg: Color::srgb(0.35, 0.0, 0.0) },
             ));
         }
     }

@@ -14,9 +14,7 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[cfg(not(target_arch = "wasm32"))]
 use std::fs;
-#[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
 
 use crate::abilities::{HeroAbility, HeroClass};
@@ -44,10 +42,10 @@ use crate::raws::{spawn_class_abilities, spawn_named_item, spawn_named_mob, spaw
 use crate::spawner::party_member;
 use crate::viewshed::Viewshed;
 
-#[cfg(all(not(target_arch = "wasm32"), not(test)))]
+#[cfg(not(test))]
 const SAVE_FILE: &str = "savegame.json";
 // Tests drive the real death path; keep it away from a developer's save.
-#[cfg(all(not(target_arch = "wasm32"), test))]
+#[cfg(test)]
 const SAVE_FILE: &str = "savegame.test-never-written.json";
 
 /// Bump when a save from the last version can no longer be read as it is.
@@ -354,7 +352,6 @@ pub fn restore(world: &mut World, save: SaveData) {
         heroes.insert(hero.slot, entity);
     }
 
-    let mut doors = Vec::new();
     for thing in &save.things {
         let (x, y) = match thing.place {
             Place::Ground { x, y } => (x, y),
@@ -402,17 +399,10 @@ pub fn restore(world: &mut World, save: SaveData) {
         if thing.door_open == Some(true) {
             // As `player::try_move` opens one.
             entity.insert((Door { open: true }, EntityShape::OpenDoor)).remove::<(BlocksTile, BlocksVisibility)>();
-            doors.push(entity.id());
         }
     }
     drop(raws);
     world.flush();
-
-    for door in doors {
-        if let Some(mut renderable) = world.get_mut::<Renderable>(door) {
-            renderable.glyph = "/".into();
-        }
-    }
     let mut abilities = world.query::<(&mut HeroAbility, &ChildOf)>();
     for (mut ability, parent) in abilities.iter_mut(world) {
         let hero = save.party.iter().find(|h| heroes.get(&h.slot) == Some(&parent.parent()));
@@ -456,7 +446,6 @@ fn apply_status(entity: &mut EntityCommands, status: &Status) {
 // The file
 // ============================================================================
 
-#[cfg(not(target_arch = "wasm32"))]
 pub fn save_game(world: &mut World) {
     let Some(save) = collect(world) else {
         warn!("Cannot save: no party found");
@@ -471,19 +460,16 @@ pub fn save_game(world: &mut World) {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub fn has_save_file() -> bool {
     Path::new(SAVE_FILE).exists()
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub fn delete_save_file() {
     let _ = fs::remove_file(SAVE_FILE);
 }
 
 /// For the main menu: whether a save can be continued. One that cannot be
 /// loaded is moved aside, and `Err` says so in words for the player.
-#[cfg(not(target_arch = "wasm32"))]
 pub fn save_status() -> Result<bool, String> {
     let Ok(json) = fs::read_to_string(SAVE_FILE) else {
         return Ok(false);
@@ -492,7 +478,6 @@ pub fn save_status() -> Result<bool, String> {
 }
 
 /// Moves the save aside and returns the report.
-#[cfg(not(target_arch = "wasm32"))]
 fn discard(problem: &str) -> String {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -513,7 +498,6 @@ fn discard(problem: &str) -> String {
 
 /// Load the save into `world`, then delete it (permadeath). A save that
 /// cannot be loaded is moved aside and reported in the game log.
-#[cfg(not(target_arch = "wasm32"))]
 pub fn load_game(world: &mut World) -> bool {
     let Ok(json) = fs::read_to_string(SAVE_FILE) else {
         warn!("No save file found");
@@ -539,31 +523,6 @@ pub fn continue_game(world: &mut World) {
     if load_game(world) {
         world.resource_mut::<NextState<RunState>>().set(RunState::PreRun);
     }
-}
-
-// ============================================================================
-// WASM stubs (no filesystem access)
-// ============================================================================
-
-#[cfg(target_arch = "wasm32")]
-pub fn save_game(_world: &mut World) {}
-
-#[cfg(target_arch = "wasm32")]
-pub fn has_save_file() -> bool {
-    false
-}
-
-#[cfg(target_arch = "wasm32")]
-pub fn delete_save_file() {}
-
-#[cfg(target_arch = "wasm32")]
-pub fn save_status() -> Result<bool, String> {
-    Ok(false)
-}
-
-#[cfg(target_arch = "wasm32")]
-pub fn load_game(_world: &mut World) -> bool {
-    false
 }
 
 // ============================================================================
@@ -746,7 +705,6 @@ mod tests {
         world.get_mut::<CombatStats>(party[1]).unwrap().hp -= 4;
         world.get_mut::<Door>(door).unwrap().open = true;
         world.entity_mut(door).remove::<(BlocksTile, BlocksVisibility)>().insert(EntityShape::OpenDoor);
-        world.get_mut::<Renderable>(door).unwrap().glyph = "/".into();
         world.insert_resource(Mode::Combat { round: 2, ap_spent: [(party[2], 1)].into() });
         world.insert_resource(ActiveUnit(Some(party[2])));
         world.insert_resource(Purse { gold: 55 });

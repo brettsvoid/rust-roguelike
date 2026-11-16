@@ -30,6 +30,11 @@ tools/scenes.py combat cover     # only these ("abil*" matches a prefix); --list
 cargo run -- --screenshot out.png --seed 42 --depth 2 --reveal-map --frames 60
 ```
 
+Desktop only: there is no web build. F09 built `wasm32-unknown-unknown` once (Bevy 0.20.1) and
+it failed to compile: `getrandom` 0.4.3, pulled in through `rand` 0.10 by `bevy_math` and by the
+game, refuses that target unless its `wasm_js` feature is on. The `wasm-release` profile and the
+`target_arch = "wasm32"` branches (no-op save and an in-memory town) were removed with it.
+
 ### Verifying changes: batch, don't poll
 
 A game run is the expensive step, so work in batches (the owner asked for this):
@@ -54,6 +59,8 @@ The coordinator runs the same suite before every merge.
 ```text
 --seed N --depth N --frames N --reveal-map
 --menu             stay on the main menu and capture it (no game starts)
+--visualise N      open the Map Visualiser on builder N of its menu (0 Simple Map, 3 Cellular
+                   Automata) instead of a game; snapshots change every 30 frames
 --console CMD      a debug console command, repeatable. "town ..." commands run before the
                    level is built. Useful: godmode, "place DX DY NAME" (any raws entry at an
                    offset from the active hero), "spawn <item>", "gold N", "hurt N",
@@ -119,8 +126,8 @@ for that overhaul. Key points:
   targeting screen), E ends the party phase in combat, T opens the ledger in town, Q saves and quits
 - **Mechanics**: Hunger/survival, items/equipment
 
-The Architecture section below describes the code as it is now. The current
-build is mid-conversion: the map and entities are grey-box 3D primitives on
+The Architecture section below describes the code as it is now. The map and
+entities are 3D models (grey-box primitives where a model file is missing) on
 an isometric camera, with a party of four heroes, one of each class (fighter, ranger, mage,
 cleric). Exploring, the active hero
 leads and the others follow; on contact the game drops into combat rounds where
@@ -243,7 +250,7 @@ Non-plugin modules worth knowing:
   `tile_glyph`)
 - `entity_render.rs` - 3D bodies for creatures, items, props and bloodstains (a flat splat mesh,
   turned per tile). An entity
-  with `EntityShape` + `Renderable` (raws glyph and colour) gets a shared mesh per shape and a
+  with `EntityShape` + `Renderable` (the raws colour, which tints the primitive) gets a shared mesh per shape and a
   shared material per colour from `EntityAssets` via the `attach_entity_mesh` observer. Spawn
   map entities with `RenderableBundle`; re-inserting `EntityShape` re-dresses (doors opening)
 - `models.rs` - The model pipeline (see Models below)
@@ -387,7 +394,7 @@ with no code change. A missing file keeps the grey-box primitive, silently (`Ava
 scans the folder once at startup, so restart after adding a file).
 
 - Mobs, items and props: set `"model": "<name>"` in the entry's `renderable` in
-  `raws/spawns.json`, beside `glyph`. An open door looks for `<name>_open`. Heroes: the
+  `raws/spawns.json`, beside `fg` (the raws `glyph` is no longer read by the game). An open door looks for `<name>_open`. Heroes: the
   `"model"` of their class in the raws `classes`.
 - Tiles: the name comes from `models::tile_model_name`: `tile_floor`, `tile_wood_floor`,
   `tile_road`, `tile_grass`, `tile_bridge`, `tile_shallow_water`, `tile_deep_water`,
@@ -536,7 +543,6 @@ of the same logic. The build should stay at zero warnings.
   effect
 - Permadeath: save file deleted on load and when the last hero dies. A fallen hero leaves play
   and drops what they carried; the selection moves to the next living hero
-- WASM: save/load disabled (no filesystem access)
 - Vendors: clicking a vendor in town walks the active hero beside them and opens the
   shop (`ui/menus/shop.rs`, `RunState::ShowShop`). The trade rules are pure functions in
   `economy/shop.rs`; who buys and stocks what is `town::STALLS`. Shelves refill
@@ -596,7 +602,8 @@ of the same logic. The build should stay at zero warnings.
 - `translate_positions` moves a 3D entity (`EntityShape`) to `grid_to_world` plus its shape's lift
   whenever its `Position` changes, except creatures, which `presentation::play_beats` moves. Tiles are placed once at spawn. Effects and bloodstains have
   no `Position` (they are not on the tile for gameplay) and get their transform at spawn
-- 2D: `translate_glyphs` places the visualiser's `Text2d` tiles in screen pixels
+- 2D: `translate_glyphs` places the visualiser's `Text2d` tiles in screen pixels, the whole
+  map from the window's top left (it ignores the game camera). Nothing in play is drawn in 2D
 
 ### Fog of War
 

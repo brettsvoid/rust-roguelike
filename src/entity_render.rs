@@ -62,11 +62,9 @@ fn blood_splat() -> Mesh {
     splat
 }
 
-/// The glyph and colour from the raws. The colour tints the 3D body; the
-/// glyph is kept for saves and the 2D fallback.
+/// The colour from the raws: it tints the grey-box body of an entity without a model.
 #[derive(Component, Clone, Debug)]
 pub struct Renderable {
-    pub glyph: String,
     pub fg: Color,
 }
 

@@ -41,6 +41,8 @@
 //! `savegame.json` beside it); without a save that loads, the capture shows
 //! the main menu.
 //! `--menu` stays on the main menu and captures it instead of starting a game.
+//! `--visualise N` opens the Map Visualiser on builder N of its menu (0 is the first)
+//! instead, so a capture shows the flipbook's glyphs mid-generation.
 //! Every visual change is verified with it.
 
 use std::path::PathBuf;
@@ -65,6 +67,7 @@ use crate::economy::town::{TownState, Vendor};
 use crate::gamelog::GameLog;
 use crate::levels;
 use crate::map::{Map, Position};
+use crate::mapgen_viz::{start_preview, MapGenBuilderName, MapGenHistory};
 use crate::models::AvailableModels;
 use crate::monsters::Monster;
 use crate::picking::{self, FakeCursor, HoveredTile};
@@ -139,6 +142,8 @@ pub struct ScreenshotArgs {
     pub reveal_map: bool,
     /// Capture the main menu rather than start a game.
     pub menu: bool,
+    /// Open the Map Visualiser on this builder rather than start a game.
+    pub visualise: Option<usize>,
     pub frames: u32,
     pub every: Option<u32>,
     pub console: Vec<String>,
@@ -202,6 +207,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
     let mut depth = levels::TOWN_DEPTH;
     let mut reveal_map = false;
     let mut menu = false;
+    let mut visualise = None;
     let mut frames = 60;
     let mut every = None;
     let mut console = Vec::new();
@@ -242,6 +248,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
             "--frames" => frames = value.parse().map_err(|_| bad())?,
             "--every" => every = Some(value.parse().ok().filter(|&n| n > 0).ok_or_else(bad)?),
             "--console" => console.push(value),
+            "--visualise" => visualise = Some(value.parse().map_err(|_| bad())?),
             "--cursor" => {
                 let (x, y) = value.split_once(',').ok_or_else(bad)?;
                 cursor = Some(Vec2::new(x.parse().map_err(|_| bad())?, y.parse().map_err(|_| bad())?));
@@ -277,6 +284,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
         depth,
         reveal_map,
         menu,
+        visualise,
         frames,
         every,
         console,
@@ -343,9 +351,16 @@ fn start_game(
     mut debug_state: ResMut<DebugState>,
     mut town: ResMut<TownState>,
     mut next_state: ResMut<NextState<RunState>>,
+    (mut history, mut builder_name): (ResMut<MapGenHistory>, ResMut<MapGenBuilderName>),
 ) {
     commands.insert_resource(Started);
     if args.menu {
+        return;
+    }
+    if let Some(index) = args.visualise {
+        // As the builder menu does on a pick.
+        start_preview(&mut map, &mut rng, &mut history, &mut builder_name, Some(index));
+        next_state.set_if_different(RunState::MapGeneration);
         return;
     }
     if args.reveal_map {
@@ -616,13 +631,14 @@ mod tests {
     #[test]
     fn all_flags() {
         assert_eq!(
-            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --menu --frames 10 --every 2 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger --keys g.in --click 3,-4 --press 800,950.5 --keys wasdc+-e --shop Priest --keys bj! --reload --load"),
+            parse("--screenshot a.png --seed 7 --depth 3 --reveal-map --menu --visualise 3 --frames 10 --every 2 --console heal --console godmode --ledger --cursor 640,400.5 --target Dagger --keys g.in --click 3,-4 --press 800,950.5 --keys wasdc+-e --shop Priest --keys bj! --reload --load"),
             Ok(Some(ScreenshotArgs {
                 path: PathBuf::from("a.png"),
                 seed: 7,
                 depth: 3,
                 reveal_map: true,
                 menu: true,
+                visualise: Some(3),
                 frames: 10,
                 every: Some(2),
                 console: vec!["heal".into(), "godmode".into()],
@@ -665,6 +681,7 @@ mod tests {
                 depth: 0,
                 reveal_map: false,
                 menu: false,
+                visualise: None,
                 frames: 60,
                 every: None,
                 console: vec![],
