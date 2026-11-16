@@ -30,7 +30,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "tools" / "scenes.json"
 TOWN = ROOT / "tools" / "scenes-town.json"
-TIMEOUT_SECS = 180
+TIMEOUT_SECS = 400
 SHEET_COLUMNS = 4
 SHEET_TILE = "800x500"
 FONT = "/System/Library/Fonts/Supplemental/Arial.ttf"
