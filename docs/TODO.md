@@ -284,18 +284,19 @@ and adds the `model` names to `raws/spawns.json`.
   gameplay zoom.
 
 ### A05 Monsters, set 1
-- Status: in progress
+- Status: done
 - Needs: F08
 - Rat, kobold, goblin, orc.
 - Done when: all four appear in a harness screenshot and are told apart at
   gameplay zoom.
 
 ### A06 Items and loot
-- Status: todo
+- Status: in progress
 - Needs: F08
 - Potion, scroll, rations, dagger, longsword, battleaxe, shield, tower shield,
   gold pile, generic loot sack.
 - Done when: each item on the floor shows its model.
+- Widened: every item in the raws, so A08 has nothing left to model.
 
 ### A07 Effects
 - Status: done
@@ -310,6 +311,7 @@ and adds the `model` names to `raws/spawns.json`.
 - Needs: A05, E05
 - Models for the monsters, weapons and armour that E05 adds to the raws.
 - Done when: no raws entry falls back to a primitive.
+- Note: A05 modelled every monster in the raws. A06 covers every item. Close this when A06 lands.
 
 ### A09 Skeletal animation
 - Status: todo
