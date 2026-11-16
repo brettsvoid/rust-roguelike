@@ -41,7 +41,9 @@ cargo run -- --screenshot out.png --depth 2 --reveal-map --cursor 720,430 \
 # w a s d (pan: each holds the key for 10 frames, about 2.3 tiles), c (recentre),
 # + and - (one wheel notch to zoom). The camera eases (about a second to settle), and the
 # capture is taken at the fixed frame --frames, so a short --frames shows it mid-glide.
-# Input is fed only while the game waits for it, a shop is
+# --every N also saves every Nth frame before the last as out-FFFF.png beside out.png, a frame
+# sequence for checking motion (glides, lunges, floaters, falls, the camera).
+# Input is fed only while the game waits for it and nothing plays (`Presentation::busy`), a shop is
 # open or the inventory is open (a to j use that line). They run in the order given,
 # e.g. walk five tiles east so explored-but-unseen tiles show:
 cargo run -- --screenshot fog.png --seed 42 --depth 2 --click 45,20 --frames 120
@@ -71,7 +73,7 @@ cargo run -- --screenshot hud.png --depth 2 --reveal-map --console godmode --con
 # frame where the item spawns and the one where the inventory closes). Aldric shoots the goblin
 # two tiles away in round 2 ("hit for 8 (65%)" at seed 42):
 cargo run -- --screenshot bow.png --depth 2 --reveal-map --console godmode --console "spawn bow" \
-  --keys .gia. --click 30,28 --click 35,26 --click 33,30 --keys ennn --click 33,28 --frames 40
+  --keys .gia. --click 30,28 --click 35,26 --click 33,30 --keys ennn --click 33,28 --frames 240
 # --shop VENDOR clicks that vendor (blacksmith, alchemist, clothier, barkeep, priest,
 # enchanter): the active hero walks beside them and the shop opens. Inputs after it are
 # fed into the shop: n (Tab: buy or sell), a to j (trade that line), ! (Escape: close).
@@ -106,7 +108,7 @@ cargo run -- --screenshot ow.png --depth 2 --reveal-map --console godmode --cons
 # reacts when Aldric walks up beside it ("Overwatch! Goblin attacks Aldric: miss (45%)"):
 cargo run -- --screenshot ow_monster.png --depth 2 --reveal-map --console godmode \
   --console "place 7 0 Goblin" --console "place 6 -1 Goblin" --console "place 6 0 Goblin" \
-  --console "place 6 1 Goblin" --keys ee --click 46,20 --frames 90
+  --console "place 6 1 Goblin" --keys ee --click 46,20 --frames 260
 # Hunker down: in the cover staging Aldric hunkers (h) and the goblin's attack shows the
 # doubled cover ("Goblin attacks Aldric: miss (25%, half cover, hunkered)"):
 cargo run -- --screenshot hunker.png --depth 2 --reveal-map --console godmode \
@@ -202,6 +204,22 @@ The game uses Bevy's plugin system. Each module defines a plugin that registers 
 - **LightingPlugin** (`lighting.rs`) - `LightSource` point lights, flicker, the shadow caster cap,
   and the per-depth ambient light, fog, bloom and town sun (see Lighting)
 - **EffectsPlugin** (`effects.rs`) - Combat and spell effects (see Effects)
+- **PresentationPlugin** (`presentation.rs`) - How the rules' results play out. The rules stay
+  instant (`Position` changes at once); where things happen, typed `Beat`s are pushed onto the
+  `Presentation` queue: `Move` (heroes in `player.rs`, every combat move and monster step in
+  `overwatch::walk_under_watch`, cut at each reaction shot), `Lunge` / `Projectile`, `Floater`
+  and `Flinch` (`combat::Strikes::strike`), `Death` (`presentation::fall` from
+  `combat::delete_the_dead`: the unit is despawned at once and a stand-in body inherits its queued
+  beats, falls and fades), `CameraFocus` and `Wait` (`monsters::monster_ai`, round each monster
+  that acts in combat). `play_beats` alone sets creature (`EntityShape::Creature`) transforms; a
+  creature no beat names rests on its tile. Ordering (`holds`): a beat starts once every earlier
+  beat has played its `hold`; a unit's beats never overlap; floaters and deaths hold nothing;
+  a lunge holds until its blow lands; moves pushed while exploring overlap other units' moves,
+  and a move that starts where the same unit's queued move ends extends it, so a click walk is one
+  continuous glide (the walk takes its next step once the leader has `WALK_LEAD` tiles or less
+  left to glide). In combat the map input waits while `Presentation::busy`, and any key or
+  click finishes the playing beats. Every speed and duration is a named constant at the top of
+  the file; the path, glide, ordering and floater rules are pure and unit tested
 
 Non-plugin modules worth knowing:
 
@@ -431,7 +449,11 @@ of the same logic. The build should stay at zero warnings.
   `Camera` resource: a continuous focus (fractional grid x, y) and a view height. It glides to
   the active hero (exponential smoothing, `FOLLOW_TIME`) until held WASD pans it (`PAN_SPEED`,
   scaled by zoom, eased by `PAN_EASE_TIME`); that hero moving, selecting another, or C ends
-  the pan. Leaving `PreRun` (new game, load, new level) snaps instead. Zoom eases the
+  the pan. `Camera::look_at(Some(cell))` glides to a point instead, overriding a pan, until
+  `look_at(None)`: the presentation uses it for a monster acting off-screen in combat (more than
+  `CAMERA_FOCUS_MARGIN` of the screen in from an edge counts as on screen) and releases it once
+  the queue is idle, so the view glides back to the active hero. Leaving `PreRun` (new game,
+  load, new level) snaps instead. Zoom eases the
   projection's `viewport_height` to a target (`ZOOM_EASE_TIME`). Every speed and the wheel,
   touchpad and pinch directions are named constants at the top of `camera.rs`. All of it is
   driven by `Time`, so harness captures repeat
@@ -459,7 +481,7 @@ of the same logic. The build should stay at zero warnings.
   double-sided), drawn by `show_path_preview` on the hovered destination of a combat move. The move range draws the one-AP
   zone blue (`move_one`) and the two-AP zone green (`move_two`), inset so the grid shows
 - `translate_positions` moves a 3D entity (`EntityShape`) to `grid_to_world` plus its shape's lift
-  whenever its `Position` changes. Tiles are placed once at spawn. Effects and bloodstains have
+  whenever its `Position` changes, except creatures, which `presentation::play_beats` moves. Tiles are placed once at spawn. Effects and bloodstains have
   no `Position` (they are not on the tile for gameplay) and get their transform at spawn
 - 2D: `translate_glyphs` places the visualiser's `Text2d` tiles in screen pixels
 
@@ -470,8 +492,8 @@ of the same logic. The build should stay at zero warnings.
   `update_tile_mesh_visibility` applies it
 - Vision is the union of every living hero's `Viewshed`: it fills `Map::visible_tiles` and the
   revealed tiles
-- Entities other than heroes are shown only on tiles in `Map::visible_tiles`
-  (`update_renderable_visibility`); `Hidden` (unfound traps) always hides
+- Entities other than heroes are shown only while the tile their body is over (their
+  `Transform`, so a gliding monster) is in `Map::visible_tiles` (`update_renderable_visibility`); `Hidden` (unfound traps) always hides
 - Debug `reveal_map` marks every tile explored; `no_fog` (and the harness's `--reveal-map`)
   treats every revealed tile as visible, so entities show too
 
@@ -501,7 +523,9 @@ of the same logic. The build should stay at zero warnings.
 
 - Gameplay asks for one with `ResMut<Effects>` and `effects.play(EffectKind, x, y)` at the target
   tile: `HitSpark` (attack and trap hits), `Fireball { radius }`, `MagicMissile { from }` (a bolt
-  from the caster's tile, also every ranged weapon shot), `Healing`, `Confusion`
+  from the caster's tile, also every ranged weapon shot), `Healing`, `Confusion`. Attacks play
+  theirs from the presentation queue instead (a `Projectile` beat plays the bolt, a `Flinch` the
+  spark), so they show in order with the bodies
 - `EffectKind::style` is the one table of how each kind looks: mesh, HDR colour, lifetime, piece
   count, `Motion` and an optional point light. `piece_transform` places every piece as a pure
   function of progress (0 to 1) and `envelope` sets the brightness, so new kinds are a table row

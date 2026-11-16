@@ -50,7 +50,7 @@ pub const FLOATER_SECS: f32 = 0.9;
 pub const FLOATER_RISE: f32 = 0.6;
 /// A floater that starts while others show over the same tile sits this much
 /// higher per floater, so they do not overprint, in world units.
-pub const FLOATER_STACK: f32 = 0.45;
+pub const FLOATER_STACK: f32 = 0.7;
 pub const FLINCH_SECS: f32 = 0.2;
 pub const FLINCH_REACH: f32 = 0.15;
 pub const DEATH_SECS: f32 = 0.6;
@@ -320,7 +320,7 @@ pub fn path_point(cells: &[(i32, i32)], s: f32) -> Vec2 {
                     return corner(prev, a, b, r, r + local);
                 }
             }
-            return a.lerp(b, local / len);
+            return if len > 0.0 { a.lerp(b, local / len) } else { b };
         }
         start += len;
     }
@@ -674,6 +674,7 @@ mod tests {
         assert!(close(path_point(&cells, 1.5), Vec2::new(1.5, 0.0)));
         assert_eq!(path_point(&cells, 9.0), Vec2::new(2.0, 0.0), "clamped past the end");
         assert_eq!(path_point(&[(3, 4)], 0.5), Vec2::new(3.0, 4.0));
+        assert_eq!(path_point(&[(3, 4), (3, 4)], 0.0), Vec2::new(3.0, 4.0), "a step in place is not NaN");
         assert!((path_length(&[(0, 0), (1, 1)]) - 2f32.sqrt()).abs() < 1e-6);
     }
 

@@ -492,7 +492,7 @@ fn capture_after_frames(
     mut frame: Local<u32>,
 ) {
     *frame += 1;
-    if args.every.is_some_and(|n| *frame % n == 0 && *frame < args.frames) {
+    if args.every.is_some_and(|n| frame.is_multiple_of(n) && *frame < args.frames) {
         let stem = args.path.file_stem().unwrap_or_default().to_string_lossy();
         let path = args.path.with_file_name(format!("{stem}-{:04}.png", *frame));
         commands.spawn(Screenshot::image(target.0.clone())).observe(save_to_disk(path));
