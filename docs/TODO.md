@@ -587,6 +587,88 @@ and adds the `model` names to `raws/spawns.json`.
 
 ---
 
+## R: Rough edges (from the holistic review, November 2026)
+
+All 46 overhaul tickets are done. These are what the review found short. None
+needs another; take them in any order (art tickets still one at a time).
+
+### R01 Play one full run on foot
+- Status: todo
+- Nobody has played from town to the Heart and back. Every piece is tested
+  alone. Also unverified: Q then Continue across two launches, and the F1
+  field-of-view overlay after its rewrite.
+- Done when: a harness scene (or a chain of them) walks a party from town down
+  at least three levels, fights, returns, sells and descends again, with no
+  console teleports; a scene saves in one launch and continues in the next;
+  a capture shows the F1 overlay; anything broken is fixed or ticketed.
+
+### R02 First-run difficulty (needs the owner's call)
+- Status: todo
+- The simulator's first-time party reaches depth 6.8 on average; the target is
+  3 to 5 (`docs/design.md`, Balance). Numbers alone cannot fix it without
+  breaking levelled-town runs. Options: a starting purse from the town, new
+  parties starting at the town's recruit level, or accept it. Gold is also
+  plentiful (about 8,000 per first run), and nothing gets harder on the climb
+  with the Heart.
+- Done when: the owner has picked a rule, it is in the game, and
+  `balance::report` shows first runs ending at depth 3 to 5 on average.
+
+### R03 Frame-time spikes at Retina size
+- Status: todo
+- F10 measured 14.0 ms median but 17.9 ms p95 at 3200x2000, so the p95 misses
+  60 fps, and the spikes are unexplained. The four shadow-casting hero torches
+  cost about 2.2 ms each. Levers not yet tried: merge static tile meshes per
+  chunk, merge the party's torches into one shadow light. No real window has
+  been measured.
+- Done when: the cause of the p95 spikes is named with evidence, and
+  `tools/frametime.py` shows p95 under 16.7 ms at 3200x2000 in the dungeon,
+  town and combat scenes, with no visible change to the lighting.
+
+### R04 Captures differ run to run
+- Status: todo
+- Two identical harness runs differ by 10 to 92 isolated pixels. CPU light
+  clustering did not fix it (F10). Also: runs under different temp folders use
+  different scene lock files, so their games can share the GPU.
+- Done when: two runs of the same scene give byte-identical PNGs, or the cause
+  is named and shown to be outside our control; one lock file for every runner.
+
+### R05 Town lighting
+- Status: todo
+- The town reads dark and murky: grass and roads are hard to tell apart and
+  the party is lost in it. It should read as daylight (or a clear dusk).
+- Files: `src/lighting.rs` (`apply_environment`), the town kit palette.
+- Done when: the `town` and `chars_town` captures read clearly at a glance and
+  the owner agrees.
+
+### R06 Town buildings
+- Status: todo
+- Hovels have no roofs. The town wall shows as a stub from the inside. A torch
+  on a cut-away wall floats in the air.
+- Done when: captures show hovels roofed, the town wall whole from inside, and
+  a torch on a cut wall either sinking with it or hidden.
+
+### R07 Models that read badly (art)
+- Status: todo
+- The fighter's yellow washes out to cream under torchlight. Scrolls all look
+  alike. Flat weapons are hard to see on the floor. The spider's legs and the
+  demon lord's wings reach past their tile.
+- Files: `art/build_characters_kit.py`, `art/build_items_kit.py`,
+  `art/build_monsters_kit.py`.
+- Done when: captures show the fighter's colour holding under a torch, each
+  scroll kind told apart, weapons on the floor visible, and the big monsters
+  inside their tile (or the overlap accepted by the owner).
+
+### R08 Small UI and rules fixes
+- Status: todo
+- Monsters share names on a level ("Goblin #0" twice). The log overflows the
+  HUD on the victory screen. Health bars do not bob with hovering units
+  (wraith, bat). Gold rolls use the thread rng, not `GameRng`
+  (`src/raws/rawmaster.rs`, marked `shortcut:`), so seeded runs differ.
+- Done when: each is fixed, with a unit test for the names and the gold roll
+  and a capture for the log and the bars.
+
+---
+
 ## Order of work
 
 1. F00, then F01, then F02. These are serial.
