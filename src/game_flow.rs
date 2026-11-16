@@ -48,6 +48,7 @@ pub enum RunState {
     NextLevel,
     MagicMapReveal,
     GameOver,
+    Victory,
 }
 
 /// The tactical mode. Saved with the game (`saveload::SavedMode`).
@@ -190,7 +191,8 @@ impl Plugin for GameFlowPlugin {
             .init_resource::<MagicMapReveal>()
             .init_resource::<TurnEnded>()
             .init_resource::<HeroAction>()
-            .init_resource::<levels::PendingPortal>()
+            .init_resource::<levels::PendingTravel>()
+            .init_resource::<levels::PendingVictory>()
             .init_resource::<levels::Delve>()
             // PreRun: one frame of setup, then hand control to the party
             .init_resource::<KeepMode>()
@@ -260,8 +262,9 @@ impl Plugin for GameFlowPlugin {
     }
 }
 
-fn transition_to_awaiting_input(mut next_state: ResMut<NextState<RunState>>) {
-    next_state.set_if_different(RunState::AwaitingInput);
+fn transition_to_awaiting_input(mut next_state: ResMut<NextState<RunState>>, mut victory: ResMut<levels::PendingVictory>) {
+    let next = if std::mem::take(&mut victory.0) { RunState::Victory } else { RunState::AwaitingInput };
+    next_state.set_if_different(next);
 }
 
 type PartySight<'w, 's> =
@@ -322,7 +325,7 @@ fn after_party_action(
     mut hero_action: ResMut<HeroAction>,
     mut pending_magic_map: ResMut<PendingMagicMap>,
     mut reveal: ResMut<MagicMapReveal>,
-    portal: Res<levels::PendingPortal>,
+    travel: Res<levels::PendingTravel>,
     party: PartySight,
     hostiles: HostileSight,
 ) {
@@ -332,7 +335,7 @@ fn after_party_action(
         _ => Step::EndTurn,
     };
     let next = take_step(step, &mut mode, &mut next_state, &mut active, &mut walk, &party, &hostiles);
-    if next != RunState::GameOver && portal.0 {
+    if next != RunState::GameOver && travel.0.is_some() {
         next_state.set_if_different(RunState::NextLevel);
     } else if next != RunState::GameOver && std::mem::take(&mut pending_magic_map.0) {
         *reveal = MagicMapReveal { row: 0, then: next };

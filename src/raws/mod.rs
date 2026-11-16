@@ -71,14 +71,15 @@ mod tests {
     }
 
     #[test]
-    fn every_item_but_gold_belongs_to_a_sector() {
+    fn every_item_but_gold_and_the_heart_belongs_to_a_sector() {
         let sectorless: Vec<_> = shipped_raws()
             .items
             .into_iter()
             .filter(|i| i.sector.is_none())
             .map(|i| i.name)
             .collect();
-        assert_eq!(sectorless, ["Gold"]);
+        // Nobody trades the Heart of the Abyss.
+        assert_eq!(sectorless, ["Gold", "Heart of the Abyss"]);
     }
 
     /// Item names per sector and tier, so a sector can always level and
@@ -125,8 +126,9 @@ mod tests {
             .map(|e| e.name.clone())
             .collect();
         assert_eq!(missing, Vec::<String>::new());
-        // And the other way: every item and every hostile mob can spawn.
-        let spawnable = |name: &str| raws.spawn_table.iter().any(|e| e.name == name);
+        // And the other way: every item and every hostile mob can spawn. The
+        // Heart is laid on depth 12 by `map_builders::LevelStairs` instead.
+        let spawnable = |name: &str| name == crate::levels::HEART_OF_THE_ABYSS || raws.spawn_table.iter().any(|e| e.name == name);
         let unspawned: Vec<_> = raws
             .items
             .iter()

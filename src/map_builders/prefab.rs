@@ -440,7 +440,7 @@ impl PrefabMetaBuilder {
                 let x = rng.0.random_range(2..MAP_WIDTH as i32 - template.width as i32 - 2);
                 let y = rng.0.random_range(2..MAP_HEIGHT as i32 - template.height as i32 - 2);
 
-                if Self::can_place_vault(&build_data.map, vault, x, y) {
+                if Self::can_place_vault(&build_data.map, build_data.starting_position, vault, x, y) {
                     Self::apply_vault(vault, x, y, build_data);
                     break;
                 }
@@ -448,8 +448,9 @@ impl PrefabMetaBuilder {
         }
     }
 
-    /// Check if a vault can be placed at a position (needs mostly floor tiles)
-    fn can_place_vault(map: &Map, vault: &PrefabVault, start_x: i32, start_y: i32) -> bool {
+    /// Check if a vault can be placed at a position: mostly floor, and never
+    /// over the stairs or the party's start, which a vault would wall over.
+    fn can_place_vault(map: &Map, party_start: Option<(i32, i32)>, vault: &PrefabVault, start_x: i32, start_y: i32) -> bool {
         let template = &vault.template;
         let mut floor_count = 0;
         let total_tiles = template.width * template.height;
@@ -465,6 +466,9 @@ impl PrefabMetaBuilder {
                 }
 
                 let idx = map.xy_idx(map_x, map_y);
+                if map.tiles[idx] == TileType::DownStairs || party_start == Some((map_x, map_y)) {
+                    return false;
+                }
                 if map.tiles[idx] == TileType::Floor {
                     floor_count += 1;
                 }

@@ -1,5 +1,6 @@
-//! Level lifecycle: starting a new game, taking the stairs down, and going
-//! back to town by the up stairs on depth 1 or a Town Portal scroll.
+//! Level lifecycle: starting a new game, taking the stairs down or up, going
+//! back to town by a Town Portal scroll, and winning the run by carrying the
+//! Heart of the Abyss from depth 12 up into town.
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -17,7 +18,7 @@ use crate::map_render::{spawn_map_tiles, TileReveal};
 use crate::party::{self, ActiveUnit, PartyMember};
 use crate::resources::UiFont;
 use crate::rng::GameRng;
-use crate::spawner;
+use crate::{saveload, spawner};
 use crate::viewshed::Viewshed;
 
 /// The town's depth. The dungeon runs from depth 1 to 12 below it.
@@ -26,13 +27,21 @@ pub const TOWN_DEPTH: i32 = 0;
 /// The prize on depth 12. A party carrying it must climb out on foot.
 pub const HEART_OF_THE_ABYSS: &str = "Heart of the Abyss";
 
+/// The deepest dungeon level, where the Heart lies and no stairs lead down.
+pub const DEEPEST: i32 = 12;
+
 /// Where a level change leads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Travel {
     /// Down stairs: one level deeper, or from town to the deepest depth reached.
     Descend,
-    /// The up stairs on depth 1 or a Town Portal.
+    /// Up stairs: one level up, from depth 1 to town. The party arrives at
+    /// the down stairs of a freshly built level.
+    Ascend,
+    /// A Town Portal.
     ToTown,
+    /// The debug console's `depth N`.
+    Jump(i32),
 }
 
 /// How far this run has delved, and how long the party has been away from
@@ -43,6 +52,9 @@ pub struct Delve {
     pub deepest: i32,
     /// Dungeon levels entered since the party last left town.
     pub levels_visited: u32,
+    /// Dungeon levels entered this run (missing in older saves).
+    #[serde(default)]
+    pub levels_entered: u32,
 }
 
 impl Delve {
@@ -59,7 +71,9 @@ impl Delve {
         match travel {
             Travel::ToTown => TOWN_DEPTH,
             Travel::Descend if depth == TOWN_DEPTH => self.deepest.max(1),
-            Travel::Descend => depth + 1,
+            Travel::Descend => (depth + 1).min(DEEPEST),
+            Travel::Ascend => (depth - 1).max(TOWN_DEPTH),
+            Travel::Jump(to) => to.clamp(TOWN_DEPTH, DEEPEST),
         }
     }
 
@@ -71,37 +85,87 @@ impl Delve {
         }
         self.deepest = self.deepest.max(depth);
         self.levels_visited += 1;
+        self.levels_entered += 1;
         0
     }
 }
 
 /// Why a Town Portal cannot be read here, or `None` when it can.
 /// `carried` is every item name the party carries or wears.
-pub fn portal_refusal<'a>(depth: i32, mut carried: impl Iterator<Item = &'a str>) -> Option<&'static str> {
+pub fn portal_refusal<'a>(depth: i32, carried: impl Iterator<Item = &'a str>) -> Option<&'static str> {
     if depth == TOWN_DEPTH {
         Some("You are already in town.")
-    } else if carried.any(|name| name == HEART_OF_THE_ABYSS) {
+    } else if carries_heart(carried) {
         Some("The Heart of the Abyss smothers the portal. You must climb out.")
     } else {
         None
     }
 }
 
-/// Set when a Town Portal is read; `after_party_action` then changes level.
-#[derive(Resource, Default)]
-pub struct PendingPortal(pub bool);
+/// The tooltip name of stairs at `depth`, or `None` for any other tile.
+pub fn stairs_label(tile: TileType, depth: i32) -> Option<&'static str> {
+    match tile {
+        TileType::DownStairs => Some("Stairs down"),
+        TileType::UpStairs if depth == 1 => Some("Stairs up to town"),
+        TileType::UpStairs => Some("Stairs up"),
+        _ => None,
+    }
+}
 
-/// Build the level at `depth` and spawn its entities. Depth 1 gets up
-/// stairs at the start. Returns where the party should stand.
-fn build_level(commands: &mut Commands, map: &mut Map, rng: &mut GameRng, font: &UiFont, town: &TownState, depth: i32) -> (i32, i32) {
-    let mut builder = map_builders::level_builder(depth, rng, town);
+/// The log line on arriving at `depth` by `travel`, or `None` in town.
+fn arrival_message(travel: Travel, depth: i32) -> Option<String> {
+    match (depth, travel) {
+        (TOWN_DEPTH, _) => None,
+        (_, Travel::Ascend) => Some(format!("You climb to level {depth}.")),
+        (DEEPEST, _) => Some(format!("You descend to level {depth}. Something below beats like a heart.")),
+        _ => Some(format!("You descend to level {depth}. You feel slightly rejuvenated.")),
+    }
+}
+
+/// The log line for picking up `item`.
+pub fn pickup_message(item: &str) -> String {
+    if item == HEART_OF_THE_ABYSS {
+        "You lift the Heart of the Abyss. It beats in your hands. Now climb out.".to_string()
+    } else {
+        format!("You pick up the {item}.")
+    }
+}
+
+/// Set when a Town Portal is read or the console jumps; the next level
+/// change takes it instead of the stairs underfoot.
+#[derive(Resource, Default)]
+pub struct PendingTravel(pub Option<Travel>);
+
+/// Set when the party reaches town carrying the Heart; the run is won once
+/// the town is built (`game_flow::transition_to_awaiting_input`).
+#[derive(Resource, Default)]
+pub struct PendingVictory(pub bool);
+
+/// Whether any of `carried` (item names the party carries or wears) is the Heart.
+fn carries_heart<'a>(mut carried: impl Iterator<Item = &'a str>) -> bool {
+    carried.any(|name| name == HEART_OF_THE_ABYSS)
+}
+
+/// Build the level at `depth` and spawn its entities. Returns where the
+/// party starts (the up stairs in the dungeon) and the down stairs, if any.
+fn build_level(
+    commands: &mut Commands,
+    map: &mut Map,
+    rng: &mut GameRng,
+    font: &UiFont,
+    town: &TownState,
+    depth: i32,
+    heart_carried: bool,
+) -> ((i32, i32), Option<(i32, i32)>) {
+    let mut builder = map_builders::level_builder(depth, rng, town, heart_carried);
     builder.build_map(rng);
     *map = builder.get_map();
     let start = builder.get_starting_position();
-    if depth == 1 {
-        let idx = map.xy_idx(start.0, start.1);
-        map.tiles[idx] = TileType::UpStairs;
-    }
+    let down = map
+        .tiles
+        .iter()
+        .position(|&t| t == TileType::DownStairs)
+        .map(|idx| ((idx % map.width as usize) as i32, (idx / map.width as usize) as i32));
 
     let text_font = TextFont {
         font: font.0.clone().into(),
@@ -110,7 +174,7 @@ fn build_level(commands: &mut Commands, map: &mut Map, rng: &mut GameRng, font: 
     };
     spawn_map_tiles(commands, map, &text_font, TileReveal::Hidden);
     builder.spawn_entities(commands, rng);
-    start
+    (start, down)
 }
 
 /// Build the starting map and spawn the party plus initial entities.
@@ -128,7 +192,7 @@ pub fn spawn_new_game(
     if depth == TOWN_DEPTH {
         restock(town, &crate::raws::RAWS.lock().unwrap().raws.items);
     }
-    let start = build_level(commands, map, rng, font, town, depth);
+    let (start, _) = build_level(commands, map, rng, font, town, depth, false);
     let tiles = party::spawn_tiles(map, start, party::PARTY_SIZE);
     let party = spawner::spawn_party(commands, &tiles);
     commands.insert_resource(ActiveUnit(party.first().copied()));
@@ -142,7 +206,7 @@ pub fn spawn_new_game(
 pub fn use_town_portal(
     mut commands: Commands,
     mut gamelog: ResMut<GameLog>,
-    mut portal: ResMut<PendingPortal>,
+    mut travel: ResMut<PendingTravel>,
     map: Res<Map>,
     uses: Query<(Entity, &WantsToUseItem)>,
     portals: Query<(), With<TownPortal>>,
@@ -159,7 +223,7 @@ pub fn use_town_portal(
             }
             None => {
                 gamelog.entries.push("A shimmering portal opens and pulls the party home.".to_string());
-                portal.0 = true;
+                travel.0 = Some(Travel::ToTown);
             }
         }
     }
@@ -167,7 +231,10 @@ pub fn use_town_portal(
 
 /// Tear down the current level and build the next one, keeping the party
 /// and whatever it carries. A return to town runs the trade simulation for
-/// the days away and restocks the vendors.
+/// the days away and restocks the vendors; with the Heart it wins the run.
+/// Levels are not kept: climbing builds a fresh level and stands the party
+/// on its down stairs.
+#[allow(clippy::too_many_arguments)]
 pub fn change_level(
     mut commands: Commands,
     mut map: ResMut<Map>,
@@ -177,7 +244,7 @@ pub fn change_level(
     mut rng: ResMut<GameRng>,
     mut town: ResMut<TownState>,
     mut delve: ResMut<Delve>,
-    mut portal: ResMut<PendingPortal>,
+    (mut pending, mut victory): (ResMut<PendingTravel>, ResMut<PendingVictory>),
     active: Res<ActiveUnit>,
     mut party_query: Query<(Entity, &PartyMember, &mut CombatStats, &mut Viewshed)>,
     // Everything placed on the map goes with the level: tiles, monsters,
@@ -185,13 +252,15 @@ pub fn change_level(
     // Carried items have no `Position`.
     level_bound: Query<(Entity, &Position), Without<PartyMember>>,
     positions: Query<&Position, With<PartyMember>>,
+    carried: Query<&Name, Or<(With<InBackpack>, With<Equipped>)>>,
 ) {
     let on_up_stairs = active
         .0
         .and_then(|unit| positions.get(unit).ok())
         .is_some_and(|p| map.tiles[map.xy_idx(p.x, p.y)] == TileType::UpStairs);
-    let travel = if std::mem::take(&mut portal.0) || on_up_stairs { Travel::ToTown } else { Travel::Descend };
+    let travel = pending.0.take().unwrap_or(if on_up_stairs { Travel::Ascend } else { Travel::Descend });
     let depth = delve.destination(map.depth, travel);
+    let heart_carried = carries_heart(carried.iter().map(|n| n.name.as_str()));
 
     for (entity, _) in &level_bound {
         commands.entity(entity).despawn();
@@ -204,12 +273,16 @@ pub fn change_level(
         gamelog.entries.push(return_message(days, news.len()));
     }
 
-    let start = build_level(&mut commands, &mut map, &mut rng, &font, &town, depth);
+    let (start, down) = build_level(&mut commands, &mut map, &mut rng, &font, &town, depth, heart_carried);
+    let arrival = match (travel, down) {
+        (Travel::Ascend, Some(down)) => down,
+        _ => start,
+    };
 
-    // Stand the party round the start, in slot order, each healed by half
+    // Stand the party round the arrival, in slot order, each healed by half
     let mut members: Vec<_> = party_query.iter_mut().collect();
     members.sort_by_key(|(_, member, _, _)| member.slot);
-    let tiles = party::spawn_tiles(&map, start, members.len());
+    let tiles = party::spawn_tiles(&map, arrival, members.len());
     for ((entity, _, mut stats, mut viewshed), (x, y)) in members.into_iter().zip(tiles) {
         commands.entity(entity).insert(Position { x, y });
         stats.hp = (stats.hp + stats.max_hp / 2).min(stats.max_hp);
@@ -217,8 +290,12 @@ pub fn change_level(
         viewshed.dirty = true;
     }
 
-    if depth != TOWN_DEPTH {
-        gamelog.entries.push(format!("You descend to level {depth}. You feel slightly rejuvenated."));
+    gamelog.entries.extend(arrival_message(travel, depth));
+    if depth == TOWN_DEPTH && heart_carried {
+        gamelog.entries.push("You carry the Heart of the Abyss out into daylight.".to_string());
+        // Permadeath: a won run's save goes like a lost one's.
+        saveload::delete_save_file();
+        victory.0 = true;
     }
 
     next_state.set_if_different(RunState::PreRun);
@@ -255,29 +332,92 @@ mod tests {
         assert_eq!(delve.destination(3, Travel::ToTown), TOWN_DEPTH);
         // One day per dungeon level entered.
         assert_eq!(delve.arrive(TOWN_DEPTH), 3);
-        assert_eq!(delve, Delve { deepest: 3, levels_visited: 0 });
+        assert_eq!(delve, Delve { deepest: 3, levels_visited: 0, levels_entered: 3 });
         // Leaving town goes back to the deepest depth; the next trip counts afresh.
         assert_eq!(delve.destination(TOWN_DEPTH, Travel::Descend), 3);
         delve.arrive(3);
         assert_eq!(delve.arrive(TOWN_DEPTH), 1);
         // A game started deep (the harness) counts that level.
-        assert_eq!(Delve::starting_at(5), Delve { deepest: 5, levels_visited: 1 });
+        assert_eq!(Delve::starting_at(5), Delve { deepest: 5, levels_visited: 1, levels_entered: 1 });
+        // Up one level at a time, from depth 1 to town; never below the deepest.
+        assert_eq!(delve.destination(3, Travel::Ascend), 2);
+        assert_eq!(delve.destination(1, Travel::Ascend), TOWN_DEPTH);
+        assert_eq!(delve.destination(DEEPEST, Travel::Descend), DEEPEST);
+        assert_eq!(delve.destination(5, Travel::Jump(1)), 1);
     }
 
-    /// The start must be placed before unreachable floor is culled, or a
-    /// wall at the map centre culls the whole level and leaves no stairs.
     #[test]
-    fn dungeon_levels_have_down_stairs() {
+    fn the_log_tells_climbing_from_descending() {
+        assert_eq!(arrival_message(Travel::Ascend, 4).as_deref(), Some("You climb to level 4."));
+        assert_eq!(
+            arrival_message(Travel::Descend, 4).as_deref(),
+            Some("You descend to level 4. You feel slightly rejuvenated.")
+        );
+        assert_eq!(arrival_message(Travel::Ascend, TOWN_DEPTH), None);
+        assert_eq!(stairs_label(TileType::UpStairs, 1), Some("Stairs up to town"));
+        assert_eq!(stairs_label(TileType::UpStairs, 5), Some("Stairs up"));
+        assert_eq!(stairs_label(TileType::Floor, 5), None);
+        assert_eq!(pickup_message("Dagger"), "You pick up the Dagger.");
+    }
+
+    /// Every dungeon level for seeds 1 to 300 has up stairs at the start and,
+    /// reachable from it, down stairs on depths 1 to 11, or on depth 12 the
+    /// Heart with its guard beside it. Seed 100 once started in a sealed
+    /// pocket (the whole rest of the level culled), seed 231 had the corner
+    /// fort stamped over its stairs, and five seeds (52, 71, ...) had BSP
+    /// corridors start on a room's wall line and miss the room.
+    #[test]
+    fn every_dungeon_level_has_its_stairs() {
+        use crate::pathfinding::dijkstra_map;
+        crate::raws::load_raws();
         let town = TownState::fresh(1);
-        let stairless: Vec<u64> = (0..100)
-            .filter(|&seed| {
+        let mut faults = Vec::new();
+        for seed in 1..=300u64 {
+            for depth in 1..=DEEPEST {
                 let mut rng = GameRng::seeded(seed);
-                let mut builder = map_builders::level_builder(3, &mut rng, &town);
+                let mut builder = map_builders::level_builder(depth, &mut rng, &town, false);
                 builder.build_map(&mut rng);
-                !builder.get_map().tiles.contains(&TileType::DownStairs)
-            })
-            .collect();
-        assert_eq!(stairless, Vec::<u64>::new());
+                let map = builder.get_map();
+                let (x, y) = builder.get_starting_position();
+                let start = map.xy_idx(x, y);
+                let reach = dijkstra_map(&map, &[start]);
+                let reachable = |idx: usize| reach[idx] < f32::MAX;
+                let count = |tile| map.tiles.iter().filter(|&&t| t == tile).count();
+                let named = |name: &str| builder.spawn_list().iter().filter(|(_, n)| n == name).map(|&(i, _)| i).collect::<Vec<_>>();
+
+                let mut fault = |why: &str| faults.push(format!("seed {seed} depth {depth} ({}): {why}", builder.get_name()));
+                if map.tiles[start] != TileType::UpStairs || count(TileType::UpStairs) != 1 {
+                    fault("no single up stairs at the start");
+                }
+                let down: Vec<usize> = (0..map.tiles.len()).filter(|&i| map.tiles[i] == TileType::DownStairs).collect();
+                if depth < DEEPEST {
+                    if down.len() != 1 || !reachable(down[0]) {
+                        fault("no single reachable down stairs");
+                    }
+                } else {
+                    let heart = named(HEART_OF_THE_ABYSS);
+                    let guard = named("Demon Lord");
+                    if !down.is_empty() {
+                        fault("down stairs on the deepest level");
+                    }
+                    if heart.len() != 1 || !reachable(heart[0]) || heart[0] == start {
+                        fault("no single reachable Heart away from the start");
+                    } else if !guard.iter().any(|&g| {
+                        let (gx, gy) = ((g % map.width as usize) as i32, (g / map.width as usize) as i32);
+                        let (hx, hy) = ((heart[0] % map.width as usize) as i32, (heart[0] / map.width as usize) as i32);
+                        (gx - hx).abs().max((gy - hy).abs()) == 1 && map.tiles[g] == TileType::Floor
+                    }) {
+                        fault("no guard beside the Heart");
+                    }
+                }
+            }
+        }
+        assert_eq!(faults, Vec::<String>::new());
+
+        let mut rng = GameRng::seeded(1);
+        let mut builder = map_builders::level_builder(DEEPEST, &mut rng, &town, true);
+        builder.build_map(&mut rng);
+        assert!(!builder.spawn_list().iter().any(|(_, n)| n == HEART_OF_THE_ABYSS), "a carried Heart is not laid again");
     }
 
     #[test]

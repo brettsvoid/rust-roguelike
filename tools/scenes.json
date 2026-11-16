@@ -23,7 +23,7 @@
     {
       "name": "targeting",
       "note": "A fake cursor and the targeting overlay for a scroll.",
-      "args": "--seed 42 --depth 2 --reveal-map --cursor 900,400 --console \"spawn fireball\" --keys .g --target \"Fireball Scroll\" --frames 90"
+      "args": "--seed 42 --depth 2 --reveal-map --cursor 900,400 --console \"spawn fireball\" --keys cg --target \"Fireball Scroll\" --frames 90"
     },
     {
       "name": "fx",
@@ -89,7 +89,7 @@
     {
       "name": "bow",
       "note": "Aldric picks up and equips a bow, then shoots.",
-      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"spawn bow\" --keys .gia. --click 30,28 --click 35,26 --click 33,30 --keys ennn --click 33,28 --frames 240",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"spawn bow\" --keys cgiac --click 30,28 --click 35,26 --click 33,30 --keys ennn --click 33,28 --frames 240",
       "expect": [
         "You equip the Shortbow.",
         "Aldric shoots"
@@ -107,7 +107,7 @@
     {
       "name": "overwatch",
       "note": "Aldric on overwatch with a bow reacts to a goblin walking in.",
-      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"spawn bow\" --console \"place 6 0 Goblin\" --keys .gia.oe --frames 120",
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"spawn bow\" --console \"place 6 0 Goblin\" --keys cgiacoe --frames 120",
       "expect": [
         "Aldric goes on overwatch.",
         "Overwatch! Aldric shoots Goblin"
@@ -168,7 +168,7 @@
     {
       "name": "chars_party_zoom",
       "note": "The same, zoomed in.",
-      "args": "--seed 42 --depth 2 --keys \"..++++++\" --frames 180"
+      "args": "--seed 42 --depth 2 --keys \"cc++++++\" --frames 180"
     },
     {
       "name": "chars_town",
@@ -183,7 +183,7 @@
     {
       "name": "chars_walk",
       "note": "Walk five tiles east: the heroes turn to face the way they glide.",
-      "args": "--seed 42 --depth 2 --keys \"..++\" --click 45,20 --every 10 --frames 120"
+      "args": "--seed 42 --depth 2 --keys \"cc++\" --click 45,20 --every 10 --frames 120"
     },
     {
       "name": "kill_all",
@@ -434,12 +434,45 @@
     {
       "name": "ui_tooltip",
       "note": "Aldric takes up a bow; in combat the cursor over an orc four tiles east shows the shot preview.",
-      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"spawn bow\" --console \"place 4 0 Orc\" --cursor 1005,565 --keys .gia. --frames 150"
+      "args": "--seed 42 --depth 2 --reveal-map --console godmode --console \"spawn bow\" --console \"place 4 0 Orc\" --cursor 1005,565 --keys cgiac --frames 150"
     },
     {
       "name": "ui_bars",
       "note": "Health bars sit just over each model: Rat, Orc Warrior, Lich, Wraith in front, Demon Lord, Giant Bat, Kobold behind; Aldric is hurt so his bar shows, the other heroes' do not.",
       "args": "--seed 42 --depth 2 --console godmode --console \"hurt 10\" --console \"place -1 -2 Rat\" --console \"place 1 -2 Orc Warrior\" --console \"place 3 -2 Lich\" --console \"place 5 -2 Wraith\" --console \"place -1 -4 Demon Lord\" --console \"place 1 -4 Giant Bat\" --console \"place 3 -4 Kobold\" --keys \"++++\" --frames 150"
+    },
+    {
+      "name": "heart_lair",
+      "note": "Depth 12: the Heart of the Abyss (at 13,19 on this seed) glowing on the floor with a Demon Lord beside it, Aldric two tiles away, zoomed in.",
+      "args": "--seed 42 --depth 12 --reveal-map --console godmode --console \"teleport 15 21\" --keys \"++++\" --frames 150"
+    },
+    {
+      "name": "heart_portal",
+      "note": "Aldric takes the Heart on depth 12; Corin then reads a Town Portal and it is refused.",
+      "args": "--seed 42 --depth 12 --console godmode --console \"teleport heart\" --keys gnn --do \"spawn portal\" --keys gia --frames 150",
+      "expect": [
+        "You lift the Heart of the Abyss",
+        "smothers the portal"
+      ]
+    },
+    {
+      "name": "climb",
+      "note": "The party starts on the up stairs of depth 3, climbs to a fresh depth 2 and arrives on its down stairs, which it takes straight back down.",
+      "args": "--seed 42 --depth 3 --console godmode --keys . --keys . --frames 150",
+      "expect": [
+        "You climb to level 2.",
+        "You descend to level 3."
+      ]
+    },
+    {
+      "name": "ending",
+      "note": "Aldric takes the Heart on depth 12, the party jumps to depth 1 and takes its up stairs into town: the victory screen over the town.",
+      "args": "--seed 42 --depth 12 --console godmode --console \"teleport heart\" --keys g --do \"depth 1\" --keys . --frames 240",
+      "expect": [
+        "You lift the Heart of the Abyss",
+        "You descend to level 1",
+        "You carry the Heart of the Abyss out into daylight."
+      ]
     }
   ]
 }

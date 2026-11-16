@@ -10,7 +10,7 @@
 //! Chain these after any initial builder that doesn't handle start/stairs/
 //! spawns itself.
 
-use crate::map::{TileType, MAP_HEIGHT, MAP_WIDTH};
+use crate::map::{Map, TileType, MAP_HEIGHT, MAP_WIDTH};
 use crate::pathfinding::dijkstra_map;
 use crate::raws::{get_spawn_table_for_depth, RAWS};
 use crate::rng::GameRng;
@@ -60,37 +60,45 @@ impl MetaMapBuilder for AreaStartingPosition {
             YStart::Bottom => MAP_HEIGHT as i32 - 2,
         };
 
-        // Find nearest floor tile to seed position
-        let mut available = Vec::new();
-        for (idx, tile) in build_data.map.tiles.iter().enumerate() {
-            if *tile == TileType::Floor {
-                available.push(idx);
-            }
-        }
-
-        if available.is_empty() {
+        let Some(idx) = start_in_main_area(&build_data.map, (seed_x, seed_y)) else {
             build_data.starting_position = Some((seed_x, seed_y));
             return;
+        };
+        build_data.starting_position = Some(((idx % MAP_WIDTH) as i32, (idx / MAP_WIDTH) as i32));
+    }
+}
+
+/// The floor tile nearest `seed` (Manhattan) that lies in the main area: the
+/// first connected area, nearest first, holding at least half the floor, else
+/// the largest. The nearest tile alone can be a sealed pocket, and
+/// `CullUnreachable` would then wall up the whole rest of the level.
+fn start_in_main_area(map: &Map, (seed_x, seed_y): (i32, i32)) -> Option<usize> {
+    let mut floor: Vec<usize> = (0..map.tiles.len()).filter(|&i| map.tiles[i] == TileType::Floor).collect();
+    let distance = |idx: usize| ((idx % MAP_WIDTH) as i32 - seed_x).abs() + ((idx / MAP_WIDTH) as i32 - seed_y).abs();
+    floor.sort_by_key(|&idx| (distance(idx), idx));
+
+    let mut seen = vec![false; map.tiles.len()];
+    let mut best: Option<(usize, usize)> = None;
+    for &idx in &floor {
+        if seen[idx] {
+            continue;
         }
-
-        // Find closest floor tile to seed
-        let mut closest_idx = available[0];
-        let mut closest_dist = i32::MAX;
-
-        for idx in available {
-            let x = (idx % MAP_WIDTH) as i32;
-            let y = (idx / MAP_WIDTH) as i32;
-            let dist = (x - seed_x).abs() + (y - seed_y).abs();
-            if dist < closest_dist {
-                closest_dist = dist;
-                closest_idx = idx;
+        let reach = dijkstra_map(map, &[idx]);
+        let mut size = 0;
+        for (i, &d) in reach.iter().enumerate() {
+            if d < f32::MAX && map.tiles[i] == TileType::Floor {
+                seen[i] = true;
+                size += 1;
             }
         }
-
-        let x = (closest_idx % MAP_WIDTH) as i32;
-        let y = (closest_idx / MAP_WIDTH) as i32;
-        build_data.starting_position = Some((x, y));
+        if best.is_none_or(|(_, most)| size > most) {
+            best = Some((idx, size));
+        }
+        if size * 2 >= floor.len() {
+            break;
+        }
     }
+    best.map(|(idx, _)| idx)
 }
 
 // ============================================================================
@@ -156,6 +164,10 @@ impl MetaMapBuilder for DistantExit {
         }
 
         if max_distance > 0.0 {
+            // One way down: stairs an earlier builder placed give way.
+            for tile in build_data.map.tiles.iter_mut().filter(|t| **t == TileType::DownStairs) {
+                *tile = TileType::Floor;
+            }
             build_data.map.tiles[exit_idx] = TileType::DownStairs;
         }
 

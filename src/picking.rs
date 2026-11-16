@@ -18,6 +18,7 @@ impl Plugin for PickingPlugin {
     fn build(&self, app: &mut App) {
         let in_gameplay = not(in_state(RunState::MainMenu))
             .and_then(not(in_state(RunState::GameOver)))
+            .and_then(not(in_state(RunState::Victory)))
             .and_then(not(in_state(RunState::MapGeneration)))
             .and_then(not(in_state(RunState::MapBuilderSelect)));
 

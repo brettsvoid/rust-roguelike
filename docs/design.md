@@ -268,9 +268,12 @@ in this table. Dungeon loot is tiered by depth (E05).
 
 ### Return Journey
 
-After the Heart is claimed, all levels increase in difficulty. New powerful
-enemies spawn, and the party must fight upward through 12 increasingly
-dangerous floors. Whether a Town Portal works while carrying the Heart is open.
+The Heart lies at the far end of depth 12, guarded by a Demon Lord; that level
+has no stairs down. A Town Portal will not work while the party carries the
+Heart, so the party climbs: every dungeon level has up stairs where the party
+arrives, and each level climbed into is built afresh, the party arriving on
+its down stairs. Carrying the Heart up the stairs of depth 1 into town wins the
+run. Harder levels on the way up are not built yet.
 
 ---
 

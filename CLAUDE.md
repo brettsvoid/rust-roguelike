@@ -64,11 +64,13 @@ The coordinator runs the same suite before every merge.
 --console CMD      a debug console command, repeatable. "town ..." commands run before the
                    level is built. Useful: godmode, "place DX DY NAME" (any raws entry at an
                    offset from the active hero), "spawn <item>", "gold N", "hurt N",
-                   "effect <spark|fireball|missile|heal|confusion|blood>", "teleport X Y",
+                   "effect <spark|fireball|missile|heal|confusion|blood>", "teleport X Y", "teleport heart" (onto the Heart),
                    "town level <sector> <1-5>", "town days N", kill_all (every monster
                    falls as if killed: stand-in body, gold, "is dead", experience), kill
                    (the active hero falls), "kill party" (every hero: game over),
-                   "xp N" (to every living hero).
+                   "xp N" (to every living hero), "depth N" (jump to a fresh level at depth N).
+--do CMD           a console command queued with the inputs, run in its turn (e.g.
+                   `--keys g --do "depth 1" --keys .`)
 --click X,Y        left-click grid cell X,Y: walk, attack, select a hero, confirm a target
 --press X,Y        left-click a point of the 1600x1000 picture (HUD buttons and cards)
 --cursor X,Y       hover the mouse at a point of the picture
@@ -338,13 +340,23 @@ Non-plugin modules worth knowing:
   overwatch ("Goblin goes on overwatch.") by `enemy_ai::plan`. The HUD party row shows
   "Overwatch" or "Hunkered" after the AP
 - `levels.rs` - New-game setup and level changes (`change_level`, run in `RunState::NextLevel`).
-  The town is depth 0 (`TOWN_DEPTH`), the dungeon depths 1 to 12. Down stairs go one level
-  deeper, or from town to the deepest depth reached; the up stairs (only on depth 1, at the start)
-  and a Town Portal scroll (`use_town_portal`, refused in town or while the party carries the
-  Heart of the Abyss) go to town. `Delve` holds the deepest depth and the levels entered since
-  leaving town; a return to town runs `trade::simulate` for one day per level entered, then
+  The town is depth 0 (`TOWN_DEPTH`), the dungeon depths 1 to 12 (`DEEPEST`). Every dungeon
+  level has up stairs where the party arrives (`map_builders::LevelStairs`, the last builder of
+  every dungeon chain). Down stairs go one level deeper, or from town to the deepest depth
+  reached; up stairs go one level up (`Travel::Ascend`), from depth 1 to town; a Town Portal
+  scroll (`use_town_portal`, refused in town or while the party carries the Heart of the Abyss)
+  goes to town. Levels are not kept: a level climbed into is built afresh (new layout, new
+  monsters) and the party stands on its down stairs (climbing into town, on the dungeon entrance). Depth 12 has no down stairs: the raws item
+  Heart of the Abyss lies where they would have been (the far end of the level), a Demon Lord
+  beside it, unless the party already carries it. Reaching town carrying the Heart wins the run:
+  `PendingVictory` sends the next `PreRun` to `RunState::Victory` (`ui/menus/victory.rs`, a
+  summary panel; any key returns to the main menu) and the save file is deleted as on a death.
+  `Delve` holds the deepest depth, the levels entered since leaving town and the levels entered
+  this run; a return to town runs `trade::simulate` for one day per level entered, then
   `stock::restock`. Every entity with a `Position` that is not a hero is despawned with the
-  level (carried items have none)
+  level (carried items have none). `PendingTravel` is set by a portal or the console's `depth N`
+  (a jump to a fresh level at depth N). The tooltip names stairs ("Stairs up", "Stairs up to
+  town", "Stairs down") and the log says "You climb to level N." or "You descend to level N."
 - `saveload.rs` - Save/load plus the save-on-quit (Q) system
 
 ### Game State
@@ -361,7 +373,7 @@ Two pieces of state, both in `game_flow.rs`:
   damage and `Confusion` counts down; ability cooldowns tick down there too
 - `ShowInventory` / `ShowDropItem` / `ShowRemoveItem` / `ShowTargeting` / `ShowLedger` / `ShowShop` - UI
   overlays; they return to `AwaitingInput` and leave `Mode` alone
-- `NextLevel`, `MagicMapReveal`, `GameOver`, and the visualiser's `MapBuilderSelect` / `MapGeneration`
+- `NextLevel`, `MagicMapReveal`, `GameOver`, `Victory` (the run is won: the victory panel over the town), and the visualiser's `MapBuilderSelect` / `MapGeneration`
 
 `Mode` (a resource) is the tactical mode: `Explore`, or `Combat { round, ap_spent }`. Every change
 of mode or phase goes through `advance(mode, step, situation)`, a pure function over plain data
@@ -486,8 +498,7 @@ scans the folder once at startup, so restart after adding a file).
   `art/items_kit.blend`, importing the monsters script and reusing the held weapons and shields
   (`sword`, `bow`, `axe`, `big_axe`, `hammer`, `mace`, `staff`, `shield`; `recoloured` swaps
   their materials, e.g. steel to gold). The raws `model` is the item name in snake case
-  (`Alchemist's Fire` is `alchemists_fire`), plus `heart_of_the_abyss` for the debug-spawned
-  Heart, which is not in the raws. Each `Item` is rested on the floor, centred and grown by
+  (`Alchemist's Fire` is `alchemists_fire`), `heart_of_the_abyss` for the Heart. Each `Item` is rested on the floor, centred and grown by
   `GROW` (1.25) to at most `MAX_SPAN` (1.05 m) at `finish`. Long things lie along the north-east
   diagonal, across the camera's view; shields lean towards the camera. Potions, the Heart, the
   portal seal and magic trims glow; steel here is brighter and not metallic, as metal with
@@ -541,7 +552,7 @@ of the same logic. The build should stay at zero warnings.
 - Not saved: the camera, presentation beats, a walk under way, the targeting or a menu open
   (a loaded game starts waiting for input); visible tiles and viewsheds (recomputed); a lit
   effect
-- Permadeath: save file deleted on load and when the last hero dies. A fallen hero leaves play
+- Permadeath: save file deleted on load, when the last hero dies and when the run is won. A fallen hero leaves play
   and drops what they carried; the selection moves to the next living hero
 - Vendors: clicking a vendor in town walks the active hero beside them and opens the
   shop (`ui/menus/shop.rs`, `RunState::ShowShop`). The trade rules are pure functions in

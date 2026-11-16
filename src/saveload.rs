@@ -675,6 +675,7 @@ mod tests {
             }
             map.revealed_tiles[3] = true;
             map.bloodstains.insert(8);
+            map.tiles[9] = TileType::UpStairs;
         }
         let party = crate::spawner::spawn_party(&mut world.commands(), &[(1, 1), (2, 1), (3, 1), (4, 1)]);
         let raws = RAWS.lock().unwrap();
@@ -692,6 +693,8 @@ mod tests {
         spawn_named_item(&raws, &mut commands, "Health Potion", 1, 2).unwrap();
         let sword = spawn_named_item(&raws, &mut commands, "Longsword", 0, 0).unwrap();
         commands.entity(sword).remove::<Position>().insert(Equipped { owner: party[0], slot: EquipmentSlot::Melee });
+        let heart = spawn_named_item(&raws, &mut commands, crate::levels::HEART_OF_THE_ABYSS, 0, 0).unwrap();
+        commands.entity(heart).remove::<Position>().insert(InBackpack { owner: party[3] });
         commands.entity(party[0]).insert((Poison { damage: 2, turns: 3 }, Overwatch));
         drop(raws);
         world.flush();
@@ -708,7 +711,7 @@ mod tests {
         world.insert_resource(Mode::Combat { round: 2, ap_spent: [(party[2], 1)].into() });
         world.insert_resource(ActiveUnit(Some(party[2])));
         world.insert_resource(Purse { gold: 55 });
-        world.insert_resource(Delve { deepest: 3, levels_visited: 2 });
+        world.insert_resource(Delve { deepest: 3, levels_visited: 2, levels_entered: 5 });
         world.resource_mut::<GameLog>().entries.push("Aldric goes on overwatch.".into());
         world
     }
@@ -735,6 +738,9 @@ mod tests {
             "Gold { amount: 9 }",
             "Door { open: true }",
             "Goblin Archer #7",
+            "Heart of the Abyss",
+            "UpStairs",
+            "levels_entered: 5",
         ] {
             assert!(all.contains(wanted), "{wanted} missing from the snapshot:\n{all}");
         }

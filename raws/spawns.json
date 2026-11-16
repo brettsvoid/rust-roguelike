@@ -122,6 +122,18 @@
       }
     },
     {
+      "name": "Heart of the Abyss",
+      "base_value": 10000,
+      "tier": 5,
+      "renderable": {
+        "glyph": "*",
+        "model": "heart_of_the_abyss",
+        "fg": "#E60D1A",
+        "bg": "#000000",
+        "order": 0
+      }
+    },
+    {
       "name": "Scroll of Magic Mapping",
       "base_value": 50,
       "tier": 2,

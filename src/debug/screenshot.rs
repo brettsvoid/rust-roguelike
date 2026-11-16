@@ -31,7 +31,10 @@
 //! `n` (Tab) switches buy and sell, the letters `a` to `j` trade that line and
 //! `!` (Escape) closes it. Inputs are fed into the inventory too: `i` then `a`
 //! uses the first item, e.g. `--console "spawn portal" --keys gia` reads a Town
-//! Portal (`spawn heart` drops a stand-in Heart of the Abyss to test the refusal).
+//! Portal (`spawn heart` drops the Heart of the Abyss to test the refusal).
+//! `--do CMD` queues a debug console command with the inputs, run in its
+//! turn (e.g. `--keys g --do "depth 1" --keys .` takes an item, jumps to a fresh
+//! depth 1 and takes its up stairs).
 //! `--every N` also saves every Nth frame before the last as `out-FFFF.png`
 //! next to `out.png`, a sequence to look at motion with.
 //! `--reload`, queued with the inputs, saves the game, loads it back and logs
@@ -168,6 +171,8 @@ pub enum HarnessInput {
     Shop(Vendor),
     /// Save, then load the save back (`reload_game`).
     Reload,
+    /// `--do`: a debug console command in its turn among the inputs.
+    Console(String),
 }
 
 fn key_input(c: char) -> Option<HarnessInput> {
@@ -268,6 +273,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<Screensho
                 inputs.push(HarnessInput::Press(Vec2::new(x.parse().map_err(|_| bad())?, y.parse().map_err(|_| bad())?)));
             }
             "--shop" => inputs.push(HarnessInput::Shop(Vendor::from_name(&value).ok_or_else(bad)?)),
+            "--do" => inputs.push(HarnessInput::Console(value)),
             _ => return Err(format!("unknown argument: {flag}")),
         }
     }
@@ -553,7 +559,32 @@ fn feed_next_input(
             mouse.press(MouseButton::Left);
         }
         HarnessInput::Reload => commands.queue(reload_game),
+        HarnessInput::Console(ref cmd) => commands.run_system_cached_with(run_console, cmd.clone()),
     }
+}
+
+/// `--do`: runs one console command now, as `prepare_capture` runs `--console`.
+fn run_console(
+    In(cmd): In<String>,
+    mut commands: Commands,
+    mut debug_state: ResMut<DebugState>,
+    mut god_mode: ResMut<GodMode>,
+    active: Res<ActiveUnit>,
+    mut party: Query<(Entity, &mut Position, &mut CombatStats), With<PartyMember>>,
+    monster_query: Query<Entity, With<Monster>>,
+    mut town: ResMut<TownState>,
+) {
+    let out = super::commands::execute_command(
+        &cmd,
+        &mut commands,
+        &mut debug_state,
+        &mut god_mode,
+        &mut party,
+        active.0,
+        &monster_query,
+        &mut town,
+    );
+    info!("console> {cmd}: {out}");
 }
 
 /// `--reload`: save, load the file back, and log whether the loaded game is

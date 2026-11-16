@@ -29,6 +29,7 @@ mod room_modifiers;
 mod room_sorter;
 mod rooms_only;
 mod simple_map;
+mod stairs;
 mod town;
 mod voronoi;
 mod wall_torches;
@@ -61,6 +62,7 @@ pub use room_sorter::{RoomSort, RoomSorter};
 pub use rooms_only::{BspRoomsBuilder, SimpleMapRoomsBuilder};
 pub use simple_map::SimpleMapBuilder;
 pub use voronoi::VoronoiCellBuilder;
+pub use stairs::LevelStairs;
 pub use wall_torches::WallTorches;
 pub use town::TownBuilder;
 pub use wfc::WfcBuilder;
@@ -286,7 +288,12 @@ impl BuilderType {
             BuilderType::PrefabSectional => Box::new(
                 BuilderChain::new(depth, "Prefab (Sectional)")
                     .start_with(Box::new(CellularAutomataBuilder::new()))
-                    .with(PrefabMetaBuilder::sectional(CORNER_FORT.clone())),
+                    .with(PrefabMetaBuilder::sectional(CORNER_FORT.clone()))
+                    // The fort is stamped where it is, over the stairs or the
+                    // start if they lie there, so both are placed again.
+                    .with(AreaStartingPosition::new(XStart::Center, YStart::Center))
+                    .with(CullUnreachable::new())
+                    .with(DistantExit::new()),
             ),
         }
     }
@@ -317,6 +324,9 @@ pub trait MapBuilder {
     fn spawn_entities(&self, commands: &mut Commands, rng: &mut GameRng);
     fn get_map(&self) -> Map;
     fn get_starting_position(&self) -> (i32, i32);
+    /// What the chain queued to spawn: (tile index, raws name).
+    #[cfg(test)]
+    fn spawn_list(&self) -> &[(usize, String)];
     fn get_snapshot_history(&self) -> Vec<Map>;
     fn get_name(&self) -> &'static str;
     /// Appends a meta builder to the end of the chain.
@@ -443,9 +453,12 @@ impl MapBuilder for BuilderChain {
     }
 
     fn get_starting_position(&self) -> (i32, i32) {
-        self.build_data
-            .starting_position
-            .unwrap_or((MAP_WIDTH as i32 / 2, MAP_HEIGHT as i32 / 2))
+        starting_position(self.build_data.starting_position)
+    }
+
+    #[cfg(test)]
+    fn spawn_list(&self) -> &[(usize, String)] {
+        &self.build_data.spawn_list
     }
 
     fn get_snapshot_history(&self) -> Vec<Map> {
@@ -459,6 +472,11 @@ impl MapBuilder for BuilderChain {
     fn then(&mut self, builder: Box<dyn MetaMapBuilder>) {
         self.builders.push(builder);
     }
+}
+
+/// Where the party starts: the chain's choice, or the map centre.
+fn starting_position(chosen: Option<(i32, i32)>) -> (i32, i32) {
+    chosen.unwrap_or((MAP_WIDTH as i32 / 2, MAP_HEIGHT as i32 / 2))
 }
 
 pub fn random_builder(depth: i32, rng: &mut GameRng) -> Box<dyn MapBuilder> {
@@ -624,13 +642,17 @@ pub fn default_builder(depth: i32) -> Box<dyn MapBuilder> {
 
 /// Selects the appropriate builder based on dungeon depth.
 /// Depth 0 is the town, grown to `town`'s levels; the dungeon depths below
-/// it use random dungeon generation.
-pub fn level_builder(depth: i32, rng: &mut GameRng, town: &TownState) -> Box<dyn MapBuilder> {
+/// it use random dungeon generation, with up stairs at the start. The
+/// deepest has no down stairs and holds the Heart of the Abyss unless
+/// `heart_carried`.
+pub fn level_builder(depth: i32, rng: &mut GameRng, town: &TownState, heart_carried: bool) -> Box<dyn MapBuilder> {
     match depth {
         crate::levels::TOWN_DEPTH => Box::new(BuilderChain::new(depth, "Town").start_with(Box::new(TownBuilder::new(town)))),
         _ => {
             let mut builder = random_builder(depth, rng);
             builder.then(WallTorches::new());
+            let bottom = depth >= crate::levels::DEEPEST;
+            builder.then(LevelStairs::new(bottom, bottom && !heart_carried));
             builder
         }
     }

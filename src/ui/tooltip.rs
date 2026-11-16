@@ -11,7 +11,7 @@ use crate::overwatch::Hunkered;
 use crate::party::ActiveUnit;
 use crate::picking::{update_hovered_tile, HoveredTile};
 use crate::resources::UiFont;
-use crate::{RunState, TargetingInfo};
+use crate::{levels, RunState, TargetingInfo};
 
 use super::combat_hud::{shot_preview, Mark, Shooter, ShotPreview};
 use super::components::Tooltip;
@@ -23,6 +23,7 @@ impl Plugin for TooltipPlugin {
     fn build(&self, app: &mut App) {
         let in_gameplay = not(in_state(RunState::MainMenu))
             .and_then(not(in_state(RunState::GameOver)))
+            .and_then(not(in_state(RunState::Victory)))
             .and_then(not(in_state(RunState::MapGeneration)))
             .and_then(not(in_state(RunState::MapBuilderSelect)));
 
@@ -87,6 +88,7 @@ fn update_tooltip(
             Some((unit, Shooter { at: (at.x, at.y), aim, bonus: stats.power + i32::from(well_fed) }))
         });
 
+    let stairs = levels::stairs_label(map.tiles[map.xy_idx(map_x, map_y)], map.depth);
     let lines: Vec<Line> = entities_query
         .iter()
         .filter(|(_, pos, ..)| pos.x == map_x && pos.y == map_y)
@@ -102,6 +104,7 @@ fn update_tooltip(
             }
             _ => Line::Name(name.name.clone()),
         })
+        .chain(stairs.map(|label| Line::Name(label.to_string())))
         .collect();
     if lines.is_empty() {
         return;

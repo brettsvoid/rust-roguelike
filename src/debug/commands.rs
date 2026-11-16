@@ -4,12 +4,11 @@ use crate::combat::CombatStats;
 use crate::economy::town::{Sector, TownState};
 use crate::economy::trade;
 use crate::economy::Purse;
-use crate::components::{Item, Name, RenderableBundle};
+use crate::components::Name;
 use crate::effects::{EffectKind, Effects};
-use crate::entity_render::EntityShape;
-use crate::levels::HEART_OF_THE_ABYSS;
+use crate::levels::{PendingTravel, Travel, DEEPEST, HEART_OF_THE_ABYSS, TOWN_DEPTH};
+use crate::RunState;
 use crate::map::{Map, Position, MAP_HEIGHT, MAP_WIDTH};
-use crate::models::Model;
 use crate::monsters::Monster;
 use crate::party::PartyMember;
 
@@ -37,13 +36,14 @@ pub fn execute_command(
         Some("heal") => cmd_heal(party),
         Some("hurt") => cmd_hurt(&parts, party, active),
         Some("kill_all") => cmd_kill_all(commands, monster_query),
-        Some("teleport") => cmd_teleport(&parts, party, active),
+        Some("teleport") => cmd_teleport(&parts, commands, party, active),
         Some("spawn") => cmd_spawn(&parts, commands, party, active),
         Some("place") => cmd_place(&parts, commands, party, active),
         Some("effect") => cmd_effect(&parts, commands, party, active),
         Some("town") => cmd_town(&parts, town),
         Some("gold") => cmd_gold(&parts, commands),
         Some("xp") => cmd_xp(&parts, commands),
+        Some("depth") => cmd_depth(&parts, commands),
         Some("kill") if parts.get(1) == Some(&"party") => {
             for (hero, ..) in party.iter() {
                 cmd_kill(commands, Some(hero));
@@ -57,7 +57,7 @@ pub fn execute_command(
 }
 
 fn cmd_help() -> String {
-    "Commands: spawn <item> (portal, heart, ...), effect <spark|fireball|missile|heal|confusion|blood>, place <dx> <dy> <raws name>, teleport <x> <y>, gold <n>, xp <n>, kill (the active hero; kill party for all), godmode, reveal, nofog, heal, hurt <n>, kill_all, town sell <sector> <value>, town days <n>, town level <sector> <n>".to_string()
+    "Commands: spawn <item> (portal, heart, ...), effect <spark|fireball|missile|heal|confusion|blood>, place <dx> <dy> <raws name>, teleport <x> <y> (or heart), depth <n>, gold <n>, xp <n>, kill (the active hero; kill party for all), godmode, reveal, nofog, heal, hurt <n>, kill_all, town sell <sector> <value>, town days <n>, town level <sector> <n>".to_string()
 }
 
 fn cmd_godmode(god_mode: &mut GodMode) -> String {
@@ -122,6 +122,21 @@ fn cmd_gold(parts: &[&str], commands: &mut Commands) -> String {
             format!("Added {amount} gold to the purse")
         }
         _ => "Usage: gold <n>".to_string(),
+    }
+}
+
+/// Takes the party to a freshly built level at depth `n` (0 is town), as the
+/// stairs would, arriving at its start.
+fn cmd_depth(parts: &[&str], commands: &mut Commands) -> String {
+    match parts.get(1).map(|n| n.parse::<i32>()) {
+        Some(Ok(depth)) if (TOWN_DEPTH..=DEEPEST).contains(&depth) => {
+            commands.queue(move |world: &mut World| {
+                world.resource_mut::<PendingTravel>().0 = Some(Travel::Jump(depth));
+                world.resource_mut::<NextState<RunState>>().set(RunState::NextLevel);
+            });
+            format!("Jumping to depth {depth}")
+        }
+        _ => format!("Usage: depth <{TOWN_DEPTH}-{DEEPEST}>"),
     }
 }
 
@@ -197,11 +212,28 @@ fn cmd_kill_all(commands: &mut Commands, monster_query: &Query<Entity, With<Mons
 
 fn cmd_teleport(
     parts: &[&str],
+    commands: &mut Commands,
     party: &mut Query<(Entity, &mut Position, &mut CombatStats), With<PartyMember>>,
     active: Option<Entity>,
 ) -> String {
+    if parts.get(1) == Some(&"heart") {
+        let Some(hero) = active else { return "No active unit".to_string() };
+        // Onto the Heart of the Abyss, wherever the level laid it.
+        commands.queue(move |world: &mut World| {
+            let mut hearts = world.query::<(&Name, &Position)>();
+            let Some(at) = hearts.iter(world).find(|(n, _)| n.name == HEART_OF_THE_ABYSS).map(|(_, p)| *p) else {
+                warn!("teleport heart: no Heart of the Abyss on this level");
+                return;
+            };
+            if let Some(mut pos) = world.get_mut::<Position>(hero) {
+                *pos = at;
+                info!("teleport heart: ({}, {})", at.x, at.y);
+            }
+        });
+        return "Teleporting to the Heart of the Abyss".to_string();
+    }
     if parts.len() < 3 {
-        return "Usage: teleport <x> <y>".to_string();
+        return "Usage: teleport <x> <y> | teleport heart".to_string();
     }
     let x = parts[1].parse::<i32>();
     let y = parts[2].parse::<i32>();
@@ -254,17 +286,7 @@ fn cmd_spawn(
         "magic_map" | "map" => Some("Scroll of Magic Mapping"),
         "gold" => Some("Gold"),
         "portal" | "town_portal" => Some("Town Portal"),
-        "heart" => {
-            // Not in the raws yet: a named item with its model, enough to test the portal rule.
-            commands.spawn((
-                Item,
-                Name { name: HEART_OF_THE_ABYSS.to_string() },
-                Position { x, y },
-                Model("heart_of_the_abyss".to_string()),
-                RenderableBundle::new(Color::srgb(0.9, 0.05, 0.1), EntityShape::Item),
-            ));
-            return format!("Spawned {HEART_OF_THE_ABYSS} at ({x}, {y})");
-        }
+        "heart" => Some(HEART_OF_THE_ABYSS),
         _ => None,
     };
 

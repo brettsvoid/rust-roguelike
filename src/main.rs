@@ -125,7 +125,7 @@ fn main() {
             ui::BannerPlugin,
             ui::HealthBarsPlugin,
             ui::TargetingPlugin,
-            ui::GameOverPlugin,
+            (ui::GameOverPlugin, ui::VictoryPlugin),
             ui::InventoryPlugin,
             ui::LedgerPlugin,
             ui::ShopPlugin,

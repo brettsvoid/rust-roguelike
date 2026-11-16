@@ -57,7 +57,7 @@ pub fn item_collection_system(
         if let Ok(name) = name_query.get(wants_pickup.item) {
             gamelog
                 .entries
-                .push(format!("You pick up the {}.", name.name));
+                .push(crate::levels::pickup_message(&name.name));
         }
     }
 }

@@ -76,17 +76,17 @@ impl MetaMapBuilder for BspCorridors {
                 let room = &rooms[i];
                 let next_room = &rooms[i + 1];
 
-                // Random point within current room
+                // Random point inside each room: `apply_room_to_map` carves x1 + 1 ..= x2
+                // (the same for y), and a corridor from the wall line can miss the room.
                 let room_width = i32::abs(room.x1 - room.x2).max(1);
                 let room_height = i32::abs(room.y1 - room.y2).max(1);
-                let start_x = room.x1 + rng.0.random_range(0..room_width);
-                let start_y = room.y1 + rng.0.random_range(0..room_height);
+                let start_x = room.x1 + 1 + rng.0.random_range(0..room_width);
+                let start_y = room.y1 + 1 + rng.0.random_range(0..room_height);
 
-                // Random point within next room
                 let next_width = i32::abs(next_room.x1 - next_room.x2).max(1);
                 let next_height = i32::abs(next_room.y1 - next_room.y2).max(1);
-                let end_x = next_room.x1 + rng.0.random_range(0..next_width);
-                let end_y = next_room.y1 + rng.0.random_range(0..next_height);
+                let end_x = next_room.x1 + 1 + rng.0.random_range(0..next_width);
+                let end_y = next_room.y1 + 1 + rng.0.random_range(0..next_height);
 
                 let corridor = draw_corridor(&mut build_data.map, start_x, start_y, end_x, end_y);
                 corridors.push(corridor);
