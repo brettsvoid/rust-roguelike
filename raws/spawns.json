@@ -917,6 +917,7 @@
       "name": "Barkeep",
       "renderable": {
         "glyph": "@",
+        "model": "barkeep",
         "fg": "#FF69B4",
         "bg": "#000000",
         "order": 1
@@ -935,6 +936,7 @@
       "name": "Patron",
       "renderable": {
         "glyph": "@",
+        "model": "patron",
         "fg": "#808080",
         "bg": "#000000",
         "order": 1
@@ -953,6 +955,7 @@
       "name": "Priest",
       "renderable": {
         "glyph": "@",
+        "model": "priest",
         "fg": "#ADD8E6",
         "bg": "#000000",
         "order": 1
@@ -971,6 +974,7 @@
       "name": "Blacksmith",
       "renderable": {
         "glyph": "@",
+        "model": "blacksmith",
         "fg": "#800080",
         "bg": "#000000",
         "order": 1
@@ -989,6 +993,7 @@
       "name": "Clothier",
       "renderable": {
         "glyph": "@",
+        "model": "clothier",
         "fg": "#800080",
         "bg": "#000000",
         "order": 1
@@ -1007,6 +1012,7 @@
       "name": "Alchemist",
       "renderable": {
         "glyph": "@",
+        "model": "alchemist",
         "fg": "#800080",
         "bg": "#000000",
         "order": 1
@@ -1025,6 +1031,7 @@
       "name": "Mom",
       "renderable": {
         "glyph": "@",
+        "model": "mom",
         "fg": "#FF69B4",
         "bg": "#000000",
         "order": 1
@@ -1043,6 +1050,7 @@
       "name": "Peasant",
       "renderable": {
         "glyph": "@",
+        "model": "peasant",
         "fg": "#808080",
         "bg": "#000000",
         "order": 1
@@ -1061,6 +1069,7 @@
       "name": "Enchanter",
       "renderable": {
         "glyph": "@",
+        "model": "enchanter",
         "fg": "#9370DB",
         "bg": "#000000",
         "order": 1
@@ -1567,10 +1576,10 @@
     { "name": "Bear Trap", "weight": 2, "min_depth": 0, "max_depth": 100 }
   ],
   "classes": [
-    { "name": "Fighter", "stats": { "max_hp": 34, "power": 3, "armour": 2, "aim": 65, "defence": 5, "movement": 4 }, "gear": ["Longsword", "Shield"], "abilities": ["Cleave", "Second Wind"] },
-    { "name": "Ranger", "stats": { "max_hp": 28, "power": 2, "armour": 1, "aim": 75, "defence": 10, "movement": 5 }, "gear": ["Shortbow", "Dagger"], "abilities": ["Aimed Shot", "Snare"] },
-    { "name": "Mage", "stats": { "max_hp": 22, "power": 1, "armour": 0, "aim": 70, "defence": 5, "movement": 4 }, "gear": ["Dagger"], "abilities": ["Fireball", "Magic Missile"] },
-    { "name": "Cleric", "stats": { "max_hp": 30, "power": 2, "armour": 2, "aim": 65, "defence": 0, "movement": 4 }, "gear": ["Blessed Mace"], "abilities": ["Heal", "Smite"] }
+    { "name": "Fighter", "model": "hero_fighter", "stats": { "max_hp": 34, "power": 3, "armour": 2, "aim": 65, "defence": 5, "movement": 4 }, "gear": ["Longsword", "Shield"], "abilities": ["Cleave", "Second Wind"] },
+    { "name": "Ranger", "model": "hero_ranger", "stats": { "max_hp": 28, "power": 2, "armour": 1, "aim": 75, "defence": 10, "movement": 5 }, "gear": ["Shortbow", "Dagger"], "abilities": ["Aimed Shot", "Snare"] },
+    { "name": "Mage", "model": "hero_mage", "stats": { "max_hp": 22, "power": 1, "armour": 0, "aim": 70, "defence": 5, "movement": 4 }, "gear": ["Dagger"], "abilities": ["Fireball", "Magic Missile"] },
+    { "name": "Cleric", "model": "hero_cleric", "stats": { "max_hp": 30, "power": 2, "armour": 2, "aim": 65, "defence": 0, "movement": 4 }, "gear": ["Blessed Mace"], "abilities": ["Heal", "Smite"] }
   ],
   "abilities": [
     { "name": "Cleave", "cooldown": 3, "effect": "cleave" },

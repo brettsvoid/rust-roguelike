@@ -327,7 +327,8 @@ with no code change. A missing file keeps the grey-box primitive, silently (`Ava
 scans the folder once at startup, so restart after adding a file).
 
 - Mobs, items and props: set `"model": "<name>"` in the entry's `renderable` in
-  `raws/spawns.json`, beside `glyph`. An open door looks for `<name>_open`.
+  `raws/spawns.json`, beside `glyph`. An open door looks for `<name>_open`. Heroes: the
+  `"model"` of their class in the raws `classes`.
 - Tiles: the name comes from `models::tile_model_name`: `tile_floor`, `tile_wood_floor`,
   `tile_road`, `tile_grass`, `tile_bridge`, `tile_shallow_water`, `tile_deep_water`,
   `tile_down_stairs`, and `tile_wall_<mask>` where the mask (0 to 15) is `Map::wall_glyph_at`:
@@ -350,7 +351,7 @@ scans the folder once at startup, so restart after adding a file).
   tile (the wall torch) to its open side, the side `lighting::wall_offset` hangs the flame on,
   a door with walls north and south a quarter turn, and any other prop beside a wall turns its
   back to that wall (trying north, west, east, then south), so a cabinet or bed faces into the
-  room (`model_yaw`). Creatures and items are not turned.
+  room (`model_yaw`). Items are not turned; creatures turn to their way (see Facing below).
 - Export: Blender sources live in `art/`. Each top-level collection becomes one `.glb` named
   after it: `blender art/<file>.blend --background --python art/export.py` (or run the script
   in a live Blender with `__file__` set). Collections named `_...` are skipped.
@@ -387,6 +388,25 @@ scans the folder once at startup, so restart after adding a file).
   materials of its own (cloth, linen, leather, wax, steel, glass, flesh, blood) beside the town's
   stone, wood, iron and shallows (the trough's water); glass glows faintly. Props stay under
   about 380 triangles
+- Characters kit (A04): `art/build_characters_kit.py` builds one model per hero class and town
+  character in `art/characters_kit.blend`, reusing the props script's helpers, plus a `_preview`
+  line-up and a `_cam`. Heroes: `hero_fighter` (plate, sword, shield), `hero_ranger` (hood, bow,
+  quiver), `hero_mage` (robe, pointed hat, staff), `hero_cleric` (tabard with a sun cross,
+  mace), named by the raws `classes` entry's `"model"` (`raws::spawn_class_kit` inserts it, so a
+  loaded hero gets it too; no file keeps the capsule). Each hero's accent (tabard, hood and
+  cloak, robe and hat, tabard and mantle) is baked in the HUD colour of the default party's
+  hero of that class (`party::HEROES`); change both together. Townsfolk (raws `model` on each
+  mob): `barkeep`, `patron`, `priest`, `blacksmith`, `clothier`, `alchemist`, `mom`, `peasant`,
+  `enchanter`. Built for a rig later (A09): each model is separate objects
+  `<model>_head`, `_torso`, `_arm_l`, `_arm_r`, `_leg_l`, `_leg_r` and a held item (`_sword`,
+  `_bow`, ...), each with its origin at its joint (neck, hips, shoulder, hip joint, grip), and the
+  export keeps them as separate glTF nodes. About 1.55 m to the crown, hats to 2 m, 360 to 560
+  triangles. Colour is mostly one white `dye` material tinted by the vertex colour (`"dye.red"`
+  in the script is the `dye` material with `DYES["red"]`); `humanoid` and the hat and item
+  helpers are there for the monsters (A05)
+- Facing: a creature's model scene (not the entity, so a hero's torch stays put) turns to the
+  way it last moved, struck or was struck from, eased over `presentation::TURN_SECS`
+  (`presentation::heading`, `Facing`, `turn_models`)
 - `art/make_test_model.py` writes `assets/models/test_pyramid.glb` (no Blender needed). Copy it to
   a used name, e.g. `tile_floor.glb`, to check the pipeline, and delete the copy afterwards.
 - Every model is loaded at startup and kept. The harness starts the game only once they have

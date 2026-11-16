@@ -156,6 +156,31 @@
         "pulls the party home",
         "You return to town after 1 day away"
       ]
+    },
+    {
+      "name": "chars_party",
+      "note": "The party in hero models at the start of a dungeon level, torchlit, gameplay zoom.",
+      "args": "--seed 42 --depth 2 --frames 90"
+    },
+    {
+      "name": "chars_party_zoom",
+      "note": "The same, zoomed in.",
+      "args": "--seed 42 --depth 2 --keys \"..++++++\" --frames 180"
+    },
+    {
+      "name": "chars_town",
+      "note": "Every town character in a row two tiles south of the active hero, gameplay zoom.",
+      "args": "--seed 42 --depth 0 --reveal-map --console \"teleport 12 23\" --console \"place -5 2 Barkeep\" --console \"place -4 2 Patron\" --console \"place -3 2 Priest\" --console \"place -2 2 Blacksmith\" --console \"place -1 2 Clothier\" --console \"place 0 2 Alchemist\" --console \"place 1 2 Mom\" --console \"place 2 2 Peasant\" --console \"place 3 2 Enchanter\" --frames 120"
+    },
+    {
+      "name": "chars_town_zoom",
+      "note": "The town line-up zoomed in.",
+      "args": "--seed 42 --depth 0 --reveal-map --console \"teleport 12 23\" --console \"place -5 2 Barkeep\" --console \"place -4 2 Patron\" --console \"place -3 2 Priest\" --console \"place -2 2 Blacksmith\" --console \"place -1 2 Clothier\" --console \"place 0 2 Alchemist\" --console \"place 1 2 Mom\" --console \"place 2 2 Peasant\" --console \"place 3 2 Enchanter\" --keys \"..++++++\" --frames 200"
+    },
+    {
+      "name": "chars_walk",
+      "note": "Walk five tiles east: the heroes turn to face the way they glide.",
+      "args": "--seed 42 --depth 2 --keys \"..++\" --click 45,20 --every 10 --frames 120"
     }
   ]
 }

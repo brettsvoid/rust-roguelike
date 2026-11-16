@@ -259,11 +259,15 @@ fn equipment_slot(item: &super::Item) -> Option<EquipmentSlot> {
     }
 }
 
-/// Gives a new hero their class: its gear (the first item per slot equipped,
+/// Gives a new hero their class: its model, its gear (the first item per slot equipped,
 /// the rest in the backpack) and an entity per ability, a child of the hero
 /// (`abilities::HeroAbility`). Spells carry the scroll components of their
 /// effects, so the item code casts them. Warns and skips names the raws lack.
 pub fn spawn_class_kit(raws: &RawMaster, commands: &mut Commands, hero: Entity, class: &super::Class) {
+    if let Some(model) = &class.model {
+        // Re-inserting the shape re-dresses the hero in the model (see `attach_entity_mesh`).
+        commands.entity(hero).insert((Model(model.clone()), EntityShape::Creature));
+    }
     let mut worn = Vec::new();
     for name in &class.gear {
         let (Some(item), Some(template)) = (

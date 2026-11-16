@@ -6,6 +6,8 @@ use serde::Deserialize;
 #[derive(Deserialize, Debug, Clone)]
 pub struct Class {
     pub name: String,
+    /// The hero's model file (`assets/models/<model>.glb`); without it, the capsule.
+    pub model: Option<String>,
     pub stats: ClassStats,
     /// Item names from `items`. The first item for each equipment slot is
     /// worn or wielded; anything else goes in the backpack.

@@ -12,6 +12,10 @@
 //! starts where the same unit's queued move ends extends it instead, so a
 //! click walk glides as one continuous path.
 //!
+//! Facing (`heading`): a creature's model turns, eased over `TURN_SECS`, to
+//! the way it last moved, struck, or was struck from. Only the model scene
+//! child turns, so a hero's torch stays on the camera side.
+//!
 //! All animation runs on `Time`, so harness captures are the same every run.
 
 use std::f32::consts::PI;
@@ -22,7 +26,7 @@ use bevy::ui::UiSystems;
 
 use crate::combat::Outcome;
 use crate::effects::{EffectKind, Effects};
-use crate::entity_render::EntityShape;
+use crate::entity_render::{EntityShape, ModelScene};
 use crate::game_flow::Mode;
 use crate::map::{grid_to_world, Position};
 use crate::player;
@@ -63,6 +67,8 @@ pub const CAMERA_FOCUS_SECS: f32 = 0.4;
 pub const CAMERA_FOCUS_MARGIN: f32 = 0.1;
 /// A pause after each monster that acted in combat.
 pub const BETWEEN_UNITS_SECS: f32 = 0.15;
+/// Time constant of a creature turning to face its way (exponential ease).
+pub const TURN_SECS: f32 = 0.08;
 
 /// One visual step of what the rules just did. Cells are grid cells; each
 /// beat carries all it needs, so playing it never reads `Position`.
@@ -385,6 +391,33 @@ fn smoothstep(t: f32) -> f32 {
     t * t * (3.0 - 2.0 * t)
 }
 
+/// The yaw that turns a model facing south (+z) to face along `dir`, a grid
+/// direction (x east, y south). `None` for no direction.
+pub fn yaw_towards(dir: Vec2) -> Option<f32> {
+    (dir.length_squared() > 1e-6).then(|| dir.x.atan2(dir.y))
+}
+
+/// Which way the beat's body faces `t` seconds in: along its path, at what
+/// it strikes, or at what struck it.
+fn heading(beat: &Beat, t: f32) -> Option<(Entity, f32)> {
+    let (unit, dir) = match beat {
+        Beat::Move { unit, cells } => {
+            let length = path_length(cells);
+            let s = glide_distance(t, length);
+            let probe = 0.05;
+            (*unit, path_point(cells, (s + probe).min(length)) - path_point(cells, (s - probe).max(0.0)))
+        }
+        Beat::Lunge { unit, from, to } => (*unit, cell(*to) - cell(*from)),
+        Beat::Flinch { unit, at, from } => (*unit, cell(*from) - cell(*at)),
+        _ => return None,
+    };
+    yaw_towards(dir).map(|yaw| (unit, yaw))
+}
+
+/// The way a creature's model turns to (`heading`).
+#[derive(Component)]
+pub struct Facing(pub f32);
+
 fn floor(c: (i32, i32)) -> Vec3 {
     grid_to_world(c.0, c.1)
 }
@@ -439,7 +472,7 @@ impl Plugin for PresentationPlugin {
             .add_systems(Update, skip_on_input.after(player::handle_player_input))
             .add_systems(
                 PostUpdate,
-                play_beats.before(TransformSystems::Propagate).before(UiSystems::Prepare),
+                (play_beats, turn_models).chain().before(TransformSystems::Propagate).before(UiSystems::Prepare),
             );
     }
 }
@@ -532,6 +565,7 @@ fn play_beats(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut bodies: Bodies,
     mut skins: Query<&mut MeshMaterial3d<StandardMaterial>>,
+    mut facings: Query<&mut Facing>,
     mut floaters: Query<(&mut Node, &mut TextColor), With<FloaterText>>,
     camera: Query<(&Camera, &Transform), With<Camera3d>>,
 ) {
@@ -597,6 +631,14 @@ fn play_beats(
             continue;
         };
         place(&mut bodies, &playing.beat, t);
+        if let Some((unit, yaw)) = heading(&playing.beat, t) {
+            match facings.get_mut(unit) {
+                Ok(mut facing) => facing.0 = yaw,
+                Err(_) => {
+                    commands.entity(unit).try_insert(Facing(yaw));
+                }
+            }
+        }
         match &playing.beat {
             Beat::Death { unit, .. } => {
                 if let Ok(skin) = skins.get(*unit) {
@@ -639,6 +681,25 @@ fn play_beats(
         follow.look_at(None);
     }
     presentation.explore = *mode == Mode::Explore;
+}
+
+/// Eases each creature's model scene towards its `Facing`.
+fn turn_models(
+    time: Res<Time>,
+    units: Query<(&Facing, &Children)>,
+    mut scenes: Query<&mut Transform, With<ModelScene>>,
+) {
+    let ease = 1.0 - (-time.delta_secs() / TURN_SECS).exp();
+    for (facing, children) in &units {
+        let target = Quat::from_rotation_y(facing.0);
+        for &child in children {
+            if let Ok(mut transform) = scenes.get_mut(child) {
+                if transform.rotation != target {
+                    transform.rotation = transform.rotation.slerp(target, ease);
+                }
+            }
+        }
+    }
 }
 
 /// The lowest stack slot over `at` no showing floater holds.
@@ -862,5 +923,29 @@ mod tests {
         assert!(peak.distance(Vec3::new(3.0 + LUNGE_REACH, lift, 3.0)) < 1e-4);
         let back = body_pose(&lunge, LUNGE_SECS).unwrap().1.translation;
         assert!(back.distance(Vec3::new(3.0, lift, 3.0)) < 1e-4);
+    }
+
+    #[test]
+    fn a_body_faces_its_path_its_target_and_its_attacker() {
+        let u = units(1)[0];
+        let yaw = |beat: &Beat, t: f32| heading(beat, t).map(|(_, yaw)| yaw);
+        let close = |a: Option<f32>, b: f32| a.is_some_and(|a| (a - b).abs() < 1e-3);
+        // East is +x, a quarter turn; north (grid y down the screen, so -1) is a half turn.
+        let east = Beat::Move { unit: u, cells: vec![(0, 0), (1, 0), (2, 0)] };
+        assert!(close(yaw(&east, 0.0), PI / 2.0), "{:?}", yaw(&east, 0.0));
+        assert!(close(yaw(&east, east.duration()), PI / 2.0));
+        let north = Beat::Move { unit: u, cells: vec![(0, 2), (0, 1)] };
+        assert!(close(yaw(&north, north.duration() / 2.0), PI));
+        // Round a corner: east at the start, south (no turn) at the end.
+        let corner = Beat::Move { unit: u, cells: vec![(0, 0), (1, 0), (1, 1), (1, 2)] };
+        assert!(close(yaw(&corner, 0.0), PI / 2.0));
+        assert!(close(yaw(&corner, corner.duration()), 0.0));
+        // A lunge west faces west; a flinch faces back at the striker to its south-east.
+        assert!(close(yaw(&Beat::Lunge { unit: u, from: (3, 3), to: (2, 3) }, 0.1), -PI / 2.0));
+        assert!(close(yaw(&Beat::Flinch { unit: u, at: (3, 3), from: (4, 4) }, 0.1), PI / 4.0));
+        // Standing still or a beat without a body: no heading.
+        assert_eq!(yaw(&Beat::Move { unit: u, cells: vec![(5, 5)] }, 0.0), None);
+        assert_eq!(heading(&Beat::Wait { secs: 1.0 }, 0.0), None);
+        assert_eq!(yaw_towards(Vec2::ZERO), None);
     }
 }
